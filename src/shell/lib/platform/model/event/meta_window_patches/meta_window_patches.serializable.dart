@@ -59,6 +59,12 @@ sealed class MetaWindowPatchMessage
     required bool value,
   }) = UpdateIsModal;
 
+  /// The user asked for this window: navigate to it once it has a tile.
+  const factory MetaWindowPatchMessage.updateNavigationRequested({
+    required String id,
+    required bool value,
+  }) = UpdateNavigationRequested;
+
   const factory MetaWindowPatchMessage.updateIsFullscreen({
     required String id,
     required bool value,

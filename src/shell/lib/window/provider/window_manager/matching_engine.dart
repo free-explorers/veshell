@@ -11,6 +11,7 @@ import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/meta_window/provider/process_info_state.dart';
 import 'package:shell/monitor/provider/monitor_placement.dart';
+import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/shared/util/logger.dart';
@@ -1112,6 +1113,23 @@ class MatchingEngine extends _$MatchingEngine {
         // by Steam, which gives it no opener relation) gets a tile in gaming
         // mode, like the relation branch's automatic extraction does.
         final fullscreenLike = isFullscreenLike(metaWindowId);
+        // While the focused screen's overview is open, the user is working
+        // there: the window opens in it, as an ephemeral window, instead of
+        // as a new tile in the workspace behind it.
+        final screenId = ref.read(focusedScreenProvider);
+        if (!fullscreenLike &&
+            screenId != null &&
+            ref.read(overviewStateProvider(screenId)).isDisplayed) {
+          matchingLog.info(
+            'No tile for $metaWindowId: opening it in the open overview',
+          );
+          unawaited(
+            ref
+                .read(overviewStateProvider(screenId).notifier)
+                .adoptMetaWindow(metaWindowId),
+          );
+          return;
+        }
         unawaited(
           ref
               .read(windowManagerProvider.notifier)

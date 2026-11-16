@@ -75,6 +75,13 @@ pub enum MetaWindowPatch {
         id: String,
         value: bool,
     },
+    /// The user asked for this window (an invoked notification action, an
+    /// activated tray item): the shell navigates to it as soon as it has a
+    /// tile, then clears the flag.
+    UpdateNavigationRequested {
+        id: String,
+        value: bool,
+    },
     /// Whether the toplevel negotiates a fullscreen state (client-requested or
     /// shell-requested). A fullscreen window is a top-level application surface,
     /// so the shell extracts it to its own tile instead of turning it into a
@@ -263,6 +270,13 @@ pub struct MetaWindow {
     /// recording indicator on the tile and its workspace without re-deriving
     /// the mapping.
     pub is_recording: bool,
+    /// Whether the user asked for this window and the shell has not navigated
+    /// to it yet. Set by the compositor when it honors a user activation; the
+    /// shell brings the window into view once it is matched to its tile (which
+    /// can come after the activation of a window that just opened) and clears
+    /// it.
+    #[serde(default)]
+    pub navigation_requested: bool,
 }
 
 /// The compositor-global placement of a client visible-content box.
@@ -550,19 +564,21 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         );
     }
 
-    /// Tells the shell to bring a window into view after the compositor honored
-    /// an activation token minted for an invoked notification action.
+    /// Flags a window the user asked for, so the shell navigates to it.
     ///
     /// The compositor has already focused the surface, but the shell owns the
     /// workspace and tile the window lives in: without selecting them the
-    /// window stays off-screen even though it holds the keyboard focus.
-    pub fn notify_window_activation_requested(&mut self, meta_window_id: &str) {
-        info!(meta_window_id, "window activation requested");
-        let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
-        platform_method_channel.invoke_method(
-            "window_activation_requested",
-            Some(Box::new(json!({ "metaWindowId": meta_window_id }))),
-            None,
+    /// window stays off-screen even though it holds the keyboard focus. The
+    /// flag lives on the meta window so a window activated as it opens, before
+    /// the shell matched it to its tile, is still navigated to once it is.
+    pub fn request_navigation(&mut self, meta_window_id: &str) {
+        info!(meta_window_id, "window navigation requested");
+        self.patch_meta_window(
+            MetaWindowPatch::UpdateNavigationRequested {
+                id: meta_window_id.to_string(),
+                value: true,
+            },
+            true,
         );
     }
 
@@ -761,6 +777,11 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                         return;
                     }
                     meta_window.is_modal = value;
+                }
+            }
+            MetaWindowPatch::UpdateNavigationRequested { id, value } => {
+                if let Some(meta_window) = self.meta_window_state.meta_windows.get_mut(&id) {
+                    meta_window.navigation_requested = value;
                 }
             }
             MetaWindowPatch::UpdateIsFullscreen { id, value } => {

@@ -94,6 +94,7 @@
             "showClock": true,
             "clockFormat": "locale",
             "showKeyboardLayout": true,
+            "showSystemTray": true,
             "showWifi": true,
             "showVolume": true,
             "showBattery": true,

@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
-import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/platform/model/request/activate_window/activate_window.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
@@ -37,14 +36,6 @@ void bringWindowIntoView(Ref ref, WindowId windowId) {
       _revealEphemeral(ref, windowId);
     case DialogWindowId():
       _revealDialog(ref, windowId);
-  }
-}
-
-/// Brings the shell window owning [metaWindowId] into view.
-void bringMetaWindowIntoView(Ref ref, MetaWindowId metaWindowId) {
-  final windowId = ref.read(metaWindowWindowMapProvider)[metaWindowId];
-  if (windowId != null) {
-    bringWindowIntoView(ref, windowId);
   }
 }
 

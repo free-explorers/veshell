@@ -625,6 +625,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             need_decoration: !is_decorated,
             scale_ratio: fallback_scale_ratio,
             game_mode_activated: false,
+            navigation_requested: false,
             is_recording: false,
         });
         info!(
@@ -715,6 +716,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             need_decoration: !x11_surface.is_decorated(),
             scale_ratio,
             game_mode_activated: false,
+            navigation_requested: false,
             is_recording: false,
         });
         info!("new meta window from x11: {:?}", meta_window);
@@ -877,6 +879,7 @@ mod tests {
             current_output: None,
             scale_ratio: 1.0,
             game_mode_activated: false,
+            navigation_requested: false,
             is_recording: false,
         }
     }

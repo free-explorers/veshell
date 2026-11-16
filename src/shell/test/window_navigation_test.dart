@@ -133,12 +133,6 @@ void main() {
     expect(workspace3.selectedWindow, _windowC);
   });
 
-  test('a meta window resolves to its shell window', () {
-    bringMetaWindowIntoView(ref, 'meta-c');
-
-    expect(workspace3.selectedWindow, _windowC);
-  });
-
   test('a dialog resolves to its parent tile', () {
     bringWindowIntoView(ref, _dialog);
 

@@ -38,6 +38,8 @@ mod start_move_window;
 mod start_resize_window;
 mod surface_visibility;
 pub mod switch_keyboard_layout;
+mod system_tray_activation_token;
+mod system_tray_ready;
 mod window_preview;
 
 use self::activate_window::activate_window;
@@ -143,6 +145,16 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             }
             "notification_ready" => {
                 self::notification_ready::notification_ready(method_call, result, data)
+            }
+            "system_tray_ready" => {
+                self::system_tray_ready::system_tray_ready(method_call, result, data)
+            }
+            "system_tray_activation_token" => {
+                self::system_tray_activation_token::system_tray_activation_token(
+                    method_call,
+                    result,
+                    data,
+                )
             }
             _ => result.error(
                 "method_not_found".to_string(),

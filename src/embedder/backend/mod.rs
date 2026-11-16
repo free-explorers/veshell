@@ -88,6 +88,11 @@ pub trait Backend {
     /// portal backend, only the real seat session owns the name, so a nested or
     /// non-session run does not contend for it on a foreign bus.
     const RUNS_NOTIFICATION_SERVER: bool = false;
+    /// Whether this run owns `org.kde.StatusNotifierWatcher`, the system
+    /// tray's registry. Like the notification server, only the real seat
+    /// session owns the name, so a nested run does not take over the tray of
+    /// the desktop it runs in.
+    const RUNS_SYSTEM_TRAY_WATCHER: bool = false;
     /// Whether the backend applies the user-facing monitor transform as an
     /// output transform. The nested backend pins a `Flipped180` correction, so
     /// it must not have it overwritten by the (normal by default) setting.

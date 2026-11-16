@@ -131,6 +131,8 @@ class MetaWindowState extends _$MetaWindowState {
         state = state.copyWith(isFixedSized: patch.value);
       case UpdateIsModal():
         state = state.copyWith(isModal: patch.value);
+      case UpdateNavigationRequested():
+        state = state.copyWith(navigationRequested: patch.value);
       case UpdateIsFullscreen():
         state = state.copyWith(isFullscreen: patch.value);
       case UpdateClientMaximized():

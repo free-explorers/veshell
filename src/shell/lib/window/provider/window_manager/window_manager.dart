@@ -106,6 +106,39 @@ class WindowManager extends _$WindowManager {
     return windowId;
   }
 
+  /// Creates an ephemeral window for [metaWindowId] on [screenId], with the
+  /// native window's properties, without attaching it yet: the caller adds it
+  /// to the overview first, so the window can be revealed as soon as it is
+  /// attached (see `OverviewState.adoptMetaWindow`).
+  Future<EphemeralWindowId> createEphemeralWindowForMetaWindow(
+    MetaWindowId metaWindowId,
+    ScreenId screenId,
+  ) async {
+    final windowId = EphemeralWindowId(_uuidGenerator.v4());
+    _log.info(
+      'Creating new EphemeralWindow $windowId for surface $metaWindowId',
+    );
+    final metaWindow = ref.readMetaWindow(metaWindowId);
+    final desktopEntryForSurface = await ref.read(
+      localizedDesktopEntryForIdProvider(metaWindow.appId ?? '').future,
+    );
+    ref
+        .ephemeralWindowNotifier(windowId)
+        .initialize(
+          EphemeralWindow(
+            windowId: windowId,
+            screenId: screenId,
+            properties: WindowProperties.fromMetaWindow(metaWindow).copyWith(
+              appId:
+                  desktopEntryForSurface?.desktopEntry.id ??
+                  (metaWindow.appId ?? ''),
+            ),
+          ),
+        );
+    state = state.copyWith(windows: state.windows.add(windowId));
+    return windowId;
+  }
+
   Future<PersistentWindowId> createPersistentWindowForMetaWindow({
     required MetaWindowId metaWindowId,
     DisplayMode? displayMode,

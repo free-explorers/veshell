@@ -19,7 +19,14 @@ Signals, in order of reliability / fallback:
 3. Application identity — desktop-entry-resolved `appId` matching an existing placeholder.
 4. Window title — matches the placeholder's stored title.
 5. Process grouping — same `pid` or `app-*.scope` cgroup.
-6. Fallback — no matching placeholder: create a new persistent window.
+6. Fallback — no matching placeholder: create a new persistent window in the
+   selected workspace of the focused screen. While that screen's
+   [Overview](overview.md) is open, the user is working there instead: the
+   window opens in it as an ephemeral window, appended to its content and
+   selected, as if launched from its search (a fullscreen-like window still
+   gets its own `game` tile). The tile joins the overview before the window is
+   attached to it, so a window the user asked for (`navigationRequested`, for
+   example from a tray item) is revealed there.
 
 ### Sequential Windows: Application that when launched create multiple windows sequentially
 For applications that have a splash screen or a loading screen. The application starts and creates a new Wayland or XWayland window, then it creates another window.

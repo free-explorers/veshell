@@ -151,7 +151,8 @@ void main() {
       final known = readKnownFailures(
         File(p.join(root!, 'extra', 'probe', 'known_failures.txt')),
       );
-      expect(known, isNotEmpty);
+      // The list is empty once every known failure is fixed: only its entries'
+      // shape is checked.
       expect(known.every((line) => line.contains('.dart: ')), isTrue);
     });
   });

@@ -199,12 +199,14 @@ pub struct State<BackendData: Backend + 'static> {
     /// Exported `xdg-foreign` handles (portal `parent_window` resolution):
     /// each handle maps to the surface that exported it.
     pub xdg_foreign_state: crate::wayland::xdg_foreign::XdgForeignState,
-    /// Activation tokens minted for invoked notification actions, mapping the
-    /// token to the meta window the action belongs to. When a client turns one
-    /// of these into an `xdg_activation_v1` request, the window is focused —
-    /// the user invoked the action — instead of being read as a demand for
-    /// attention. Single-use, pruned by age.
-    pub notification_activation_tokens: HashMap<String, (String, Instant)>,
+    /// Activation tokens the compositor minted because the user asked for an
+    /// application's window: an invoked notification action (mapping to the
+    /// meta window the action belongs to) or an activated tray item (no
+    /// window: the application picks which one it shows). When a client turns
+    /// one of these into an `xdg_activation_v1` request, the window is focused
+    /// instead of being read as a demand for attention. Single-use, pruned by
+    /// age.
+    pub trusted_activation_tokens: HashMap<String, (Option<String>, Instant)>,
     pub xdg_dialog_state: XdgDialogState,
     pub xdg_popups: HashMap<u64, PopupSurface>,
     pub xdg_shell_state: XdgShellState,
@@ -252,6 +254,7 @@ pub struct State<BackendData: Backend + 'static> {
     /// Notification-owned state: the freedesktop notifications transport
     /// server and the loop-side reply table for accepted calls.
     pub notification_state: crate::notification::NotificationState,
+    pub system_tray_state: crate::system_tray::SystemTrayState,
     /// View (monitor) that received the start of the current pointer gesture
     /// (button-held drag, trackpad pan/zoom scroll, or pinch). Every later
     /// event of that gesture is pinned to this view so Flutter sees one
@@ -661,6 +664,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let portal_state = crate::portal::PortalState::new::<BackendData>(&loop_handle);
         let notification_state =
             crate::notification::NotificationState::new::<BackendData>(&loop_handle);
+        let system_tray_state =
+            crate::system_tray::SystemTrayState::new::<BackendData>(&loop_handle);
         let idle_notifier_state =
             IdleNotifierState::<Self>::new(&display_handle, loop_handle.clone());
         let idle_inhibit_manager_state = IdleInhibitManagerState::new::<Self>(&display_handle);
@@ -721,7 +726,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             xdg_dialog_state,
             xdg_activation_state,
             xdg_foreign_state: crate::wayland::xdg_foreign::XdgForeignState::new(),
-            notification_activation_tokens: HashMap::new(),
+            trusted_activation_tokens: HashMap::new(),
             meta_window_state: MetaWindowState::new(),
             x11_surfaces: HashMap::new(),
             x11_surface_per_x11_window: HashMap::new(),
@@ -755,6 +760,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             capture_state,
             portal_state,
             notification_state,
+            system_tray_state,
             pointer_gesture_view_id: None,
             mirror_of: HashMap::new(),
             idle,
@@ -769,39 +775,42 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         state
     }
 
-    /// Mints an activation token for a notification action and records the
-    /// meta window it may activate. The returned string is what the D-Bus
-    /// `ActivationToken` signal carries; the client hands it back through
-    /// `xdg_activation_v1`.
-    pub fn mint_notification_activation_token(&mut self, meta_window_id: &str) -> String {
-        self.prune_notification_activation_tokens();
+    /// Mints a trusted activation token and records the meta window it was
+    /// minted for, if any. The returned string is what the client receives
+    /// over D-Bus (the notification `ActivationToken` signal, the tray item's
+    /// `ProvideXdgActivationToken`) and hands back through `xdg_activation_v1`.
+    pub fn mint_trusted_activation_token(&mut self, meta_window_id: Option<&str>) -> String {
+        self.prune_trusted_activation_tokens();
         let token = self
             .xdg_activation_state
             .create_external_token(None)
             .0
             .as_str()
             .to_owned();
-        self.notification_activation_tokens
-            .insert(token.clone(), (meta_window_id.to_owned(), Instant::now()));
+        self.trusted_activation_tokens.insert(
+            token.clone(),
+            (meta_window_id.map(str::to_owned), Instant::now()),
+        );
         token
     }
 
-    /// Consumes the notification activation token `token`, returning the meta
-    /// window it was minted for. `None` when the token is not one of ours (a
+    /// Consumes the trusted activation token `token`, returning the meta
+    /// window it was minted for (`Some(None)` when it was minted for no
+    /// particular window). `None` when the token is not one of ours (a
     /// client-created activation), which keeps the ordinary activation path.
-    pub fn take_notification_activation_token(&mut self, token: &str) -> Option<String> {
-        self.notification_activation_tokens
+    pub fn take_trusted_activation_token(&mut self, token: &str) -> Option<Option<String>> {
+        self.trusted_activation_tokens
             .remove(token)
             .map(|(meta_window_id, _)| meta_window_id)
     }
 
-    /// Drops notification activation tokens that were minted but never used,
-    /// so a client that ignores the signal cannot leak tokens forever.
-    fn prune_notification_activation_tokens(&mut self) {
+    /// Drops trusted activation tokens that were minted but never used, so a
+    /// client that ignores them cannot leak tokens forever.
+    fn prune_trusted_activation_tokens(&mut self) {
         // A client normally activates within milliseconds of the signal.
         const TOKEN_TTL: Duration = Duration::from_secs(30);
         let stale: Vec<String> = self
-            .notification_activation_tokens
+            .trusted_activation_tokens
             .iter()
             .filter(|(_, (_, minted))| minted.elapsed() > TOKEN_TTL)
             .map(|(token, _)| token.clone())
@@ -809,7 +818,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         for token in stale {
             self.xdg_activation_state
                 .remove_token(&XdgActivationToken::from(token.clone()));
-            self.notification_activation_tokens.remove(&token);
+            self.trusted_activation_tokens.remove(&token);
         }
     }
 

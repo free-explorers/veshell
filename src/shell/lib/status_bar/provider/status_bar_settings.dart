@@ -10,6 +10,7 @@ const statusBarShowClockPath = 'theme.statusBarContent.showClock';
 const statusBarClockFormatPath = 'theme.statusBarContent.clockFormat';
 const statusBarShowKeyboardLayoutPath =
     'theme.statusBarContent.showKeyboardLayout';
+const statusBarShowSystemTrayPath = 'theme.statusBarContent.showSystemTray';
 const statusBarShowWifiPath = 'theme.statusBarContent.showWifi';
 const statusBarShowVolumePath = 'theme.statusBarContent.showVolume';
 const statusBarShowBatteryPath = 'theme.statusBarContent.showBattery';
@@ -22,6 +23,7 @@ typedef StatusBarSettings = ({
   bool showClock,
   ClockFormat clockFormat,
   bool showKeyboardLayout,
+  bool showSystemTray,
   bool showWifi,
   bool showVolume,
   bool showBattery,
@@ -43,6 +45,7 @@ const StatusBarSettings statusBarSettingsFallback = (
   showClock: true,
   clockFormat: ClockFormat.locale,
   showKeyboardLayout: true,
+  showSystemTray: true,
   showWifi: true,
   showVolume: true,
   showBattery: true,
@@ -73,6 +76,10 @@ StatusBarSettings statusBarSettings(Ref ref) {
     showKeyboardLayout: readBool(
       statusBarShowKeyboardLayoutPath,
       fallback: fallback.showKeyboardLayout,
+    ),
+    showSystemTray: readBool(
+      statusBarShowSystemTrayPath,
+      fallback: fallback.showSystemTray,
     ),
     showWifi: readBool(statusBarShowWifiPath, fallback: fallback.showWifi),
     showVolume: readBool(

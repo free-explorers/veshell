@@ -5,6 +5,7 @@ import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/file_explorer/model/file_entry.dart';
 import 'package:shell/file_explorer/provider/filtered_entry_list.dart';
+import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/overview/model/overview.dart';
 import 'package:shell/overview/model/overview_content.dart';
 import 'package:shell/overview/model/search_mode.dart';
@@ -215,6 +216,25 @@ class OverviewState extends _$OverviewState {
     );
 
     unawaited(ref.ephemeralWindowNotifier(windowId).launchSelf());
+  }
+
+  /// Opens [metaWindowId], a window no tile claims, in this overview as an
+  /// ephemeral window, and selects it.
+  ///
+  /// The tile joins the overview before it is given the native window, so a
+  /// window the user asked for (`navigationRequested`) is revealed here as
+  /// soon as it is attached.
+  Future<void> adoptMetaWindow(MetaWindowId metaWindowId) async {
+    final windowId = await ref
+        .read(windowManagerProvider.notifier)
+        .createEphemeralWindowForMetaWindow(metaWindowId, state.screenId);
+    final content = OverviewContent.window(windowId);
+    state = state.copyWith(
+      contentList: state.contentList.add(content),
+      selectedContentId: content.contentId,
+      selectedIndex: null,
+    );
+    ref.ephemeralWindowNotifier(windowId).addMetaWindow(metaWindowId);
   }
 
   void removeWindow(EphemeralWindowId windowId) {
