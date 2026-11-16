@@ -6,14 +6,11 @@ import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/system_tray/provider/system_tray_manager.dart';
 import 'package:shell/system_tray/widget/tray_item_button.dart';
 
-/// The width of one tray item in the card: its icon and a short label.
-const _itemWidth = 80.0;
-
 /// The system tray card, or `null` when no application has a tray item.
 ///
-/// The card lists every item, passive ones included (dimmed), with its name,
-/// so the Helm is where the whole tray is always reachable, whatever the
-/// status bar shows.
+/// The card lists every item, passive ones included (dimmed), so the Helm is
+/// where the whole tray is always reachable, whatever the status bar shows.
+/// Each item is named by its tooltip.
 Widget? systemTraySection(WidgetRef ref) {
   final items = ref.watch(systemTrayManagerProvider);
   if (items.isEmpty) return null;
@@ -32,23 +29,11 @@ Widget? systemTraySection(WidgetRef ref) {
             runSpacing: 4,
             children: [
               for (final item in items)
-                SizedBox(
-                  width: _itemWidth,
-                  child: TrayItemButton(
-                    key: ValueKey(item.id),
-                    item: item,
-                    iconSize: 32,
-                    padding: const EdgeInsets.all(8),
-                    label: Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        item.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
+                TrayItemButton(
+                  key: ValueKey(item.id),
+                  item: item,
+                  iconSize: 24,
+                  padding: const EdgeInsets.all(8),
                 ),
             ],
           ),

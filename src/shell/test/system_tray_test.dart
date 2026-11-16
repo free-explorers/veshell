@@ -12,6 +12,7 @@ import 'package:shell/system_tray/model/tray_menu.dart';
 import 'package:shell/system_tray/model/tray_properties.dart';
 import 'package:shell/system_tray/provider/system_tray_manager.dart';
 import 'package:shell/system_tray/widget/tray_item_button.dart';
+import 'package:shell/system_tray/widget/tray_item_icon.dart';
 
 /// An `a(iiay)` entry of [width]×[height] ARGB pixels, all [argb].
 DBusStruct _pixmap(int width, int height, List<int> argb) => DBusStruct([
@@ -151,6 +152,44 @@ void main() {
       expect(
         plainToolTipText('Line <b>one</b><br/>Tom &amp; Jerry &lt;3'),
         'Line one\nTom & Jerry <3',
+      );
+    });
+  });
+
+  group('raster tray icon size', () {
+    test('an icon with enough pixels fills its box', () {
+      final drawn = crispRasterSize(pixels: 64, box: 24, devicePixelRatio: 2);
+      expect(drawn.size, 24);
+      expect(drawn.upscaled, isFalse);
+    });
+
+    test('a 24 px icon is drawn at its own size at 1x', () {
+      final drawn = crispRasterSize(pixels: 24, box: 24, devicePixelRatio: 1);
+      expect(drawn.size, 24);
+      expect(drawn.upscaled, isFalse);
+    });
+
+    test('a 24 px icon is doubled at 2x, not stretched', () {
+      final drawn = crispRasterSize(pixels: 24, box: 32, devicePixelRatio: 2);
+      // 64 physical pixels hold 2 whole copies of 24: 48 px, 24 logical.
+      expect(drawn.size, 24);
+      expect(drawn.upscaled, isTrue);
+    });
+
+    test('a fractional scale keeps the icon at its own pixels', () {
+      final drawn = crispRasterSize(
+        pixels: 24,
+        box: 24,
+        devicePixelRatio: 1.25,
+      );
+      expect(drawn.size, 24 / 1.25);
+      expect(drawn.upscaled, isFalse);
+    });
+
+    test('an unknown size fills the box', () {
+      expect(
+        crispRasterSize(pixels: null, box: 24, devicePixelRatio: 1).size,
+        24,
       );
     });
   });

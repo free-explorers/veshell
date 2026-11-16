@@ -12,7 +12,8 @@ is not supported.
 The tray is shown in two places:
 
 - the **Helm** lists every item in a *Background Apps* card of the control column
-  (after the media control), with its name, passive items included;
+  (after the media control), passive items included; each item is named by
+  its tooltip;
 - the **status bar** (top panel or notch, see the `theme.statusBar` setting)
   shows the items' icons before the system status, unless
   `theme.statusBarContent.showSystemTray` is off. It leaves out passive items,

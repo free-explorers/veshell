@@ -24,20 +24,18 @@ const _scrollStepPixels = 50.0;
 /// * middle click: `SecondaryActivate`;
 /// * scroll: `Scroll`.
 ///
-/// [label], when set, is written under the icon.
+/// Its tooltip names the item and adds the application's description.
 class TrayItemButton extends HookConsumerWidget {
   const TrayItemButton({
     required this.item,
     required this.iconSize,
     this.padding = const EdgeInsets.all(4),
-    this.label,
     super.key,
   });
 
   final TrayItem item;
   final double iconSize;
   final EdgeInsetsGeometry padding;
-  final Widget? label;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -116,10 +114,8 @@ class TrayItemButton extends HookConsumerWidget {
     final title = toolTip != null && toolTip.title.isNotEmpty
         ? toolTip.title
         : item.label;
-    // With a label under the icon, the tooltip only adds what it does not
-    // already say.
     final tooltipMessage = [
-      if (label == null || title != item.label) title,
+      title,
       if (description.isNotEmpty) description,
     ].join('\n');
 
@@ -148,7 +144,7 @@ class TrayItemButton extends HookConsumerWidget {
           onTertiaryTapUp: (details) => unawaited(
             manager.secondaryActivate(item.id, details.globalPosition),
           ),
-          child: _OptionalTooltip(
+          child: Tooltip(
             message: tooltipMessage,
             child: InkWell(
               borderRadius: BorderRadius.circular(iconSize),
@@ -168,15 +164,9 @@ class TrayItemButton extends HookConsumerWidget {
                   unawaited(openMenu(details.globalPosition)),
               child: Padding(
                 padding: padding,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Opacity(
-                      opacity: item.status == TrayItemStatus.passive ? 0.6 : 1,
-                      child: TrayItemIcon(item: item, size: iconSize),
-                    ),
-                    ?label,
-                  ],
+                child: Opacity(
+                  opacity: item.status == TrayItemStatus.passive ? 0.6 : 1,
+                  child: TrayItemIcon(item: item, size: iconSize),
                 ),
               ),
             ),
@@ -185,19 +175,6 @@ class TrayItemButton extends HookConsumerWidget {
       ),
     );
   }
-}
-
-/// A [Tooltip] showing [message], or [child] alone when there is nothing to
-/// say.
-class _OptionalTooltip extends StatelessWidget {
-  const _OptionalTooltip({required this.message, required this.child});
-
-  final String message;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) =>
-      message.isEmpty ? child : Tooltip(message: message, child: child);
 }
 
 /// The menu entries under [parent], as Material menu items.

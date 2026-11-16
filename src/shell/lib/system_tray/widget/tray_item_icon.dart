@@ -1,9 +1,11 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/application/provider/png_pixel_size.dart';
 import 'package:shell/application/util/icon_size.dart';
 import 'package:shell/application/widget/grid_fit_svg_icon.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
@@ -72,15 +74,47 @@ class TrayNamedIcon extends ConsumerWidget {
     if (file.path.endsWith('.svg')) {
       return GridFitSvgIcon(file: file, size: size);
     }
-    return Image.file(
-      file,
-      cacheWidth: bucket,
-      width: size,
-      height: size,
-      fit: BoxFit.contain,
-      errorBuilder: (_, _, _) => fallback,
+    final pixels = ref.watch(pngPixelSizeProvider(file.path))?.longestSide;
+    final drawn = crispRasterSize(
+      pixels: pixels,
+      box: size,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+    );
+    return Center(
+      child: Image.file(
+        file,
+        cacheWidth: bucket,
+        width: drawn.size,
+        height: drawn.size,
+        fit: BoxFit.contain,
+        filterQuality: drawn.upscaled
+            ? FilterQuality.none
+            : FilterQuality.medium,
+        errorBuilder: (_, _, _) => fallback,
+      ),
     );
   }
+}
+
+/// The logical size to draw a raster icon of [pixels] (its longest side) at
+/// in a [box] logical-pixel square.
+///
+/// An icon with enough pixels fills the box. A smaller one is not stretched
+/// by a fraction, which blurs it (a tray icon is often a single 22 or 24 px
+/// image): it is drawn at the largest whole multiple of its own pixels that
+/// fits, `upscaled` when that multiple is above one, so it is drawn with
+/// sharp pixel doubling. An unknown size fills the box.
+({double size, bool upscaled}) crispRasterSize({
+  required double? pixels,
+  required double box,
+  required double devicePixelRatio,
+}) {
+  final physicalBox = box * devicePixelRatio;
+  if (pixels == null || pixels <= 0 || pixels >= physicalBox) {
+    return (size: box, upscaled: false);
+  }
+  final factor = (physicalBox / pixels).floor();
+  return (size: pixels * factor / devicePixelRatio, upscaled: factor > 1);
 }
 
 /// A pixmap the item sent, scaled to [size] logical pixels.
@@ -91,12 +125,24 @@ class TrayPixmapIcon extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) => Image(
-    image: TrayPixmapImage(pixmap),
-    width: size,
-    height: size,
-    fit: BoxFit.contain,
-  );
+  Widget build(BuildContext context) {
+    final drawn = crispRasterSize(
+      pixels: math.max(pixmap.width, pixmap.height).toDouble(),
+      box: size,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+    );
+    return Center(
+      child: Image(
+        image: TrayPixmapImage(pixmap),
+        width: drawn.size,
+        height: drawn.size,
+        fit: BoxFit.contain,
+        filterQuality: drawn.upscaled
+            ? FilterQuality.none
+            : FilterQuality.medium,
+      ),
+    );
+  }
 }
 
 /// Decodes a [TrayPixmap]'s raw RGBA pixels. Keyed by the pixels, so equal
