@@ -18,6 +18,7 @@ import 'package:shell/platform/model/request/platform_request.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/window/model/ephemeral_window.dart';
@@ -135,6 +136,8 @@ void main() {
       ProviderScope(
         overrides: [
           platformManagerProvider.overrideWith(_FakePlatformManager.new),
+          // The real hotkeys read the settings files, which tests do not have.
+          hotkeysActivatorProvider.overrideWithValue(const {}),
           ephemeralWindowStateProvider(_windowId).overrideWith(windowState),
           if (displayed) ...[
             metaWindowStateProvider(
@@ -250,6 +253,8 @@ void main() {
       ProviderScope(
         overrides: [
           platformManagerProvider.overrideWith(_FakePlatformManager.new),
+          // The real hotkeys read the settings files, which tests do not have.
+          hotkeysActivatorProvider.overrideWithValue(const {}),
           overviewStateProvider(
             _screenId,
           ).overrideWith(_SelectedWindowOverviewState.new),

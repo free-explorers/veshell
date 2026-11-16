@@ -11,6 +11,7 @@ import 'package:shell/platform/model/event/meta_window_patches/meta_window_patch
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
+import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
 import 'package:shell/wayland/model/wl_surface.dart';
 import 'package:shell/wayland/provider/wl_surface_state.dart';
 import 'package:shell/window/widget/window.dart';
@@ -108,6 +109,8 @@ void main() {
         ProviderScope(
           overrides: [
             platformManagerProvider.overrideWithValue(events.stream),
+            // The real hotkeys read the settings files, which tests do not have.
+            hotkeysActivatorProvider.overrideWithValue(const {}),
             metaWindowStateProvider(
               _windowId,
             ).overrideWith(_FakeMetaWindowState.new),
@@ -161,7 +164,8 @@ void main() {
       _patches.clear();
       visible.value = 1;
       await tester.pump();
-      await tester.pump();
+      // Tile-count changes animate the tile size; let it reach the new one.
+      await tester.pumpAndSettle();
 
       expect(
         _patches.whereType<UpdateGeometry>().map((patch) => patch.value?.width),
@@ -190,6 +194,8 @@ void main() {
         ProviderScope(
           overrides: [
             platformManagerProvider.overrideWithValue(events.stream),
+            // The real hotkeys read the settings files, which tests do not have.
+            hotkeysActivatorProvider.overrideWithValue(const {}),
             metaWindowStateProvider(
               _windowId,
             ).overrideWith(_FakeMetaWindowState.new),
@@ -234,7 +240,8 @@ void main() {
         _surfaceState!.setBuffer(_fullSize);
         visible.value = 2;
         await tester.pump();
-        await tester.pump();
+        // Tile-count changes animate the tile size; let it reach the new one.
+        await tester.pumpAndSettle();
         expect(
           _patches.whereType<UpdateGeometry>().map(
             (patch) => patch.value?.width,
@@ -247,7 +254,8 @@ void main() {
         _surfaceState!.setBuffer(_halfSize);
         visible.value = 1;
         await tester.pump();
-        await tester.pump();
+        // Tile-count changes animate the tile size; let it reach the new one.
+        await tester.pumpAndSettle();
         expect(
           _patches.whereType<UpdateGeometry>().map(
             (patch) => patch.value?.width,
