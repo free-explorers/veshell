@@ -20,6 +20,9 @@ import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/status_bar/model/clock_format.dart';
 import 'package:shell/status_bar/provider/active_keyboard_layout.dart';
 import 'package:shell/status_bar/provider/status_bar_settings.dart';
+import 'package:shell/system_tray/model/tray_item.dart';
+import 'package:shell/system_tray/provider/system_tray_manager.dart';
+import 'package:shell/system_tray/widget/tray_item_button.dart';
 
 /// The colours of the status bar, a shade darker than the workspace panel
 /// it is drawn next to.
@@ -65,11 +68,15 @@ class StatusBarItemTheme extends StatelessWidget {
   );
 }
 
-/// The status icons the settings enable: keyboard layout, Wi-Fi, volume,
-/// battery. Each item
-/// keeps its own margin, so one with nothing to show leaves no gap.
+/// The status icons the settings enable: the system tray, keyboard layout,
+/// Wi-Fi, volume, battery. Each item keeps its own margin, so one with
+/// nothing to show leaves no gap.
 class StatusBarIcons extends ConsumerWidget {
-  const StatusBarIcons({super.key});
+  const StatusBarIcons({this.includeSystemTray = true, super.key});
+
+  /// Whether the system tray leads the icons; a host that lays the tray out
+  /// itself (the notch, to let only it take clicks) leaves it out.
+  final bool includeSystemTray;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -77,11 +84,42 @@ class StatusBarIcons extends ConsumerWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (includeSystemTray && settings.showSystemTray)
+          const StatusBarSystemTray(),
         if (settings.showKeyboardLayout) const _KeyboardLayoutStatus(),
         if (settings.showWifi) const _WifiStatusIcon(),
         if (settings.showVolume) const _VolumeStatusIcon(),
         if (settings.showBattery)
           _BatteryStatus(showPercentage: settings.showBatteryPercentage),
+      ],
+    );
+  }
+}
+
+/// The system tray's icons, before the system status: every item but the
+/// passive ones, which have nothing to report. The notch and the top panel
+/// grow to fit them all.
+class StatusBarSystemTray extends ConsumerWidget {
+  const StatusBarSystemTray({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(statusBarSettingsProvider).showSystemTray) {
+      return const SizedBox.shrink();
+    }
+    final items = ref
+        .watch(systemTrayManagerProvider)
+        .where((item) => item.status != TrayItemStatus.passive);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final item in items)
+          TrayItemButton(
+            key: ValueKey(item.id),
+            item: item,
+            iconSize: 16,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          ),
       ],
     );
   }

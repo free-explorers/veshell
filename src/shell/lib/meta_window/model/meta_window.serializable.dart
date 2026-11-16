@@ -80,6 +80,12 @@ abstract class MetaWindow with _$MetaWindow {
     /// compositor (consumer pid, then app id) and rendered on the tile and its
     /// workspace; the shell never re-derives the mapping.
     @Default(false) bool isRecording,
+
+    /// Whether the user asked for this window (an invoked notification
+    /// action, an activated tray item) and the shell has not navigated to it
+    /// yet. Set by the compositor; the shell brings the window into view as
+    /// soon as it has a tile, then clears it.
+    @Default(false) bool navigationRequested,
     String? currentOutput,
     @RectConverter() Rect? geometry,
   }) = _MetaWindow;

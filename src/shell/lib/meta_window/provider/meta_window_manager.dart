@@ -23,6 +23,7 @@ import 'package:shell/window/provider/window_manager/matching_engine.dart';
 import 'package:shell/window/provider/window_manager/matching_utils.dart';
 import 'package:shell/window/provider/window_manager/title_reassociation.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
+import 'package:shell/window/provider/window_navigation.dart';
 import 'package:shell/window/provider/window_provider.mixin.dart';
 
 part 'meta_window_manager.g.dart';
@@ -38,6 +39,11 @@ class MetaWindowManager extends _$MetaWindowManager {
   final Set<MetaWindowId> _pendingCreated = {};
   final Set<MetaWindowId> _removedWhilePending = {};
 
+  // Windows the user asked for while their creation was still awaiting: the
+  // compositor flags a window it focused moments after creating it, and the
+  // flag must survive until the window is known.
+  final Set<MetaWindowId> _navigationRequestedWhilePending = {};
+
   // Popups created through onNewMetaPopup, tracked so a patch or removal
   // racing past the creation event cannot mount the uninitialized provider.
   final Set<String> _popupIds = {};
@@ -52,6 +58,15 @@ class MetaWindowManager extends _$MetaWindowManager {
       if (next case final MetaWindowPatchEvent event) {
         final patch = event.message;
         if (!state.contains(patch.id)) {
+          if (patch is UpdateNavigationRequested &&
+              _pendingCreated.contains(patch.id)) {
+            if (patch.value) {
+              _navigationRequestedWhilePending.add(patch.id);
+            } else {
+              _navigationRequestedWhilePending.remove(patch.id);
+            }
+            return;
+          }
           geometryLog.warning('window patch $patch dropped for unknown window');
           return;
         }
@@ -66,6 +81,9 @@ class MetaWindowManager extends _$MetaWindowManager {
               patch is UpdateIsModal ||
               patch is UpdateActivatedBy) {
             _maybeRerouteAsDialog(patch.id);
+          }
+          if (patch is UpdateNavigationRequested && patch.value) {
+            _navigateIfRequested(patch.id);
           }
         });
       }
@@ -95,7 +113,34 @@ class MetaWindowManager extends _$MetaWindowManager {
     });
     ref.onDispose(platformSubscription.cancel);
 
+    // A window the user asked for as it opened is flagged before the shell
+    // matched it to its tile: navigate to it once it is.
+    ref.listen(metaWindowWindowMapProvider, (previous, next) {
+      for (final metaWindowId in next.keys) {
+        if (previous?.containsKey(metaWindowId) ?? false) continue;
+        _navigateIfRequested(metaWindowId);
+      }
+    });
+
     return <MetaWindowId>{}.lock;
+  }
+
+  /// Brings [metaWindowId]'s window into view if the user asked for it
+  /// ([MetaWindow.navigationRequested]) and it has a tile, then clears the
+  /// flag, on the compositor too. Without a tile yet, the flag waits for the
+  /// match.
+  void _navigateIfRequested(MetaWindowId metaWindowId) {
+    if (!state.contains(metaWindowId)) return;
+    if (!ref.readMetaWindow(metaWindowId).navigationRequested) return;
+    final windowId = ref.read(metaWindowWindowMapProvider)[metaWindowId];
+    if (windowId == null) return;
+    navigationLog.info('Navigating to $windowId, which the user asked for');
+    bringWindowIntoView(ref, windowId);
+    unawaited(
+      ref
+          .metaWindowNotifier(metaWindowId)
+          .patch(UpdateNavigationRequested(id: metaWindowId, value: false)),
+    );
   }
 
   Future<void> onNewMetaWindow(MetaWindowCreatedEvent event) async {
@@ -110,6 +155,9 @@ class MetaWindowManager extends _$MetaWindowManager {
     // If the window was removed during the creation await, destroy it now
     // instead of leaking a revived zombie window (its providers were already
     // torn down and must not be re-added).
+    final navigationRequested = _navigationRequestedWhilePending.remove(
+      metaWindowId,
+    );
     if (_removedWhilePending.remove(metaWindowId)) {
       _destroyMetaWindowState(metaWindowId);
       geometryLog.info(
@@ -121,6 +169,14 @@ class MetaWindowManager extends _$MetaWindowManager {
       return;
     }
     state = state.add(metaWindowId);
+    if (navigationRequested) {
+      await ref
+          .metaWindowNotifier(metaWindowId)
+          .patch(
+            UpdateNavigationRequested(id: metaWindowId, value: true),
+            propagate: false,
+          );
+    }
 
     _mappedSubscriptions[metaWindowId] = ref.listenMetaWindow(
       metaWindowId,

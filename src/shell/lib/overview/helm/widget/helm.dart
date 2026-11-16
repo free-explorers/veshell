@@ -7,6 +7,7 @@ import 'package:shell/overview/helm/control_panel/audio/widget/audio_control.dar
 import 'package:shell/overview/helm/control_panel/bluetooth/widget/bluetooth_control.dart';
 import 'package:shell/overview/helm/control_panel/media_player/widget/media_player_control.dart';
 import 'package:shell/overview/helm/control_panel/network/widget/network_control.dart';
+import 'package:shell/overview/helm/control_panel/system_tray/widget/system_tray_control.dart';
 import 'package:shell/overview/helm/control_panel/widget/session_controls.dart';
 import 'package:shell/overview/helm/monitoring_panel/widget/monitoring_panel.dart';
 import 'package:shell/overview/helm/notification_panel/widget/notification_panel.dart';
@@ -67,6 +68,7 @@ class _ThreeColumnLayout extends StatelessWidget {
               footer: const SessionControls(),
               sections: [
                 mediaPlayerSection,
+                systemTraySection,
                 _card(const AudioControl()),
                 networkSection,
                 _card(const BluetoothControl()),
@@ -98,6 +100,7 @@ class _MergedLayout extends StatelessWidget {
               footer: const SessionControls(),
               sections: [
                 mediaPlayerSection,
+                systemTraySection,
                 _card(const AudioControl()),
                 networkSection,
                 _card(const BluetoothControl()),
@@ -163,6 +166,7 @@ class _TabbedLayout extends ConsumerWidget {
                   PanelColumn(
                     sections: [
                       mediaPlayerSection,
+                      systemTraySection,
                       _card(const AudioControl()),
                       networkSection,
                       _card(const BluetoothControl()),

@@ -32,10 +32,11 @@ import 'package:shell/platform/model/event/new_subsurface/new_subsurface.seriali
 import 'package:shell/platform/model/event/new_surface/new_surface.serializable.dart';
 import 'package:shell/platform/model/event/process_info/process_info.serializable.dart';
 import 'package:shell/platform/model/event/set_environment_variables/set_environment_variables.serializable.dart';
-import 'package:shell/platform/model/event/window_activation_requested/window_activation_requested.serializable.dart';
 import 'package:shell/platform/model/event/window_attention_released/window_attention_released.serializable.dart';
 import 'package:shell/platform/model/event/window_attention_requested/window_attention_requested.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/system_tray/model/system_tray_item_registered/system_tray_item_registered.serializable.dart';
+import 'package:shell/system_tray/model/system_tray_item_unregistered/system_tray_item_unregistered.serializable.dart';
 
 part 'platform_event.serializable.freezed.dart';
 part 'platform_event.serializable.g.dart';
@@ -220,14 +221,6 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required NotificationCloseRequestedMessage message,
   }) = NotificationCloseRequestedEvent;
 
-  /// The compositor honored an activation token minted for an invoked
-  /// notification action and focused the window: the shell brings it into view
-  /// (selecting its workspace and tile), which the compositor cannot do.
-  const factory PlatformEvent.windowActivationRequested({
-    required String method,
-    required WindowActivationRequestedMessage message,
-  }) = WindowActivationRequestedEvent;
-
   /// A window asks for the user's attention (X11 demands-attention or a
   /// Wayland `xdg_activation_v1` request for an existing window). The shell
   /// synthesizes a notification instead of focusing the window.
@@ -299,6 +292,21 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required GestureSwipeEndMessage message,
   }) = GestureSwipeEndEvent;
+
+  /// System Tray Item Registered Event
+  /// Sent when an application registers a tray item with the compositor's
+  /// StatusNotifierWatcher, and for every known item once the shell is ready.
+  const factory PlatformEvent.systemTrayItemRegistered({
+    required String method,
+    required SystemTrayItemRegisteredMessage message,
+  }) = SystemTrayItemRegisteredEvent;
+
+  /// System Tray Item Unregistered Event
+  /// Sent when a tray item's bus name loses its owner.
+  const factory PlatformEvent.systemTrayItemUnregistered({
+    required String method,
+    required SystemTrayItemUnregisteredMessage message,
+  }) = SystemTrayItemUnregisteredEvent;
 
   /// Creates a new [PlatformEvent] instance from a map.
   ///

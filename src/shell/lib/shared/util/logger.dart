@@ -11,6 +11,7 @@ final geometryLog = logging.Logger('Geometry');
 final matchingLog = logging.Logger('Matching');
 final notificationLog = logging.Logger('Notification');
 final mprisLog = logging.Logger('Mpris');
+final systemTrayLog = logging.Logger('SystemTray');
 final polkitLog = logging.Logger('Polkit');
 final captureLog = logging.Logger('Capture');
 final fileExplorerLog = logging.Logger('FileExplorer');

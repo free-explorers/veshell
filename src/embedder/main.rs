@@ -49,6 +49,7 @@ mod probe;
 mod settings;
 mod state;
 mod surface_pacing;
+mod system_tray;
 mod texture_swap_chain;
 mod wayland;
 

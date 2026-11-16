@@ -18,6 +18,7 @@ class StatusBarContentValue extends ConsumerWidget {
     final settings = ref.watch(statusBarSettingsProvider);
     final items = [
       if (settings.showClock) l10n.statusBarClock,
+      if (settings.showSystemTray) l10n.statusBarSystemTray,
       if (settings.showKeyboardLayout) l10n.statusBarKeyboardLayout,
       if (settings.showWifi) l10n.statusBarWifi,
       if (settings.showVolume) l10n.statusBarVolume,
@@ -97,6 +98,12 @@ class StatusBarContentEditor extends ConsumerWidget
                   }
                 : null,
           ),
+        ),
+        toggle(
+          key: 'showSystemTray',
+          title: l10n.statusBarSystemTray,
+          description: l10n.statusBarSystemTrayDescription,
+          value: settings.showSystemTray,
         ),
         toggle(
           key: 'showKeyboardLayout',

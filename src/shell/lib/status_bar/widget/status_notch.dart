@@ -47,30 +47,40 @@ class StatusNotch extends ConsumerWidget {
         // Clipped to its outline for hits too: the picker, and the tiles
         // beside the notch's curves, stay reachable.
         clipper: const StatusNotchClipper(shape),
-        child: AbsorbPointer(
-          child: Material(
-            color: colors.background,
-            child: SizedBox(
-              height: height,
-              child: Padding(
-                padding: const EdgeInsets.only(
-                  top: gap,
-                  left: _contentInset,
-                  right: _contentInset,
-                ),
-                child: StatusBarItemTheme(
-                  foreground: colors.foreground,
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      StatusBarIcons(),
-                      // The clock sits apart from the icons.
-                      Padding(
-                        padding: EdgeInsetsDirectional.only(start: 4),
-                        child: StatusBarClock(),
+        // The notch takes the hits inside its outline (the Material absorbs
+        // them), so the tiles under it do not get them.
+        child: Material(
+          color: colors.background,
+          child: SizedBox(
+            height: height,
+            child: Padding(
+              padding: const EdgeInsets.only(
+                top: gap,
+                left: _contentInset,
+                right: _contentInset,
+              ),
+              child: StatusBarItemTheme(
+                foreground: colors.foreground,
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // The tray icons are the only part of the notch that
+                    // answers clicks: they drive their applications.
+                    StatusBarSystemTray(),
+                    AbsorbPointer(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          StatusBarIcons(includeSystemTray: false),
+                          // The clock sits apart from the icons.
+                          Padding(
+                            padding: EdgeInsetsDirectional.only(start: 4),
+                            child: StatusBarClock(),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),

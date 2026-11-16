@@ -689,6 +689,47 @@ pub mod xdg {
     /// Electron rely on instead of `xdg_toplevel.set_parent`. When known, it
     /// is turned into a transient parent so the existing dialog routing groups
     /// the new window under the correct application instance.
+    /// Focuses `surface`, which the user asked for (an invoked notification
+    /// action, an activated tray item), and asks the shell to bring its window
+    /// into view: the compositor's focus alone would leave it off-screen. When
+    /// `meta_window_id` is unknown, the surface's own window is used.
+    fn honor_user_activation<BackendData: Backend>(
+        state: &mut State<BackendData>,
+        surface: &WlSurface,
+        meta_window_id: Option<String>,
+        source: &'static str,
+    ) {
+        let meta_window_id = meta_window_id.or_else(|| {
+            state
+                .meta_window_state
+                .meta_window_id_per_surface_id
+                .get(&get_surface_id(surface))
+                .cloned()
+        });
+        match crate::flutter_engine::platform_channel_callbacks::activate_window::focus_surface(
+            state, surface,
+        ) {
+            Ok(()) => {
+                info!(
+                    target: "veshell::geometry",
+                    ?meta_window_id,
+                    source,
+                    "xdg_activation: user activation focused its window"
+                );
+                if let Some(meta_window_id) = meta_window_id {
+                    state.request_navigation(&meta_window_id);
+                }
+            }
+            Err((code, message)) => warn!(
+                target: "veshell::geometry",
+                error = code,
+                message,
+                source,
+                "xdg_activation: user activation could not focus its window"
+            ),
+        }
+    }
+
     impl<BackendData: Backend> XdgActivationHandler for State<BackendData> {
         fn activation_state(&mut self) -> &mut XdgActivationState {
             &mut self.xdg_activation_state
@@ -700,35 +741,38 @@ pub mod xdg {
             token_data: XdgActivationTokenData,
             surface: WlSurface,
         ) {
-            // A token minted by the notification server for an invoked action
-            // is trusted: the user asked for the window, so honor the
-            // activation by focusing it instead of reading it as a demand for
-            // attention.
-            if let Some(meta_window_id) = self.take_notification_activation_token(token.as_str()) {
+            // A token the compositor minted for an invoked notification action
+            // or an activated tray item is trusted: the user asked for the
+            // window, so honor the activation by focusing it instead of reading
+            // it as a demand for attention.
+            if let Some(minted_for) = self.take_trusted_activation_token(token.as_str()) {
                 self.xdg_activation_state.remove_token(&token);
-                match crate::flutter_engine::platform_channel_callbacks::activate_window::focus_surface(
-                    self,
-                    &surface,
-                ) {
-                    Ok(()) => {
-                        info!(
-                            target: "veshell::geometry",
-                            meta_window_id,
-                            "xdg_activation: notification token focused its window"
-                        );
-                        // The compositor focused the surface, but only the
-                        // shell can select the workspace/tile that makes the
-                        // window visible.
-                        self.notify_window_activation_requested(&meta_window_id);
-                    }
-                    Err((code, message)) => warn!(
-                        target: "veshell::geometry",
-                        error = code,
-                        message,
-                        "xdg_activation: notification token could not focus its window"
-                    ),
-                }
+                honor_user_activation(self, &surface, minted_for, "trusted token");
                 return;
+            }
+
+            // An application whose tray item the user just activated, but which
+            // cannot take a trusted token (no `ProvideXdgActivationToken`: Chromium
+            // and Electron applications), activates its window with a token of
+            // its own. Coming from that same process within moments of the
+            // click, it is the user's request too.
+            let activated_meta_window_id = self
+                .meta_window_state
+                .meta_window_id_per_surface_id
+                .get(&get_surface_id(&surface))
+                .cloned();
+            let activated_pid = activated_meta_window_id.as_ref().and_then(|id| {
+                self.meta_window_state
+                    .meta_windows
+                    .get(id)
+                    .map(|meta_window| meta_window.pid)
+            });
+            if let Some(pid) = activated_pid {
+                if self.system_tray_state.take_activation_grant(pid) {
+                    self.xdg_activation_state.remove_token(&token);
+                    honor_user_activation(self, &surface, activated_meta_window_id, "tray item");
+                    return;
+                }
             }
 
             let activated_surface_id = get_surface_id(&surface);

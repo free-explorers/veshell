@@ -37,7 +37,7 @@ pub fn notification_activation_token<BackendData: Backend + 'static>(
             }
         };
 
-    let token = data.mint_notification_activation_token(&payload.meta_window_id);
+    let token = data.mint_trusted_activation_token(Some(&payload.meta_window_id));
     data.notification_state
         .emit_activation_token(payload.id, &token);
     result.success(None);
