@@ -367,6 +367,104 @@ void main() {
         ]);
       },
     );
+
+    testWidgets('a multiple open request returns every Ctrl-clicked file', (
+      tester,
+    ) async {
+      final calls = _recordPlatformCalls(tester);
+      await pumpChooser(tester, _openRequest().copyWith(multiple: true));
+
+      await tester.tap(find.text('alpha.png'));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.tap(find.text('beta.txt'));
+      // A folder is never part of an open-files selection.
+      await tester.tap(find.text('Documents'));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Open'));
+      await tester.pumpAndSettle();
+
+      expect((calls.single.arguments as Map)['uris'], [
+        'file:///home/user/alpha.png',
+        'file:///home/user/beta.txt',
+      ]);
+    });
+
+    testWidgets('Ctrl-click deselects a file and Shift extends a range', (
+      tester,
+    ) async {
+      final calls = _recordPlatformCalls(tester);
+      await pumpChooser(tester, _openRequest().copyWith(multiple: true));
+
+      await tester.tap(find.text('alpha.png'));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.tap(find.text('alpha.png'));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Open'))
+            .onPressed,
+        isNull,
+        reason: 'nothing is selected any more',
+      );
+
+      await tester.tap(find.text('Documents'));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.tap(find.text('beta.txt'));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Open'));
+      await tester.pumpAndSettle();
+
+      expect((calls.single.arguments as Map)['uris'], [
+        'file:///home/user/alpha.png',
+        'file:///home/user/beta.txt',
+      ]);
+    });
+
+    testWidgets('Shift and the arrows extend the selection from the search', (
+      tester,
+    ) async {
+      final calls = _recordPlatformCalls(tester);
+      await pumpChooser(tester, _openRequest().copyWith(multiple: true));
+
+      // Each key lands on its own frame, as typed keys do.
+      Future<void> press(LogicalKeyboardKey key) async {
+        await tester.sendKeyEvent(key);
+        await tester.pump();
+      }
+
+      await press(LogicalKeyboardKey.arrowDown);
+      await press(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await press(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await press(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+
+      expect((calls.single.arguments as Map)['uris'], [
+        'file:///home/user/alpha.png',
+        'file:///home/user/beta.txt',
+      ]);
+    });
+
+    testWidgets('a single open request ignores Ctrl', (tester) async {
+      final calls = _recordPlatformCalls(tester);
+      await pumpChooser(tester, _openRequest());
+
+      await tester.tap(find.text('alpha.png'));
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.tap(find.text('beta.txt'));
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Open'));
+      await tester.pumpAndSettle();
+
+      expect((calls.single.arguments as Map)['uris'], [
+        'file:///home/user/beta.txt',
+      ]);
+    });
   });
 }
 

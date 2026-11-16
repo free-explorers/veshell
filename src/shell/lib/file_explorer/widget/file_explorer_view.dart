@@ -44,6 +44,7 @@ class FileExplorerView extends HookConsumerWidget {
   const FileExplorerView({
     required this.searchText,
     this.selectedIndex,
+    this.selectedIndexSet,
     this.onSelect,
     this.onActivate,
     this.onOpenDirectory,
@@ -57,6 +58,11 @@ class FileExplorerView extends HookConsumerWidget {
 
   /// Index of the entry to highlight in the filtered list, or `null`.
   final int? selectedIndex;
+
+  /// Indexes of the entries to highlight when several are selected at once.
+  /// When set, it replaces [selectedIndex] for painting, which then only
+  /// tracks the keyboard cursor (kept in view).
+  final Set<int>? selectedIndexSet;
 
   final ValueChanged<int>? onSelect;
   final ValueChanged<int>? onActivate;
@@ -173,6 +179,7 @@ class FileExplorerView extends HookConsumerWidget {
                         entryList: entryList,
                         showDetails: showDetails,
                         selectedIndex: selectedIndex,
+                        selectedIndexSet: selectedIndexSet,
                         onSelect: onSelect,
                         onActivate: onActivate,
                         resultFocus: resultFocus,
@@ -440,6 +447,7 @@ class _FileEntryList extends HookConsumerWidget {
     required this.entryList,
     required this.showDetails,
     this.selectedIndex,
+    this.selectedIndexSet,
     this.onSelect,
     this.onActivate,
     this.resultFocus,
@@ -448,6 +456,7 @@ class _FileEntryList extends HookConsumerWidget {
   final List<FileEntry> entryList;
   final bool showDetails;
   final int? selectedIndex;
+  final Set<int>? selectedIndexSet;
   final ValueChanged<int>? onSelect;
   final ValueChanged<int>? onActivate;
   final OverviewResultFocus? resultFocus;
@@ -463,6 +472,14 @@ class _FileEntryList extends HookConsumerWidget {
 
     void handleTap(int index) {
       resultFocus?.moveTo(index);
+      // A `Ctrl` or `Shift` click edits a multiple selection: two of them on
+      // one row toggle it twice, they never open it.
+      final keyboard = HardwareKeyboard.instance;
+      if (keyboard.isControlPressed || keyboard.isShiftPressed) {
+        lastTap.value = null;
+        onSelect?.call(index);
+        return;
+      }
       final now = DateTime.now();
       final previous = lastTap.value;
       if (previous != null &&
@@ -511,7 +528,8 @@ class _FileEntryList extends HookConsumerWidget {
           modifiedLabel: entry.modified == null
               ? null
               : formatModifiedDate(entry.modified!, now: now, locale: locale),
-          isSelected: index == selectedIndex,
+          isSelected:
+              selectedIndexSet?.contains(index) ?? index == selectedIndex,
           focusNode: focus?.rowNode(index),
           onFocus: (focus == null || onSelect == null)
               ? null

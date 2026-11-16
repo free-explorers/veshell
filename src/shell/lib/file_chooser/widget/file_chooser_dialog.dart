@@ -33,6 +33,10 @@ const _fileChooserScreenId = '__file_chooser__';
 /// The dialog takes the keyboard as soon as it opens: the save name is focused
 /// with its base name selected, ready to be retyped, and the other modes focus
 /// the search field, whose arrows move the selection and `Enter` opens it.
+///
+/// An open request allowing `multiple` entries selects several at once, the
+/// file-manager way: `Ctrl`+click toggles an entry, `Shift`+click and
+/// `Shift`+arrows extend a range from the last plain or `Ctrl` click.
 class FileChooserDialog extends HookConsumerWidget {
   /// constructor
   const FileChooserDialog({required this.request, super.key});
@@ -52,10 +56,20 @@ class FileChooserDialog extends HookConsumerWidget {
     final isSave = request.mode == FileChooserMode.save;
     final isFolderPicker =
         request.mode == FileChooserMode.open && request.directory;
+    final allowMultiple =
+        request.mode == FileChooserMode.open && request.multiple;
+    // What the request can return: folders for a folder picker, files
+    // otherwise.
+    bool isReturnable(FileEntry entry) =>
+        isFolderPicker ? entry.isDirectory : !entry.isDirectory;
 
     // The selection is kept by path, not by index: filtering or re-sorting the
     // listing must never move the highlight onto another entry.
     final selectedPath = useState<DirectoryPath?>(null);
+    // With `multiple`, [selectedPath] is only the keyboard cursor: the
+    // selection is this set, and a range extends from [anchorPath].
+    final markedPathSet = useState<Set<DirectoryPath>>(const {});
+    final anchorPath = useState<DirectoryPath?>(null);
     final nameText = useState(_initialName(request));
     final searchText = useState('');
     final selectedFilter = useState<int?>(request.filters.isEmpty ? null : 0);
@@ -72,6 +86,8 @@ class FileChooserDialog extends HookConsumerWidget {
     // the default type filter and take the keyboard.
     useEffect(() {
       selectedPath.value = null;
+      markedPathSet.value = const {};
+      anchorPath.value = null;
       nameText.value = _initialName(request);
       nameController.text = nameText.value;
       searchText.value = '';
@@ -107,6 +123,8 @@ class FileChooserDialog extends HookConsumerWidget {
     // A stale selection never survives a change of directory.
     useEffect(() {
       selectedPath.value = null;
+      markedPathSet.value = const {};
+      anchorPath.value = null;
       return null;
     }, [explorer.path]);
 
@@ -119,6 +137,14 @@ class FileChooserDialog extends HookConsumerWidget {
     final selectedEntry = selectedIndex == null
         ? null
         : entryList[selectedIndex];
+    // The marked entries still listed (a type filter may hide some), in
+    // listing order.
+    final markedEntryList = allowMultiple
+        ? [
+            for (final entry in entryList)
+              if (markedPathSet.value.contains(entry.path)) entry,
+          ]
+        : const <FileEntry>[];
 
     void setName(String name) {
       nameText.value = name;
@@ -127,7 +153,7 @@ class FileChooserDialog extends HookConsumerWidget {
         ..selection = _baseNameSelection(name);
     }
 
-    void select(int index) {
+    void select(int index, {bool extend = false}) {
       if (index < 0 || index >= entryList.length) {
         return;
       }
@@ -136,7 +162,39 @@ class FileChooserDialog extends HookConsumerWidget {
       if (isSave && !entry.isDirectory) {
         setName(entry.name);
       }
+      if (!allowMultiple) {
+        return;
+      }
+      final keyboard = HardwareKeyboard.instance;
+      final anchorIndex = anchorPath.value == null
+          ? -1
+          : entryList.indexWhere((entry) => entry.path == anchorPath.value);
+      if ((extend || keyboard.isShiftPressed) && anchorIndex >= 0) {
+        final first = index < anchorIndex ? index : anchorIndex;
+        final last = index < anchorIndex ? anchorIndex : index;
+        markedPathSet.value = {
+          for (final entry in entryList.sublist(first, last + 1))
+            if (isReturnable(entry)) entry.path,
+        };
+        return;
+      }
+      anchorPath.value = entry.path;
+      if (keyboard.isControlPressed) {
+        if (isReturnable(entry)) {
+          final next = {...markedPathSet.value};
+          if (!next.remove(entry.path)) {
+            next.add(entry.path);
+          }
+          markedPathSet.value = next;
+        }
+        return;
+      }
+      markedPathSet.value = isReturnable(entry) ? {entry.path} : const {};
     }
+
+    void approveEntries(List<FileEntry> entries) => chooser.approve([
+      for (final entry in entries) _fileUri(entry.path.path),
+    ]);
 
     void approveFolder(DirectoryPath path) =>
         chooser.approve([_fileUri(path.path)]);
@@ -161,11 +219,17 @@ class FileChooserDialog extends HookConsumerWidget {
         nameFocusNode.requestFocus();
         return;
       }
-      chooser.approve([_fileUri(entry.path.path)]);
+      // Activating one of the marked files opens them all.
+      if (markedEntryList.any((marked) => marked.path == entry.path)) {
+        approveEntries(markedEntryList);
+        return;
+      }
+      approveEntries([entry]);
     }
 
-    /// Moves the selection by [delta] rows, from the top when none is set.
-    void moveSelection(int delta) {
+    /// Moves the selection by [delta] rows, from the top when none is set;
+    /// [extend] grows the multiple selection instead of replacing it.
+    void moveSelection(int delta, {bool extend = false}) {
       if (entryList.isEmpty) {
         return;
       }
@@ -173,13 +237,19 @@ class FileChooserDialog extends HookConsumerWidget {
       final next = current == null
           ? (delta > 0 ? 0 : entryList.length - 1)
           : (current + delta).clamp(0, entryList.length - 1);
-      select(next);
+      select(next, extend: extend);
     }
 
     void accept() {
       switch (request.mode) {
         case FileChooserMode.open:
-          if (request.directory) {
+          if (allowMultiple) {
+            if (markedEntryList.isNotEmpty) {
+              approveEntries(markedEntryList);
+            } else if (request.directory) {
+              approveFolder(explorer.path);
+            }
+          } else if (request.directory) {
             approveFolder(
               selectedEntry != null && selectedEntry.isDirectory
                   ? selectedEntry.path
@@ -206,6 +276,8 @@ class FileChooserDialog extends HookConsumerWidget {
     }
 
     final acceptEnabled = switch (request.mode) {
+      FileChooserMode.open when allowMultiple =>
+        request.directory || markedEntryList.isNotEmpty,
       FileChooserMode.open =>
         request.directory ||
             (selectedEntry != null && !selectedEntry.isDirectory),
@@ -238,6 +310,10 @@ class FileChooserDialog extends HookConsumerWidget {
             moveSelection(1),
         const SingleActivator(LogicalKeyboardKey.arrowUp): () =>
             moveSelection(-1),
+        const SingleActivator(LogicalKeyboardKey.arrowDown, shift: true): () =>
+            moveSelection(1, extend: true),
+        const SingleActivator(LogicalKeyboardKey.arrowUp, shift: true): () =>
+            moveSelection(-1, extend: true),
         const SingleActivator(LogicalKeyboardKey.enter): () {
           if (selectedIndex != null) {
             activate(selectedIndex);
@@ -251,8 +327,11 @@ class FileChooserDialog extends HookConsumerWidget {
         focusNode: searchFocusNode,
         onChanged: (value) {
           searchText.value = value;
-          // Typing narrows the list: start the keyboard from the first match.
+          // Typing narrows the list: start the keyboard from the first match,
+          // and never return entries the filter now hides.
           selectedPath.value = null;
+          markedPathSet.value = const {};
+          anchorPath.value = null;
         },
         decoration: _fieldDecoration(
           colorScheme,
@@ -357,6 +436,15 @@ class FileChooserDialog extends HookConsumerWidget {
                         child: FileExplorerView(
                           searchText: searchText.value,
                           selectedIndex: selectedIndex,
+                          selectedIndexSet: allowMultiple
+                              ? {
+                                  for (var i = 0; i < entryList.length; i++)
+                                    if (markedPathSet.value.contains(
+                                      entryList[i].path,
+                                    ))
+                                      i,
+                                }
+                              : null,
                           onSelect: select,
                           onActivate: activate,
                           onOpenDirectory: notifier.openBreadcrumb,
