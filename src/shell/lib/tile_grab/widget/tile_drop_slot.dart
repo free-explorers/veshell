@@ -47,6 +47,7 @@ class TileDropSlot extends HookConsumerWidget {
     this.windowId,
     this.initialDisplayIndex,
     this.leaving,
+    this.viewShift = 0,
     super.key,
   });
 
@@ -68,6 +69,12 @@ class TileDropSlot extends HookConsumerWidget {
   ///
   /// It must be keyed: once a key has been covered, it is not drawn again.
   final Widget? leaving;
+
+  /// How many slots the row's view jumped back with the latest change of the
+  /// window list: the tiles before it were removed, so every tile now sits
+  /// that many slots earlier while staying where it is on screen. The tile
+  /// jumps with the view instead of sliding to its new slot.
+  final int viewShift;
 
   final Widget child;
 
@@ -110,6 +117,11 @@ class TileDropSlot extends HookConsumerWidget {
             (morphs) => windowList.any(morphs.containsKey),
           ),
         );
+    // The view only jumps with the change of window list it came with, not on
+    // a later rebuild of this slot alone.
+    final shownWindowList = useRef(windowList);
+    final viewShift = shownWindowList.value == windowList ? 0 : this.viewShift;
+    shownWindowList.value = windowList;
     final position = useAnimationController(
       lowerBound: double.negativeInfinity,
       upperBound: double.infinity,
@@ -120,6 +132,7 @@ class TileDropSlot extends HookConsumerWidget {
       // The hidden held slot follows invisibly. Every other change of slot
       // slides, even with a single tile shown: the next tile pulled into a
       // vacated slot moves over it instead of jumping into place.
+      if (viewShift != 0) position.value -= viewShift;
       if (isHeld) {
         position.value = displayIndex;
       } else if (makesWayForLaunch) {
