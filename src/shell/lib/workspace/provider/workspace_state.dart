@@ -203,7 +203,15 @@ class WorkspaceState extends _$WorkspaceState {
     final removedIsCurrentlyFocused =
         state.selectedIndex < state.tileableWindowList.length &&
         windowId == state.tileableWindowList[state.selectedIndex];
+    final removedIndex = state.tileableWindowList.indexOf(windowId);
     final newWindowList = state.tileableWindowList.remove(windowId);
+
+    // A tile removed before the leading one shown pulls the shown tiles back
+    // one slot: the view follows them, so what is on screen stays put.
+    final firstVisibleIndex =
+        removedIndex >= 0 && removedIndex < state.firstVisibleIndex
+        ? state.firstVisibleIndex - 1
+        : state.firstVisibleIndex;
 
     var selectedIndex = state.selectedIndex;
     if (!removedIsCurrentlyFocused) {
@@ -219,6 +227,7 @@ class WorkspaceState extends _$WorkspaceState {
       tileableWindowList: newWindowList,
       category: state.forcedCategory ?? await _determineCategory(newWindowList),
       selectedIndex: selectedIndex,
+      firstVisibleIndex: firstVisibleIndex,
     );
 
     final workspaceId = ref.read(windowWorkspaceMapProvider).get(windowId);

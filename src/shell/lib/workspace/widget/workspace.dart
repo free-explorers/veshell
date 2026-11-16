@@ -146,6 +146,12 @@ class WorkspaceWidget extends HookConsumerWidget {
             previous.tileableWindowList != workspaceState.tileableWindowList
         ? previous.tileableWindowList
         : null;
+    // Tiles removed before the leading one shown move the view back with the
+    // tiles after them (see `WorkspaceState.removeWindow`), so the tiles on
+    // screen stay put instead of sliding.
+    final viewShift = previous != null && previousList != null
+        ? previous.firstVisibleIndex - workspaceState.firstVisibleIndex
+        : 0;
     if (previous != null && previousList != null) {
       // A held tile is already drawn flying to its destination.
       leavingTiles.value = isGrabbing
@@ -159,7 +165,7 @@ class WorkspaceWidget extends HookConsumerWidget {
       final index = tileable is PersistentWindowTileable
           ? previousList.indexOf(tileable.windowId)
           : previousList.length;
-      return index < 0 ? null : index.toDouble();
+      return index < 0 ? null : (index - viewShift).toDouble();
     }
 
     final selectionIndicator =
@@ -327,6 +333,7 @@ class WorkspaceWidget extends HookConsumerWidget {
                                 tileable,
                               ),
                               leaving: leavingTiles.value[index],
+                              viewShift: viewShift,
                               child: _FocusSaturation(
                                 desaturated:
                                     grayscaleUnfocused &&
@@ -395,7 +402,9 @@ Map<int, Widget> _leavingTiles(
   for (final (index, windowId) in previous.tileableWindowList.indexed) {
     if (windowList.contains(windowId)) continue;
     final provider = persistentWindowStateProvider(windowId);
-    if (ref.exists(provider)) {
+    // One before the leading tile shown was off screen: the view moves back
+    // over its slot, and no tile slides over its face.
+    if (index >= previous.firstVisibleIndex && ref.exists(provider)) {
       // The tiles after it moved back one slot per removal before them.
       leaving[index - removedBefore] = TileRemovalGhost(
         // A fresh key per removal: a covered face is never drawn again.

@@ -98,6 +98,31 @@ class SlidingContainer extends HookConsumerWidget {
       upperBound: double.infinity,
       initialValue: index.toDouble(),
     );
+
+    // The caller moved the leading tile itself, not to follow this container's
+    // report: the pages before the view changed (a tile before it was
+    // removed), so the shown pages now sit at other indices. The view and the
+    // indicator jump with them, and what is on screen does not move.
+    final firstVisibleIndex = this.firstVisibleIndex;
+    final seenFirstVisibleIndex = useRef(firstVisibleIndex);
+    final previousFirstVisibleIndex = seenFirstVisibleIndex.value;
+    seenFirstVisibleIndex.value = firstVisibleIndex;
+    if (firstVisibleIndex != null &&
+        previousFirstVisibleIndex != null &&
+        firstVisibleIndex != previousFirstVisibleIndex &&
+        firstVisibleIndex != reportedFirstVisibleIndex.value &&
+        pageController.hasClients &&
+        pageController.position.hasPixels &&
+        pageController.position.hasViewportDimension) {
+      final shift = previousFirstVisibleIndex - firstVisibleIndex;
+      final pageDimension = pageController.position.viewportDimension / visible;
+      pageController.position.correctPixels(
+        pageController.offset - shift * pageDimension,
+      );
+      selectionPosition.value -= shift;
+      reportedFirstVisibleIndex.value = firstVisibleIndex;
+    }
+
     useEffect(() {
       selectionPosition.animateTo(index.toDouble(), curve: Curves.easeInOut);
       return null;
