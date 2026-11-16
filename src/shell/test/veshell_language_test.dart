@@ -158,9 +158,7 @@ void main() {
     final dispatcher = TestWidgetsFlutterBinding.instance.platformDispatcher
       ..localesTestValue = const [Locale('zz')];
     addTearDown(dispatcher.clearLocalesTestValue);
-    final directory = Directory(
-      '/tmp/opencode',
-    ).createTempSync('veshell-language-');
+    final directory = Directory.systemTemp.createTempSync('veshell-language-');
     addTearDown(() => directory.deleteSync(recursive: true));
     final file = File('${directory.path}/settings.json')
       ..writeAsStringSync(jsonEncode({'unrelated': true}));
