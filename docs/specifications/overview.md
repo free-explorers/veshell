@@ -18,6 +18,12 @@ name, or the file name. Selecting a window's tab displays it and hands it the
 keyboard. The content cross-fades when the selection changes, and only the
 selected button is tinted — unselected buttons use a low surface.
 
+A window that opens while the overview is displayed and that no tile claims
+(an application opened from a tray item in the Helm, a window an application
+opens on its own) joins the overview as an ephemeral window and is selected,
+instead of becoming a tile in the workspace behind it. See
+[the matching fallback](matching_algorithm.md).
+
 Selecting a file in the Files mode opens or reuses a **preview tab** and
 displays it:
 
