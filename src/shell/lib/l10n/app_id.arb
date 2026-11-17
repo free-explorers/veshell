@@ -452,12 +452,12 @@
   "statusBarBatteryDescription": "Tampilkan level baterai",
   "statusBarBatteryPercentage": "Persentase baterai",
   "statusBarBatteryPercentageDescription": "Tampilkan level baterai dalam persen di samping ikonnya",
-  "touchpadTapToClick": "Touchpad: Tap to Click",
-  "touchpadTapToClickDescription": "Tap the touchpad to click",
-  "touchpadDisableWhileTyping": "Touchpad: Disable While Typing",
-  "touchpadDisableWhileTypingDescription": "Ignore touchpad input while typing",
-  "mouseSpeed": "Mouse: Pointer Speed",
-  "mouseSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default",
-  "touchpadSpeed": "Touchpad: Pointer Speed",
-  "touchpadSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default"
+  "touchpadTapToClick": "Touchpad: Ketuk untuk Klik",
+  "touchpadTapToClickDescription": "Ketuk touchpad untuk mengklik",
+  "touchpadDisableWhileTyping": "Touchpad: Nonaktifkan saat Mengetik",
+  "touchpadDisableWhileTypingDescription": "Abaikan input touchpad saat mengetik",
+  "mouseSpeed": "Mouse: Kecepatan Penunjuk",
+  "mouseSpeedDescription": "Kecepatan penunjuk dari -1.0 (lambat) hingga 1.0 (cepat); 0.0 adalah bawaan",
+  "touchpadSpeed": "Touchpad: Kecepatan Penunjuk",
+  "touchpadSpeedDescription": "Kecepatan penunjuk dari -1.0 (lambat) hingga 1.0 (cepat); 0.0 adalah bawaan"
 }

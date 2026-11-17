@@ -452,12 +452,12 @@
   "statusBarBatteryDescription": "Hiện mức pin",
   "statusBarBatteryPercentage": "Phần trăm pin",
   "statusBarBatteryPercentageDescription": "Hiện mức pin dạng phần trăm cạnh biểu tượng",
-  "touchpadTapToClick": "Touchpad: Tap to Click",
-  "touchpadTapToClickDescription": "Tap the touchpad to click",
-  "touchpadDisableWhileTyping": "Touchpad: Disable While Typing",
-  "touchpadDisableWhileTypingDescription": "Ignore touchpad input while typing",
-  "mouseSpeed": "Mouse: Pointer Speed",
-  "mouseSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default",
-  "touchpadSpeed": "Touchpad: Pointer Speed",
-  "touchpadSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default"
+  "touchpadTapToClick": "Bàn di chuột: chạm để nhấp",
+  "touchpadTapToClickDescription": "Chạm vào bàn di chuột để nhấp",
+  "touchpadDisableWhileTyping": "Bàn di chuột: tắt khi gõ phím",
+  "touchpadDisableWhileTypingDescription": "Bỏ qua thao tác trên bàn di chuột khi gõ phím",
+  "mouseSpeed": "Chuột: tốc độ con trỏ",
+  "mouseSpeedDescription": "Tốc độ con trỏ từ -1.0 (chậm) đến 1.0 (nhanh); 0.0 là mặc định",
+  "touchpadSpeed": "Bàn di chuột: tốc độ con trỏ",
+  "touchpadSpeedDescription": "Tốc độ con trỏ từ -1.0 (chậm) đến 1.0 (nhanh); 0.0 là mặc định"
 }

@@ -452,12 +452,12 @@
   "statusBarBatteryDescription": "إظهار مستوى البطارية",
   "statusBarBatteryPercentage": "نسبة البطارية",
   "statusBarBatteryPercentageDescription": "إظهار مستوى البطارية كنسبة مئوية بجوار رمزها",
-  "touchpadTapToClick": "Touchpad: Tap to Click",
-  "touchpadTapToClickDescription": "Tap the touchpad to click",
-  "touchpadDisableWhileTyping": "Touchpad: Disable While Typing",
-  "touchpadDisableWhileTypingDescription": "Ignore touchpad input while typing",
-  "mouseSpeed": "Mouse: Pointer Speed",
-  "mouseSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default",
-  "touchpadSpeed": "Touchpad: Pointer Speed",
-  "touchpadSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default"
+  "touchpadTapToClick": "لوحة اللمس: النقر بلمسة",
+  "touchpadTapToClickDescription": "المس لوحة اللمس للنقر",
+  "touchpadDisableWhileTyping": "لوحة اللمس: التعطيل أثناء الكتابة",
+  "touchpadDisableWhileTypingDescription": "تجاهل إدخال لوحة اللمس أثناء الكتابة",
+  "mouseSpeed": "الفأرة: سرعة المؤشر",
+  "mouseSpeedDescription": "سرعة المؤشر من -1.0 (بطيء) إلى 1.0 (سريع)؛ 0.0 هو الافتراضي",
+  "touchpadSpeed": "لوحة اللمس: سرعة المؤشر",
+  "touchpadSpeedDescription": "سرعة المؤشر من -1.0 (بطيء) إلى 1.0 (سريع)؛ 0.0 هو الافتراضي"
 }

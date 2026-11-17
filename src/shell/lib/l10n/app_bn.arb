@@ -452,12 +452,12 @@
   "statusBarBatteryDescription": "ব্যাটারির স্তর দেখান",
   "statusBarBatteryPercentage": "ব্যাটারির শতাংশ",
   "statusBarBatteryPercentageDescription": "আইকনের পাশে ব্যাটারির স্তর শতাংশে দেখান",
-  "touchpadTapToClick": "Touchpad: Tap to Click",
-  "touchpadTapToClickDescription": "Tap the touchpad to click",
-  "touchpadDisableWhileTyping": "Touchpad: Disable While Typing",
-  "touchpadDisableWhileTypingDescription": "Ignore touchpad input while typing",
-  "mouseSpeed": "Mouse: Pointer Speed",
-  "mouseSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default",
-  "touchpadSpeed": "Touchpad: Pointer Speed",
-  "touchpadSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default"
+  "touchpadTapToClick": "টাচপ্যাড: ট্যাপ করে ক্লিক",
+  "touchpadTapToClickDescription": "ক্লিক করতে টাচপ্যাডে ট্যাপ করুন",
+  "touchpadDisableWhileTyping": "টাচপ্যাড: টাইপ করার সময় নিষ্ক্রিয় করুন",
+  "touchpadDisableWhileTypingDescription": "টাইপ করার সময় টাচপ্যাড ইনপুট উপেক্ষা করুন",
+  "mouseSpeed": "মাউস: পয়েন্টার গতি",
+  "mouseSpeedDescription": "পয়েন্টার গতি -1.0 (ধীর) থেকে 1.0 (দ্রুত); 0.0 ডিফল্ট",
+  "touchpadSpeed": "টাচপ্যাড: পয়েন্টার গতি",
+  "touchpadSpeedDescription": "পয়েন্টার গতি -1.0 (ধীর) থেকে 1.0 (দ্রুত); 0.0 ডিফল্ট"
 }

@@ -452,12 +452,12 @@
   "statusBarBatteryDescription": "배터리 잔량을 표시합니다",
   "statusBarBatteryPercentage": "배터리 백분율",
   "statusBarBatteryPercentageDescription": "아이콘 옆에 배터리 잔량을 백분율로 표시합니다",
-  "touchpadTapToClick": "Touchpad: Tap to Click",
-  "touchpadTapToClickDescription": "Tap the touchpad to click",
-  "touchpadDisableWhileTyping": "Touchpad: Disable While Typing",
-  "touchpadDisableWhileTypingDescription": "Ignore touchpad input while typing",
-  "mouseSpeed": "Mouse: Pointer Speed",
-  "mouseSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default",
-  "touchpadSpeed": "Touchpad: Pointer Speed",
-  "touchpadSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default"
+  "touchpadTapToClick": "터치패드: 탭하여 클릭",
+  "touchpadTapToClickDescription": "터치패드를 탭하여 클릭합니다",
+  "touchpadDisableWhileTyping": "터치패드: 입력 중 비활성화",
+  "touchpadDisableWhileTypingDescription": "입력 중에는 터치패드 입력을 무시합니다",
+  "mouseSpeed": "마우스: 포인터 속도",
+  "mouseSpeedDescription": "포인터 속도는 -1.0(느림)에서 1.0(빠름)까지이며 0.0이 기본값입니다",
+  "touchpadSpeed": "터치패드: 포인터 속도",
+  "touchpadSpeedDescription": "포인터 속도는 -1.0(느림)에서 1.0(빠름)까지이며 0.0이 기본값입니다"
 }

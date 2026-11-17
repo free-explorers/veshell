@@ -452,12 +452,12 @@
   "statusBarBatteryDescription": "Pil düzeyini göster",
   "statusBarBatteryPercentage": "Pil yüzdesi",
   "statusBarBatteryPercentageDescription": "Pil düzeyini simgesinin yanında yüzde olarak göster",
-  "touchpadTapToClick": "Touchpad: Tap to Click",
-  "touchpadTapToClickDescription": "Tap the touchpad to click",
-  "touchpadDisableWhileTyping": "Touchpad: Disable While Typing",
-  "touchpadDisableWhileTypingDescription": "Ignore touchpad input while typing",
-  "mouseSpeed": "Mouse: Pointer Speed",
-  "mouseSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default",
-  "touchpadSpeed": "Touchpad: Pointer Speed",
-  "touchpadSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default"
+  "touchpadTapToClick": "Dokunmatik yüzey: dokunarak tıklama",
+  "touchpadTapToClickDescription": "Tıklamak için dokunmatik yüzeye dokunun",
+  "touchpadDisableWhileTyping": "Dokunmatik yüzey: yazarken devre dışı bırak",
+  "touchpadDisableWhileTypingDescription": "Yazarken dokunmatik yüzey girişini yok say",
+  "mouseSpeed": "Fare: işaretçi hızı",
+  "mouseSpeedDescription": "İşaretçi hızı -1.0 (yavaş) ile 1.0 (hızlı) arasında; 0.0 varsayılandır",
+  "touchpadSpeed": "Dokunmatik yüzey: işaretçi hızı",
+  "touchpadSpeedDescription": "İşaretçi hızı -1.0 (yavaş) ile 1.0 (hızlı) arasında; 0.0 varsayılandır"
 }

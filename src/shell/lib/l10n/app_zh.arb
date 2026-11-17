@@ -452,12 +452,12 @@
   "statusBarBatteryDescription": "显示电池电量",
   "statusBarBatteryPercentage": "电池百分比",
   "statusBarBatteryPercentageDescription": "在图标旁以百分比显示电池电量",
-  "touchpadTapToClick": "Touchpad: Tap to Click",
-  "touchpadTapToClickDescription": "Tap the touchpad to click",
-  "touchpadDisableWhileTyping": "Touchpad: Disable While Typing",
-  "touchpadDisableWhileTypingDescription": "Ignore touchpad input while typing",
-  "mouseSpeed": "Mouse: Pointer Speed",
-  "mouseSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default",
-  "touchpadSpeed": "Touchpad: Pointer Speed",
-  "touchpadSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default"
+  "touchpadTapToClick": "触摸板：轻触以单击",
+  "touchpadTapToClickDescription": "轻触触摸板以单击",
+  "touchpadDisableWhileTyping": "触摸板：输入时禁用",
+  "touchpadDisableWhileTypingDescription": "输入时忽略触摸板操作",
+  "mouseSpeed": "鼠标：指针速度",
+  "mouseSpeedDescription": "指针速度从 -1.0（慢）到 1.0（快）；0.0 为默认值",
+  "touchpadSpeed": "触摸板：指针速度",
+  "touchpadSpeedDescription": "指针速度从 -1.0（慢）到 1.0（快）；0.0 为默认值"
 }

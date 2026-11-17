@@ -452,12 +452,12 @@
   "statusBarBatteryDescription": "バッテリー残量を表示します",
   "statusBarBatteryPercentage": "バッテリー残量 (%)",
   "statusBarBatteryPercentageDescription": "アイコンの横にバッテリー残量をパーセントで表示します",
-  "touchpadTapToClick": "Touchpad: Tap to Click",
-  "touchpadTapToClickDescription": "Tap the touchpad to click",
-  "touchpadDisableWhileTyping": "Touchpad: Disable While Typing",
-  "touchpadDisableWhileTypingDescription": "Ignore touchpad input while typing",
-  "mouseSpeed": "Mouse: Pointer Speed",
-  "mouseSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default",
-  "touchpadSpeed": "Touchpad: Pointer Speed",
-  "touchpadSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default"
+  "touchpadTapToClick": "タッチパッド: タップでクリック",
+  "touchpadTapToClickDescription": "タッチパッドをタップしてクリックします",
+  "touchpadDisableWhileTyping": "タッチパッド: 入力中は無効化",
+  "touchpadDisableWhileTypingDescription": "入力中はタッチパッドの入力を無視します",
+  "mouseSpeed": "マウス: ポインターの速度",
+  "mouseSpeedDescription": "ポインターの速度（-1.0 が遅い、1.0 が速い）。0.0 が既定値です",
+  "touchpadSpeed": "タッチパッド: ポインターの速度",
+  "touchpadSpeedDescription": "ポインターの速度（-1.0 が遅い、1.0 が速い）。0.0 が既定値です"
 }
