@@ -2,6 +2,7 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/settings/provider/state/focus_indicator_setting.dart';
@@ -40,6 +41,11 @@ class WorkspaceWidget extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final windowManager = ref.watch(windowManagerProvider.notifier);
     final workspaceState = ref.watch(workspaceStateProvider(workspaceId));
+    final overviewDisplayed = ref.watch(
+      overviewStateProvider(
+        CurrentScreenId.of(context),
+      ).select((state) => state.isDisplayed),
+    );
 
     // The workspace as of the previous build, and the faces of the tiles its
     // last change removed, by the slot they are drawn under.
@@ -302,7 +308,8 @@ class WorkspaceWidget extends HookConsumerWidget {
                         isSwipeEnabled:
                             CurrentScreenId.of(context) ==
                                 ref.watch(focusedScreenProvider) &&
-                            isSelected,
+                            isSelected &&
+                            !overviewDisplayed,
                         selectionIndicator: selectionIndicator,
                         // A held tile finds its gap from the row's geometry.
                         viewportMetaData: (scrollOffset) => TileRowMarker(

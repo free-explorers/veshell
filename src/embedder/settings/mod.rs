@@ -352,9 +352,37 @@ pub struct MouseAndTouchpadSettings {
     /// libinput pointer acceleration profile for touchpads.
     #[serde(default, deserialize_with = "deserialize_acceleration_profile")]
     pub touchpad_acceleration_profile: AccelerationProfile,
+    /// Tap-to-click on touchpads.
+    ///
+    /// Defaults on, matching libinput on most modern touchpads and GNOME's
+    /// default for tap-capable pads. The compositor used to force it on with
+    /// no way to turn it off.
+    #[serde(default = "default_touchpad_tap_to_click")]
+    pub touchpad_tap_to_click: bool,
+    /// Ignore touchpad input while typing (libinput disable-while-typing).
+    ///
+    /// Defaults on, like libinput and GNOME.
+    #[serde(default = "default_touchpad_disable_while_typing")]
+    pub touchpad_disable_while_typing: bool,
+    /// libinput pointer speed for mice, from -1.0 (slowest) to 1.0 (fastest).
+    /// `0.0` is the device's default.
+    #[serde(default)]
+    pub mouse_speed: f64,
+    /// libinput pointer speed for touchpads, from -1.0 to 1.0. `0.0` is the
+    /// device's default.
+    #[serde(default)]
+    pub touchpad_speed: f64,
 }
 
 fn default_touchpad_natural_scrolling() -> bool {
+    true
+}
+
+fn default_touchpad_tap_to_click() -> bool {
+    true
+}
+
+fn default_touchpad_disable_while_typing() -> bool {
     true
 }
 
@@ -1249,5 +1277,23 @@ mod mouse_and_touchpad_settings_tests {
             unknown.touchpad_acceleration_profile,
             AccelerationProfile::Default
         );
+    }
+
+    #[test]
+    fn touchpad_options_default_on_and_speeds_to_neutral() {
+        let defaulted: MouseAndTouchpadSettings = serde_json::from_str("{}").unwrap();
+        assert!(defaulted.touchpad_tap_to_click);
+        assert!(defaulted.touchpad_disable_while_typing);
+        assert_eq!(defaulted.mouse_speed, 0.0);
+        assert_eq!(defaulted.touchpad_speed, 0.0);
+
+        let custom: MouseAndTouchpadSettings = serde_json::from_str(
+            r#"{"touchpadTapToClick":false,"touchpadDisableWhileTyping":false,"mouseSpeed":-0.5,"touchpadSpeed":0.75}"#,
+        )
+        .unwrap();
+        assert!(!custom.touchpad_tap_to_click);
+        assert!(!custom.touchpad_disable_while_typing);
+        assert_eq!(custom.mouse_speed, -0.5);
+        assert_eq!(custom.touchpad_speed, 0.75);
     }
 }

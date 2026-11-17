@@ -451,5 +451,13 @@
   "statusBarBattery": "बैटरी",
   "statusBarBatteryDescription": "बैटरी स्तर दिखाएँ",
   "statusBarBatteryPercentage": "बैटरी प्रतिशत",
-  "statusBarBatteryPercentageDescription": "आइकन के पास बैटरी स्तर प्रतिशत में दिखाएँ"
+  "statusBarBatteryPercentageDescription": "आइकन के पास बैटरी स्तर प्रतिशत में दिखाएँ",
+  "touchpadTapToClick": "Touchpad: Tap to Click",
+  "touchpadTapToClickDescription": "Tap the touchpad to click",
+  "touchpadDisableWhileTyping": "Touchpad: Disable While Typing",
+  "touchpadDisableWhileTypingDescription": "Ignore touchpad input while typing",
+  "mouseSpeed": "Mouse: Pointer Speed",
+  "mouseSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default",
+  "touchpadSpeed": "Touchpad: Pointer Speed",
+  "touchpadSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default"
 }

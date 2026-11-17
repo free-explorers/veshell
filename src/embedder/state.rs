@@ -256,11 +256,16 @@ pub struct State<BackendData: Backend + 'static> {
     pub notification_state: crate::notification::NotificationState,
     pub system_tray_state: crate::system_tray::SystemTrayState,
     /// View (monitor) that received the start of the current pointer gesture
-    /// (button-held drag, trackpad pan/zoom scroll, or pinch). Every later
-    /// event of that gesture is pinned to this view so Flutter sees one
-    /// consistent `view_id` and coordinate space even if the pointer crosses
-    /// monitors mid-gesture. `None` when no gesture is in progress.
+    /// (button-held drag or trackpad pan/zoom scroll). Every later event of
+    /// that gesture is pinned to this view so Flutter sees one consistent
+    /// `view_id` and coordinate space even if the pointer crosses monitors
+    /// mid-gesture. `None` when no gesture is in progress.
     pub pointer_gesture_view_id: Option<i64>,
+    /// Whether the libinput swipe gesture in progress is forwarded to the
+    /// Flutter shell. Decided at the begin event so the shell never sees an
+    /// update or end without its begin when the session state changes
+    /// mid-gesture (lock, gaming mode, screenshot selection).
+    pub shell_gesture_active: bool,
     /// Desired mirror source (connector name) per monitor, keyed by connector.
     ///
     /// Written from each monitor's `monitor/<connector>.json` when its
@@ -762,6 +767,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             notification_state,
             system_tray_state,
             pointer_gesture_view_id: None,
+            shell_gesture_active: false,
             mirror_of: HashMap::new(),
             idle,
             lock,

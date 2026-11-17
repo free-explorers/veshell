@@ -4,6 +4,12 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 
+typedef _SwipeCallbacks = (
+  void Function(GestureSwipeBeginEvent event),
+  void Function(GestureSwipeUpdateEvent event),
+  void Function(GestureSwipeEndEvent event),
+);
+
 class SwipeGestureDetector extends HookConsumerWidget {
   const SwipeGestureDetector({
     required this.child,
@@ -23,35 +29,34 @@ class SwipeGestureDetector extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stream = ref.watch(platformManagerProvider);
-    final onSwipeBeginCallback = useCallback(
-      onSwipeBegin ?? (GestureSwipeBeginEvent event) {},
-      [onSwipeBegin],
-    );
-    final onSwipeUpdateCallback = useCallback(
-      onSwipeUpdate ?? (GestureSwipeUpdateEvent event) {},
-      [onSwipeUpdate],
-    );
-    final onSwipeEndCallback = useCallback(
-      onSwipeEnd ?? (GestureSwipeEndEvent event) {},
-      [onSwipeEnd],
-    );
+    // The callbacks close over the container's state and are recreated on
+    // every build. Keep the latest ones in a ref so the subscription below
+    // only changes with `enabled`: rebuilding on each swipe update used to
+    // tear down and recreate the listener every frame.
+    final callbacks = useRef<_SwipeCallbacks?>(null)
+      ..value = (
+        onSwipeBegin ?? (GestureSwipeBeginEvent event) {},
+        onSwipeUpdate ?? (GestureSwipeUpdateEvent event) {},
+        onSwipeEnd ?? (GestureSwipeEndEvent event) {},
+      );
 
     useEffect(() {
       if (!enabled) {
-        return () {};
+        return null;
       }
 
       final subscription = stream.listen((event) {
+        final (begin, update, end) = callbacks.value!;
         if (event is GestureSwipeBeginEvent) {
-          onSwipeBeginCallback(event);
+          begin(event);
         } else if (event is GestureSwipeUpdateEvent) {
-          onSwipeUpdateCallback(event);
+          update(event);
         } else if (event is GestureSwipeEndEvent) {
-          onSwipeEndCallback(event);
+          end(event);
         }
       });
       return subscription.cancel;
-    }, [enabled, onSwipeBegin, onSwipeUpdate, onSwipeEnd, stream]);
+    }, [enabled, stream]);
     return child;
   }
 }

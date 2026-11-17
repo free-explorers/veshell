@@ -451,5 +451,13 @@
   "statusBarBattery": "배터리",
   "statusBarBatteryDescription": "배터리 잔량을 표시합니다",
   "statusBarBatteryPercentage": "배터리 백분율",
-  "statusBarBatteryPercentageDescription": "아이콘 옆에 배터리 잔량을 백분율로 표시합니다"
+  "statusBarBatteryPercentageDescription": "아이콘 옆에 배터리 잔량을 백분율로 표시합니다",
+  "touchpadTapToClick": "Touchpad: Tap to Click",
+  "touchpadTapToClickDescription": "Tap the touchpad to click",
+  "touchpadDisableWhileTyping": "Touchpad: Disable While Typing",
+  "touchpadDisableWhileTypingDescription": "Ignore touchpad input while typing",
+  "mouseSpeed": "Mouse: Pointer Speed",
+  "mouseSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default",
+  "touchpadSpeed": "Touchpad: Pointer Speed",
+  "touchpadSpeedDescription": "Pointer speed from -1.0 (slow) to 1.0 (fast); 0.0 is the default"
 }

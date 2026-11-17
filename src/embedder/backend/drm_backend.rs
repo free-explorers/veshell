@@ -566,11 +566,6 @@ pub fn run_drm_backend(real_session: bool) {
             let settings = data.settings_manager.get_settings();
             let environment_changed = data.apply_veshell_settings(&settings);
             for mut device in data.input_devices.clone() {
-                if device.config_tap_finger_count() > 0 {
-                    device
-                        .config_tap_set_enabled(true)
-                        .expect("Failed to enable tap");
-                }
                 State::<DrmBackend>::apply_libinput_settings(
                     &settings.mouse_and_touchpad,
                     &mut device,
@@ -878,11 +873,6 @@ pub fn run_drm_backend(real_session: bool) {
             match event {
                 InputEvent::DeviceAdded { mut device } => {
                     data.input_devices.insert(device.clone());
-                    if device.config_tap_finger_count() > 0 {
-                        device
-                            .config_tap_set_enabled(true)
-                            .expect("Failed to enable tap");
-                    }
                     let settings = data.settings_manager.get_settings();
                     State::<DrmBackend>::apply_libinput_settings(
                         &settings.mouse_and_touchpad,
@@ -924,6 +914,15 @@ pub fn run_drm_backend(real_session: bool) {
                     data.on_pointer_axis::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::GestureSwipeBegin { event } => {
+                    // 3-finger swipes drive shell navigation and 4-finger ones
+                    // the overview; neither belongs to a locked session, a game
+                    // that owns the output, or a frozen screenshot selection.
+                    data.shell_gesture_active = !data.is_locked()
+                        && !data.gaming_input_active()
+                        && data.capture_state.session.is_none();
+                    if !data.shell_gesture_active {
+                        return;
+                    }
                     let fingers = event.fingers();
                     data.flutter_engine_mut()
                         .platform_method_channel
@@ -937,6 +936,9 @@ pub fn run_drm_backend(real_session: bool) {
                         );
                 }
                 InputEvent::GestureSwipeUpdate { event } => {
+                    if !data.shell_gesture_active {
+                        return;
+                    }
                     let fingers = event.fingers();
                     let mut delta_x = event.dx_unaccelerated();
                     let mut delta_y = event.dy_unaccelerated();
@@ -961,6 +963,11 @@ pub fn run_drm_backend(real_session: bool) {
                         );
                 }
                 InputEvent::GestureSwipeEnd { event } => {
+                    let active = data.shell_gesture_active;
+                    data.shell_gesture_active = false;
+                    if !active {
+                        return;
+                    }
                     let fingers = event.fingers();
                     let cancelled = event.cancelled();
                     data.flutter_engine_mut()
@@ -976,19 +983,25 @@ pub fn run_drm_backend(real_session: bool) {
                         );
                 }
                 InputEvent::GesturePinchBegin { event } => {
-                    let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer();
-                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id, view_id);
+                    // Pinch belongs to the client under the pointer. Keep it
+                    // out of a locked or frozen session, where there is no
+                    // valid client target.
+                    if data.is_locked() || data.capture_state.session.is_some() {
+                        return;
+                    }
+                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event);
                 }
                 InputEvent::GesturePinchUpdate { event } => {
-                    let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer();
-                    data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id, view_id);
+                    if data.is_locked() || data.capture_state.session.is_some() {
+                        return;
+                    }
+                    data.on_gesture_pinch_update::<LibinputInputBackend>(event);
                 }
                 InputEvent::GesturePinchEnd { event } => {
-                    let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer();
-                    data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id, view_id);
+                    if data.is_locked() || data.capture_state.session.is_some() {
+                        return;
+                    }
+                    data.on_gesture_pinch_end::<LibinputInputBackend>(event);
                 }
                 InputEvent::GestureHoldBegin { event: _ } => {}
                 InputEvent::GestureHoldEnd { event: _ } => {}
@@ -2514,26 +2527,51 @@ impl State<DrmBackend> {
     /// inversion to do. Mice and touchpads have separate preferences.
     pub fn apply_libinput_settings(config: &MouseAndTouchpadSettings, device: &mut input::Device) {
         // Mice and touchpads have separate preferences, mirroring GNOME's
-        // per-device `natural-scroll` and `accel-profile` keys and libinput's
-        // own natural-scrolling defaults (mouse off, touchpad on).
+        // per-device `natural-scroll`, `accel-speed` and `accel-profile` keys
+        // and libinput's own natural-scrolling defaults (mouse off, touchpad
+        // on).
         let touchpad = is_touchpad(device);
-        let (natural_scrolling, acceleration_profile) = if touchpad {
+        let (natural_scrolling, acceleration_profile, speed) = if touchpad {
             (
                 config.touchpad_natural_scrolling,
                 config.touchpad_acceleration_profile,
+                config.touchpad_speed,
             )
         } else {
             (
                 config.mouse_natural_scrolling,
                 config.mouse_acceleration_profile,
+                config.mouse_speed,
             )
         };
         if device.config_scroll_has_natural_scroll() {
-            device
-                .config_scroll_set_natural_scroll_enabled(natural_scrolling)
-                .expect("Failed to set natural scrolling");
+            if let Err(err) = device.config_scroll_set_natural_scroll_enabled(natural_scrolling) {
+                warn!(?err, device = %device.name(), "Failed to set natural scrolling");
+            }
         }
         apply_acceleration_profile(device, acceleration_profile);
+        if device.config_accel_is_available() {
+            let speed = speed.clamp(-1.0, 1.0);
+            if let Err(err) = device.config_accel_set_speed(speed) {
+                warn!(?err, speed, device = %device.name(), "Failed to set pointer speed");
+            }
+        }
+        if touchpad {
+            // Tap-to-click is a touchpad-only capability; libinput reports the
+            // supported finger count (zero when the hardware cannot tap).
+            if device.config_tap_finger_count() > 0 {
+                if let Err(err) = device.config_tap_set_enabled(config.touchpad_tap_to_click) {
+                    warn!(?err, device = %device.name(), "Failed to set tap-to-click");
+                }
+            }
+            if device.config_dwt_is_available() {
+                if let Err(err) =
+                    device.config_dwt_set_enabled(config.touchpad_disable_while_typing)
+                {
+                    warn!(?err, device = %device.name(), "Failed to set disable-while-typing");
+                }
+            }
+        }
     }
 
     fn apply_monitor_configuration_to_drm_surface(

@@ -296,6 +296,22 @@
                         "adaptive",
                         "flat"
                     ]
+                },
+                "touchpadTapToClick": {
+                    "type": "boolean"
+                },
+                "touchpadDisableWhileTyping": {
+                    "type": "boolean"
+                },
+                "mouseSpeed": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 1
+                },
+                "touchpadSpeed": {
+                    "type": "number",
+                    "minimum": -1,
+                    "maximum": 1
                 }
             },
             "additionalProperties": false

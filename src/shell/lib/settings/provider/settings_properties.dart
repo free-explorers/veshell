@@ -449,6 +449,22 @@ class SettingsProperties extends _$SettingsProperties {
             name: l10n.touchpadAccelerationProfile,
             description: l10n.touchpadAccelerationProfileDescription,
           ),
+          'touchpadTapToClick': SettingProperty<bool>(
+            name: l10n.touchpadTapToClick,
+            description: l10n.touchpadTapToClickDescription,
+          ),
+          'touchpadDisableWhileTyping': SettingProperty<bool>(
+            name: l10n.touchpadDisableWhileTyping,
+            description: l10n.touchpadDisableWhileTypingDescription,
+          ),
+          'mouseSpeed': SettingProperty<double>(
+            name: l10n.mouseSpeed,
+            description: l10n.mouseSpeedDescription,
+          ),
+          'touchpadSpeed': SettingProperty<double>(
+            name: l10n.touchpadSpeed,
+            description: l10n.touchpadSpeedDescription,
+          ),
         },
       ),
       'idle': SettingGroup(

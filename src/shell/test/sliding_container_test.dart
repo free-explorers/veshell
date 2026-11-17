@@ -7,6 +7,9 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/platform/model/event/gesture_swipe/gesture_swipe_begin.serializable.dart';
+import 'package:shell/platform/model/event/gesture_swipe/gesture_swipe_end.serializable.dart';
+import 'package:shell/platform/model/event/gesture_swipe/gesture_swipe_update.serializable.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
@@ -125,6 +128,138 @@ Future<void> _pumpResizable(
       ),
     ),
   );
+}
+
+/// Emits the compositor's three-finger swipe events into [events].
+void _swipeBegin(StreamController<PlatformEvent> events, {int fingers = 3}) {
+  events.add(
+    GestureSwipeBeginEvent(
+      method: 'gesture_swipe_begin',
+      message: GestureSwipeBeginMessage(time: 0, fingers: fingers),
+    ),
+  );
+}
+
+void _swipeUpdate(
+  StreamController<PlatformEvent> events, {
+  required double dx,
+  required double dy,
+  required int time,
+  int fingers = 3,
+}) {
+  events.add(
+    GestureSwipeUpdateEvent(
+      method: 'gesture_swipe_update',
+      message: GestureSwipeUpdateMessage(
+        time: time,
+        fingers: fingers,
+        deltaX: dx,
+        deltaY: dy,
+      ),
+    ),
+  );
+}
+
+void _swipeEnd(
+  StreamController<PlatformEvent> events, {
+  required int time,
+  bool cancelled = false,
+  int fingers = 3,
+}) {
+  events.add(
+    GestureSwipeEndEvent(
+      method: 'gesture_swipe_end',
+      message: GestureSwipeEndMessage(
+        time: time,
+        fingers: fingers,
+        cancelled: cancelled,
+      ),
+    ),
+  );
+}
+
+/// Emits [count] horizontal updates of [dx] gesture units, [intervalMs] apart.
+void _swipeSteps(
+  StreamController<PlatformEvent> events, {
+  required double dx,
+  required int count,
+  required int intervalMs,
+  int startTime = 0,
+}) {
+  for (var i = 0; i < count; i++) {
+    _swipeUpdate(events, dx: dx, dy: 0, time: startTime + i * intervalMs);
+  }
+}
+
+/// The (fractional) page the container's row currently shows.
+double? _page(WidgetTester tester, {Finder? container}) {
+  final finder = find.descendant(
+    of: container ?? find.byType(SlidingContainer),
+    matching: find.byType(Scrollable),
+  );
+  return (tester.widget<Scrollable>(finder).controller! as PageController).page;
+}
+
+class _SwipeHarness {
+  _SwipeHarness(this.events, this.picked, this.selected);
+  final StreamController<PlatformEvent> events;
+  final List<int> picked;
+  final ValueNotifier<int> selected;
+}
+
+/// Renders a [SlidingContainer] wired to a controllable platform stream, with
+/// its selected index fed back so a swipe navigates as it does in the shell.
+Future<_SwipeHarness> _pumpSwipeContainer(
+  WidgetTester tester, {
+  required int visible,
+  int index = 0,
+  int? firstVisibleIndex,
+  Axis direction = Axis.horizontal,
+  double width = 600,
+}) async {
+  final events = StreamController<PlatformEvent>.broadcast();
+  addTearDown(events.close);
+  tester.view
+    ..devicePixelRatio = 1.0
+    ..physicalSize = Size(width, 600);
+  addTearDown(tester.view.reset);
+  final picked = <int>[];
+  final selected = ValueNotifier(index);
+  addTearDown(selected.dispose);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [platformManagerProvider.overrideWithValue(events.stream)],
+      child: MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: width,
+            height: 100,
+            child: ValueListenableBuilder<int>(
+              valueListenable: selected,
+              builder: (context, value, _) => SlidingContainer(
+                direction: direction,
+                index: value,
+                visible: visible,
+                firstVisibleIndex: firstVisibleIndex,
+                onIndexChanged: (next) {
+                  picked.add(next);
+                  selected.value = next;
+                },
+                children: const [
+                  SizedBox(),
+                  SizedBox(),
+                  SizedBox(),
+                  SizedBox(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return _SwipeHarness(events, picked, selected);
 }
 
 void main() {
@@ -300,6 +435,371 @@ void main() {
       find.byKey(const ValueKey('page-2'), skipOffstage: false),
       findsNothing,
     );
+  });
+
+  group('three-finger swipe', () {
+    testWidgets('a slow drag past half a page moves one tile', (tester) async {
+      final harness = await _pumpSwipeContainer(tester, visible: 1);
+      _swipeBegin(harness.events);
+      // 240 gesture units = 0.6 of the 400-unit horizontal page, dragged
+      // slowly enough that the release has no fling left.
+      _swipeSteps(harness.events, dx: 40, count: 6, intervalMs: 100);
+      _swipeEnd(harness.events, time: 600);
+      await tester.pumpAndSettle();
+      // Let the cursor transition's settle timer fire before the test ends.
+      await tester.pump(const Duration(milliseconds: 150));
+
+      expect(harness.picked, [1]);
+      expect(harness.selected.value, 1);
+      expect(_page(tester), 1);
+    });
+
+    testWidgets('a short fast flick moves one tile', (tester) async {
+      final harness = await _pumpSwipeContainer(tester, visible: 1);
+      _swipeBegin(harness.events);
+      // 0.4 of a page, but released while still moving: the projected
+      // deceleration carries it past the next page.
+      _swipeSteps(harness.events, dx: 40, count: 4, intervalMs: 8);
+      _swipeEnd(harness.events, time: 32);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 150));
+
+      expect(harness.picked, [1]);
+      expect(_page(tester), 1);
+    });
+
+    testWidgets('a slow drag below half a page snaps back', (tester) async {
+      final harness = await _pumpSwipeContainer(tester, visible: 1);
+      _swipeBegin(harness.events);
+      _swipeSteps(harness.events, dx: 40, count: 3, intervalMs: 100);
+      _swipeEnd(harness.events, time: 300);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 150));
+
+      expect(harness.picked, isEmpty);
+      expect(_page(tester), 0);
+    });
+
+    testWidgets('a pause before lifting decays the fling', (tester) async {
+      // The same gesture as the fast flick, but the fingers rest for more
+      // than the 150 ms velocity window before lifting: no fling is left.
+      final harness = await _pumpSwipeContainer(tester, visible: 1);
+      _swipeBegin(harness.events);
+      _swipeSteps(harness.events, dx: 40, count: 4, intervalMs: 8);
+      _swipeEnd(harness.events, time: 400);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 150));
+
+      expect(harness.picked, isEmpty);
+      expect(_page(tester), 0);
+    });
+
+    testWidgets('a backwards swipe from the first tile does not move forward', (
+      tester,
+    ) async {
+      // Regression: the old end-of-gesture logic compared the viewport-centre
+      // page with the selected tile, so with two tiles visible a backwards
+      // swipe selected the next tile.
+      final harness = await _pumpSwipeContainer(
+        tester,
+        visible: 2,
+        firstVisibleIndex: 0,
+      );
+      _swipeBegin(harness.events);
+      _swipeUpdate(harness.events, dx: -200, dy: 0, time: 0);
+      _swipeUpdate(harness.events, dx: -200, dy: 0, time: 16);
+      _swipeEnd(harness.events, time: 32);
+      await tester.pumpAndSettle();
+
+      expect(harness.picked, isEmpty);
+      expect(_page(tester), 0);
+    });
+
+    testWidgets('a cancelled swipe snaps back without changing the tile', (
+      tester,
+    ) async {
+      final harness = await _pumpSwipeContainer(tester, visible: 1);
+      _swipeBegin(harness.events);
+      _swipeSteps(harness.events, dx: 40, count: 6, intervalMs: 16);
+      _swipeEnd(harness.events, time: 100, cancelled: true);
+      await tester.pumpAndSettle();
+      // Let the cursor transition's settle timer fire before the test ends.
+      await tester.pump(const Duration(milliseconds: 150));
+
+      expect(harness.picked, isEmpty);
+      expect(harness.selected.value, 0);
+      expect(_page(tester), 0);
+    });
+
+    testWidgets(
+      'a cancelled drag past half a page still returns to its start',
+      (tester) async {
+        // With two tiles visible the selected trailing tile stays in view, so
+        // restoring it would only snap to the *nearest* page. A cancelled
+        // gesture must return to the page it started on, not advance one.
+        final harness = await _pumpSwipeContainer(
+          tester,
+          visible: 2,
+          index: 1,
+          firstVisibleIndex: 0,
+        );
+        _swipeBegin(harness.events);
+        _swipeSteps(harness.events, dx: 40, count: 6, intervalMs: 16);
+        _swipeEnd(harness.events, time: 100, cancelled: true);
+        await tester.pumpAndSettle();
+        // Let the cursor transition's settle timer fire before the test ends.
+        await tester.pump(const Duration(milliseconds: 150));
+
+        expect(harness.picked, isEmpty);
+        expect(_page(tester), 0);
+      },
+    );
+
+    testWidgets('a short swipe settles on whole pages with several tiles', (
+      tester,
+    ) async {
+      // The selected tile is the trailing visible one, so the selection can
+      // stay in view without the row moving. A drag below half a page of
+      // normalized progress must neither pick the next tile nor leave the row
+      // between slots.
+      final harness = await _pumpSwipeContainer(
+        tester,
+        visible: 2,
+        index: 1,
+        firstVisibleIndex: 0,
+      );
+      _swipeBegin(harness.events);
+      _swipeUpdate(harness.events, dx: 10, dy: 0, time: 0);
+      _swipeUpdate(harness.events, dx: 20, dy: 0, time: 100);
+      _swipeUpdate(harness.events, dx: 20, dy: 0, time: 200);
+      _swipeEnd(harness.events, time: 300);
+      await tester.pumpAndSettle();
+      // Let the cursor transition's settle timer fire before the test ends.
+      await tester.pump(const Duration(milliseconds: 150));
+
+      expect(harness.picked, isEmpty);
+      expect(_page(tester), 0);
+    });
+
+    testWidgets('the row follows the normalized progress, not the page width', (
+      tester,
+    ) async {
+      // 200 units is half of the 400-unit horizontal page, so the row must be
+      // halfway across, whatever the page is wide.
+      final harness = await _pumpSwipeContainer(
+        tester,
+        visible: 1,
+        width: 2000,
+      );
+      _swipeBegin(harness.events);
+      _swipeSteps(harness.events, dx: 100, count: 2, intervalMs: 100);
+      await tester.pump();
+
+      expect(_page(tester), closeTo(0.5, 0.01));
+
+      _swipeEnd(harness.events, time: 200);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 150));
+    });
+
+    testWidgets('a wide tile follows the same normalized swipe distance', (
+      tester,
+    ) async {
+      // The same 240 gestures units that move a 600 px page also move a
+      // 2000 px tile: the page width does not change the gesture travel.
+      final harness = await _pumpSwipeContainer(
+        tester,
+        visible: 1,
+        width: 2000,
+      );
+      _swipeBegin(harness.events);
+      _swipeSteps(harness.events, dx: 40, count: 6, intervalMs: 100);
+      _swipeEnd(harness.events, time: 600);
+      await tester.pumpAndSettle();
+      // Let the cursor transition's settle timer fire before the test ends.
+      await tester.pump(const Duration(milliseconds: 150));
+
+      expect(harness.picked, [1]);
+      expect(_page(tester), 1);
+    });
+
+    testWidgets('a slow wide-tile drag below half a page snaps back', (
+      tester,
+    ) async {
+      final harness = await _pumpSwipeContainer(
+        tester,
+        visible: 1,
+        width: 2000,
+      );
+      _swipeBegin(harness.events);
+      _swipeSteps(harness.events, dx: 40, count: 3, intervalMs: 100);
+      _swipeEnd(harness.events, time: 300);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(milliseconds: 150));
+
+      expect(harness.picked, isEmpty);
+      expect(_page(tester), 0);
+    });
+
+    testWidgets(
+      'a gesture cut off by a disabled detector does not wedge the row',
+      (tester) async {
+        // The detector unsubscribes while `isSwipeEnabled` is false, so a
+        // gesture in progress never delivers its end. Its state must be reset:
+        // a stale `swipeInProgress` makes `scrollToIndex` refuse to settle the
+        // next selection, leaving the row between two pages.
+        final events = StreamController<PlatformEvent>.broadcast();
+        addTearDown(events.close);
+        tester.view
+          ..devicePixelRatio = 1.0
+          ..physicalSize = const Size(600, 600);
+        addTearDown(tester.view.reset);
+        final enabled = ValueNotifier(true);
+        final selected = ValueNotifier(1);
+        final firstVisible = ValueNotifier(0);
+        addTearDown(enabled.dispose);
+        addTearDown(selected.dispose);
+        addTearDown(firstVisible.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              platformManagerProvider.overrideWithValue(events.stream),
+            ],
+            child: MaterialApp(
+              home: Center(
+                child: SizedBox(
+                  width: 600,
+                  height: 100,
+                  child: ListenableBuilder(
+                    listenable: Listenable.merge([
+                      enabled,
+                      selected,
+                      firstVisible,
+                    ]),
+                    builder: (context, _) => SlidingContainer(
+                      index: selected.value,
+                      visible: 2,
+                      firstVisibleIndex: firstVisible.value,
+                      isSwipeEnabled: enabled.value,
+                      onIndexChanged: (next) => selected.value = next,
+                      onFirstVisibleIndexChanged: (next) =>
+                          firstVisible.value = next,
+                      children: const [
+                        SizedBox(),
+                        SizedBox(),
+                        SizedBox(),
+                        SizedBox(),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Leave the row partway between pages without an end event.
+        _swipeBegin(events);
+        _swipeUpdate(events, dx: 40, dy: 0, time: 0);
+        _swipeUpdate(events, dx: 40, dy: 0, time: 100);
+        _swipeUpdate(events, dx: 40, dy: 0, time: 200);
+        enabled.value = false;
+        await tester.pumpAndSettle();
+
+        // Re-enable and select another tile: the row must land on a whole page.
+        enabled.value = true;
+        selected.value = 2;
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 150));
+
+        expect(selected.value, 2);
+        expect(_page(tester), 1);
+        expect(firstVisible.value, 1);
+      },
+    );
+
+    /// Renders the two rows a swipe can reach: the tile row and, below it, the
+    /// screen's workspace row, both listening to [events].
+    Future<(List<int>, List<int>)> pumpBothRows(
+      WidgetTester tester,
+      StreamController<PlatformEvent> events,
+    ) async {
+      tester.view
+        ..devicePixelRatio = 1.0
+        ..physicalSize = const Size(600, 600);
+      addTearDown(tester.view.reset);
+      final horizontal = <int>[];
+      final vertical = <int>[];
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [platformManagerProvider.overrideWithValue(events.stream)],
+          child: MaterialApp(
+            home: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  key: const ValueKey('horizontal'),
+                  height: 100,
+                  child: SlidingContainer(
+                    index: 0,
+                    onIndexChanged: horizontal.add,
+                    children: const [SizedBox(), SizedBox(), SizedBox()],
+                  ),
+                ),
+                SizedBox(
+                  key: const ValueKey('vertical'),
+                  height: 100,
+                  child: SlidingContainer(
+                    direction: Axis.vertical,
+                    index: 0,
+                    onIndexChanged: vertical.add,
+                    children: const [SizedBox(), SizedBox(), SizedBox()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return (horizontal, vertical);
+    }
+
+    testWidgets('the axis the gesture starts on owns its whole length', (
+      tester,
+    ) async {
+      final events = StreamController<PlatformEvent>.broadcast();
+      addTearDown(events.close);
+      final (horizontal, vertical) = await pumpBothRows(tester, events);
+
+      _swipeBegin(events);
+      // The tile row claims the gesture on a horizontal move...
+      _swipeUpdate(events, dx: 400, dy: 0, time: 0);
+      // ...and a vertical move later in the same gesture must not scroll the
+      // workspace row too.
+      _swipeUpdate(events, dx: 0, dy: 400, time: 16);
+      _swipeEnd(events, time: 32);
+      await tester.pumpAndSettle();
+
+      expect(horizontal, [1]);
+      expect(vertical, isEmpty);
+    });
+
+    testWidgets('the axis lock is symmetric', (tester) async {
+      final events = StreamController<PlatformEvent>.broadcast();
+      addTearDown(events.close);
+      final (horizontal, vertical) = await pumpBothRows(tester, events);
+
+      _swipeBegin(events);
+      _swipeUpdate(events, dx: 0, dy: 400, time: 0);
+      _swipeUpdate(events, dx: 400, dy: 0, time: 16);
+      _swipeEnd(events, time: 32);
+      await tester.pumpAndSettle();
+
+      expect(vertical, [1]);
+      expect(horizontal, isEmpty);
+    });
   });
 }
 

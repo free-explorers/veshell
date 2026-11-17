@@ -1,10 +1,15 @@
 use std::mem::size_of;
 
 use smithay::backend::input::{
-    self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, GesturePinchUpdateEvent,
-    InputBackend, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent,
+    self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, GestureBeginEvent,
+    GestureEndEvent, GesturePinchUpdateEvent, InputBackend, PointerAxisEvent, PointerButtonEvent,
+    PointerMotionEvent,
 };
-use smithay::input::pointer::{AxisFrame, ButtonEvent, MotionEvent, RelativeMotionEvent};
+use smithay::input::pointer::{
+    AxisFrame, ButtonEvent, GesturePinchBeginEvent as PointerPinchBeginEvent,
+    GesturePinchEndEvent as PointerPinchEndEvent,
+    GesturePinchUpdateEvent as PointerPinchUpdateEvent, MotionEvent, RelativeMotionEvent,
+};
 use smithay::reexports::wayland_server::protocol::wl_pointer;
 use smithay::utils::{Logical, Point, Rectangle, SERIAL_COUNTER};
 use smithay::wayland::seat::WaylandFocus;
@@ -702,54 +707,43 @@ impl<BackendData: Backend> State<BackendData> {
         }
     }
 
-    pub fn on_gesture_pinch_begin<B: InputBackend>(
-        &mut self,
-        _event: B::GesturePinchBeginEvent,
-        device_id: i32,
-        view_id: Option<i64>,
-    ) {
-        self.pointer_gesture_view_id = view_id;
-        self.send_pointer_pan_zoom_event(
-            device_id,
-            FlutterPointerPhase_kPanZoomStart,
-            0.,
-            0.,
-            0.,
-            view_id,
+    /// Forwards a pinch gesture to the client under the pointer.
+    ///
+    /// Pinch is the client's gesture: the shell does not use it, and apps
+    /// expect `zwp_pointer_gesture_pinch_v1` (zoom, rotate) from the compositor.
+    pub fn on_gesture_pinch_begin<B: InputBackend>(&mut self, event: B::GesturePinchBeginEvent) {
+        let pointer = self.pointer.clone();
+        pointer.gesture_pinch_begin(
+            self,
+            &PointerPinchBeginEvent {
+                serial: SERIAL_COUNTER.next_serial(),
+                time: event.time_msec(),
+                fingers: event.fingers(),
+            },
         );
     }
-    pub fn on_gesture_pinch_update<B: InputBackend>(
-        &mut self,
-        event: B::GesturePinchUpdateEvent,
-        device_id: i32,
-        view_id: Option<i64>,
-    ) {
-        let gesture_view_id = self.pointer_gesture_view_id.or(view_id);
-        self.send_pointer_pan_zoom_event(
-            device_id,
-            FlutterPointerPhase_kPanZoomUpdate,
-            event.delta_x(),
-            event.delta_y(),
-            event.rotation(),
-            gesture_view_id,
+    pub fn on_gesture_pinch_update<B: InputBackend>(&mut self, event: B::GesturePinchUpdateEvent) {
+        let pointer = self.pointer.clone();
+        pointer.gesture_pinch_update(
+            self,
+            &PointerPinchUpdateEvent {
+                time: event.time_msec(),
+                delta: (event.delta_x(), event.delta_y()).into(),
+                scale: event.scale(),
+                rotation: event.rotation(),
+            },
         );
     }
-    pub fn on_gesture_pinch_end<B: InputBackend>(
-        &mut self,
-        _event: B::GesturePinchEndEvent,
-        device_id: i32,
-        view_id: Option<i64>,
-    ) {
-        let gesture_view_id = self.pointer_gesture_view_id.or(view_id);
-        self.send_pointer_pan_zoom_event(
-            device_id,
-            FlutterPointerPhase_kPanZoomEnd,
-            0.,
-            0.,
-            0.,
-            gesture_view_id,
+    pub fn on_gesture_pinch_end<B: InputBackend>(&mut self, event: B::GesturePinchEndEvent) {
+        let pointer = self.pointer.clone();
+        pointer.gesture_pinch_end(
+            self,
+            &PointerPinchEndEvent {
+                serial: SERIAL_COUNTER.next_serial(),
+                time: event.time_msec(),
+                cancelled: event.cancelled(),
+            },
         );
-        self.pointer_gesture_view_id = None;
     }
 
     /// Pointer focus for the window that owns the input in gaming mode.
