@@ -177,6 +177,13 @@ class SlidingContainer extends HookConsumerWidget {
     // about to slide in are built during that first frame instead of in the
     // middle of the animation, where the build would drop a frame.
     final swipePending = useState(false);
+    // Whether the row is scrolling, including the settle after a release and a
+    // keyboard navigation. The neighbour cache has to outlive the gesture, or
+    // the page the settle reveals is built while the row is moving.
+    // Only the row's builder listens: a scroll can start from an effect that
+    // runs while this widget's subtree builds, where rebuilding the whole
+    // container is not allowed.
+    final scrollActive = useValueNotifier(false);
     // The continuous page progress of the gesture and the speed of its last
     // 150 ms, both in page fractions (the swipe is normalized to a fixed
     // finger distance, not to the page size).
@@ -204,6 +211,8 @@ class SlidingContainer extends HookConsumerWidget {
         return null;
       }
       swipeInProgress.value = false;
+      swipePending.value = false;
+      scrollActive.value = false;
       swipeStartOffset.value = null;
       swipeHistory.value.reset();
       return null;
@@ -665,6 +674,7 @@ class SlidingContainer extends HookConsumerWidget {
                     resizeController,
                     swipeInProgress,
                     swipePending,
+                    scrollActive,
                   ]),
                   builder: (context, _) {
                     final (extent, offset) = visualLayout();
@@ -716,16 +726,23 @@ class SlidingContainer extends HookConsumerWidget {
                               cacheViewports:
                                   resizing ||
                                       buildsNeighbors ||
-                                      swipeInProgress.value
+                                      swipeInProgress.value ||
+                                      swipePending.value ||
+                                      scrollActive.value
                                   ? 1.0
                                   : 0.0,
                               allowImplicitScrolling:
                                   buildsNeighbors ||
                                   resizing ||
-                                  swipeInProgress.value,
-                              onScrollStart: () =>
-                                  cursorTransition.begin(transitionToken),
+                                  swipeInProgress.value ||
+                                  swipePending.value ||
+                                  scrollActive.value,
+                              onScrollStart: () {
+                                scrollActive.value = true;
+                                cursorTransition.begin(transitionToken);
+                              },
                               onScrollEnd: () {
+                                scrollActive.value = false;
                                 cursorTransition.end(transitionToken);
                                 // The leading tile moved while the row was
                                 // animating: report where the row landed.
@@ -738,14 +755,11 @@ class SlidingContainer extends HookConsumerWidget {
                                 }
                               },
                               delegate: SliverChildBuilderDelegate(
-                                // A page is its own repaint boundary, so
-                                // sliding the row translates a cached layer
-                                // instead of re-rasterising every page on
-                                // each frame of the swipe.
-                                (context, index) => RepaintBoundary(
-                                  key: children[index].key,
-                                  child: children[index],
-                                ),
+                                // The delegate already adds a keyed
+                                // RepaintBoundary per page, so sliding
+                                // translates layers instead of re-recording
+                                // both pages every frame.
+                                (context, index) => children[index],
                                 childCount: children.length,
                                 // A keyed page keeps its state when it moves
                                 // to another index, instead of the page now at

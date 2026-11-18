@@ -820,11 +820,9 @@ pub fn run_drm_backend(real_session: bool) {
     state.determine_highest_hz_crtc();
     state.on_outputs_changed();
 
-    // Drive Flutter's vsync from a timer at the pacing refresh, as the idle
-    // fallback to the page-flip vblank (see `on_vsync_timer` / `on_vblank`): a
-    // running scene delivers its batons from the hardware vblank and this timer
-    // stays silent, so tying vsync to a free-running timer no longer drifts
-    // against the panel. It only ticks when nothing flipped for a whole refresh.
+    // Drive Flutter's vsync from a timer at the pacing refresh. The timer ticks
+    // every refresh and `on_vblank` may tick too; `deliver_vsync_tick` keeps one
+    // tick per refresh, so a missed flip cannot stall the loop at two refreshes.
     let initial_interval = state.pacing_interval().unwrap_or(Duration::from_millis(16));
     event_loop
         .handle()
@@ -1923,6 +1921,19 @@ impl State<DrmBackend> {
     /// vblank already drove this frame. It does not render: presenting is the
     /// on-demand [`State::request_render`] path.
     fn deliver_vsync_tick(&mut self, now: Instant) {
+        // A vblank and the free-running timer can both fire for the same
+        // frame. Keep one tick per refresh: anything closer than a refresh
+        // (minus a small margin) is the same frame, not the next one.
+        if let Some(interval) = self.pacing_interval() {
+            let min_gap = interval.saturating_sub(interval / 10);
+            if self
+                .backend_data
+                .last_vsync_tick
+                .is_some_and(|last| now.saturating_duration_since(last) < min_gap)
+            {
+                return;
+            }
+        }
         self.backend_data.last_vsync_tick = Some(now);
 
         let Some((mhz, _node, _crtc)) = self.backend_data.pacing_crtc else {
@@ -2175,19 +2186,16 @@ impl State<DrmBackend> {
         }
     }
 
-    /// Fallback vsync source, armed at the pacing refresh.
+    /// Vsync source armed at the pacing refresh.
     ///
-    /// The primary source is the pacing CRTC's page-flip vblank
-    /// ([`Self::on_vblank`]): while the shell is presenting, its batons are
-    /// delivered in step with the panel instead of drifting against a timer.
-    /// This timer only covers the idle case, where a frame with no damage
-    /// produces no flip and therefore no vblank: it ticks only once a whole
-    /// refresh plus a small slack passed with no vblank, so a running scene is
-    /// never ticked twice.
+    /// The pacing CRTC's page-flip vblank ([`Self::on_vblank`]) also ticks, so
+    /// a presenting scene stays in step with the panel. This timer ticks every
+    /// refresh regardless, which keeps a missed flip from stalling the loop at
+    /// two refreshes; [`Self::deliver_vsync_tick`] drops a tick that arrives
+    /// too soon after a vblank's, so neither source ticks twice.
     ///
-    /// It keeps one cheap wake-up per refresh, so a client's pending frame
-    /// callback is never held back, and backs off while the output is blanked
-    /// or the seat inactive (where no vblank can arrive to cover it).
+    /// It backs off while the output is blanked or the seat inactive, where no
+    /// vblank can arrive and there is nothing to present.
     fn on_vsync_timer(&mut self) -> Duration {
         let Some(interval) = self.pacing_interval() else {
             // No output to pace against (a hotplug is in progress): retry
@@ -2202,21 +2210,11 @@ impl State<DrmBackend> {
         let slack = Duration::from_millis(2);
         let now = Instant::now();
 
-        // Keep the tick free-running at the refresh instead of waiting for a
-        // flip's vblank to drive it. A missed flip otherwise locks the loop at
-        // two refreshes — the old fallback only stepped in once a whole
-        // refresh went by without a vblank — and a 60 Hz panel renders at
-        // 30 fps. A vblank tick within half a refresh still wins, so a
-        // presenting scene is paced by the panel and not ticked twice.
-        // Draining only the batons Flutter requested keeps this free when
-        // nothing repaints.
-        let recent = self
-            .backend_data
-            .last_vsync_tick
-            .is_some_and(|last| now.saturating_duration_since(last) < interval / 2);
-        if !recent {
-            self.deliver_vsync_tick(now);
-        }
+        // Tick every refresh instead of waiting for a flip's vblank: a missed
+        // flip would otherwise leave the loop until the next timer period and
+        // lock a 60 Hz panel at 30 fps. `deliver_vsync_tick` drops a tick that
+        // lands too soon after a vblank's, so this never ticks twice.
+        self.deliver_vsync_tick(now);
         self.send_stale_game_frame_callbacks(now, slack);
 
         // An animated theme cursor changes with time alone; with on-demand

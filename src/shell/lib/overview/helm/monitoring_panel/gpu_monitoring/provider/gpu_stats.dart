@@ -19,7 +19,7 @@ part 'gpu_stats.g.dart';
 /// GPU is present it stays at [GpuStats] defaults and never samples.
 @Riverpod(keepAlive: true)
 class GpuStatsState extends _$GpuStatsState {
-  Map<String, int>? _previousEngineNanoseconds;
+  Map<int, Map<String, int>>? _previousClients;
   DateTime? _previousAt;
 
   @override
@@ -54,25 +54,37 @@ class GpuStatsState extends _$GpuStatsState {
 
   /// Busy share of [device]'s busiest engine since the previous sample.
   ///
-  /// The kernels sum engine time per client, and engines run in parallel, so
-  /// the busiest engine's delta over the elapsed time is the GPU's busy share.
-  /// `null` until a second sample exists.
+  /// The deltas are taken per client, then summed per engine: a client that
+  /// exits only loses its own counters instead of subtracting its lifetime
+  /// from the total. Engines run in parallel, so the busiest engine's delta
+  /// over the elapsed time is the GPU's busy share.
+  ///
+  /// `null` until a second sample exists, and whenever the clients report no
+  /// engine counters (Xe reports `drm-cycles-*` instead of `drm-engine-*`), so
+  /// the caller keeps the reader's own value.
   Future<int?> _engineLoad(GpuDevice device) async {
     final now = DateTime.now();
-    final engines = await sampleEngineNanoseconds(device);
-    final previous = _previousEngineNanoseconds;
+    final clients = await sampleClientEngineNanoseconds(device);
+    final previous = _previousClients;
     final previousAt = _previousAt;
-    _previousEngineNanoseconds = engines;
+    _previousClients = clients;
     _previousAt = now;
     if (previous == null || previousAt == null || !ref.mounted) return null;
     final elapsed = now.difference(previousAt).inMicroseconds * 1000;
     if (elapsed <= 0) return null;
 
-    var busiest = 0;
-    engines.forEach((engine, nanoseconds) {
-      final delta = nanoseconds - (previous[engine] ?? 0);
-      if (delta > busiest) busiest = delta;
+    final totals = <String, int>{};
+    clients.forEach((clientId, engines) {
+      final before = previous[clientId];
+      engines.forEach((engine, nanoseconds) {
+        // A client seen for the first time starts at zero: its whole counter
+        // is the work done since it opened.
+        final delta = nanoseconds - (before?[engine] ?? 0);
+        if (delta > 0) totals[engine] = (totals[engine] ?? 0) + delta;
+      });
     });
+    if (totals.isEmpty) return null;
+    final busiest = totals.values.reduce((a, b) => a > b ? a : b);
     return (busiest * 100 / elapsed).clamp(0, 100).round();
   }
 }

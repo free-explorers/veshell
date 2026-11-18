@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:path/path.dart' as p;
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/drm_fdinfo.dart';
@@ -7,39 +8,74 @@ import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 
 /// Per-pid total GPU engine time, in nanoseconds, for clients of [device].
 ///
-/// Fds that share a DRM client (a `dup`) are counted once. Processes with no
-/// client on [device] are omitted; [GpuDevice.pciAddress] filters out other
-/// cards.
+/// A DRM client shared between processes (an fd inherited across fork or passed
+/// over SCM_RIGHTS) counts for each holder: this is attribution, not a total.
+/// Processes with no client on [device] are omitted.
 Future<Map<int, int>> sampleProcessEngineNanoseconds(GpuDevice device) async {
-  final result = <int, int>{};
-  await _forEachClient(device, (pid, info) {
-    result[pid] = (result[pid] ?? 0) + info.totalEngineNanoseconds;
-  });
-  result.removeWhere((_, nanoseconds) => nanoseconds <= 0);
-  return result;
+  final sample = await sampleDevice(device);
+  return sample.processNanoseconds;
 }
 
-/// Total engine time per engine over every client of [device], nanoseconds.
+/// Engine time per DRM client of [device], in nanoseconds, keyed by
+/// `drm-client-id` and then by engine.
 ///
-/// Engines run in parallel, so callers compare one engine against the elapsed
-/// time instead of summing the values: the busiest engine is the GPU's busy
-/// share, which is what a single "load" figure means.
-Future<Map<String, int>> sampleEngineNanoseconds(GpuDevice device) async {
-  final result = <String, int>{};
-  await _forEachClient(device, (_, info) {
-    info.engineNanoseconds.forEach((engine, nanoseconds) {
-      result[engine] = (result[engine] ?? 0) + nanoseconds;
-    });
-  });
-  return result;
+/// A client id is unique per device, so one client is counted once even when
+/// several processes hold it. Keeping the values per client lets callers
+/// difference them between samples: a client that exits then loses only its own
+/// counters instead of subtracting its lifetime from the total.
+Future<Map<int, Map<String, int>>> sampleClientEngineNanoseconds(
+  GpuDevice device,
+) async {
+  final sample = await sampleDevice(device);
+  return sample.clientEngines;
 }
 
-/// Visits each DRM client of [device] once, with the pid that owns it.
-Future<void> _forEachClient(
-  GpuDevice device,
-  void Function(int pid, DrmFdInfo info) visit,
-) async {
+/// One walk of a [GpuDevice]'s DRM clients, shared by the card and the list.
+class DeviceEngineSample {
+  /// Creates a sample.
+  const DeviceEngineSample(this.processNanoseconds, this.clientEngines);
+
+  /// Per-pid total engine nanoseconds.
+  final Map<int, int> processNanoseconds;
+
+  /// Engine nanoseconds per `drm-client-id`, then per engine.
+  final Map<int, Map<String, int>> clientEngines;
+}
+
+DeviceEngineSample? _cached;
+String? _cachedCard;
+DateTime? _cachedAt;
+
+/// How long one scan serves both callers.
+///
+/// The card and the per-process list sample on the same interval; sharing the
+/// walk keeps them from scanning `/proc` twice for one reading.
+const _cacheFor = Duration(milliseconds: 400);
+
+/// Samples [device]'s clients off the UI isolate and caches the walk briefly.
+Future<DeviceEngineSample> sampleDevice(GpuDevice device) async {
+  final now = DateTime.now();
+  final cached = _cached;
+  if (cached != null &&
+      _cachedCard == device.cardPath &&
+      _cachedAt != null &&
+      now.difference(_cachedAt!) < _cacheFor) {
+    return cached;
+  }
+  final sample = await Isolate.run(() => walkDeviceClients(device));
+  _cached = sample;
+  _cachedCard = device.cardPath;
+  _cachedAt = now;
+  return sample;
+}
+
+/// Walks `/proc` for [device]'s clients. Top-level so it can run off-isolate.
+Future<DeviceEngineSample> walkDeviceClients(GpuDevice device) async {
+  final processNanoseconds = <int, int>{};
+  final clientEngines = <int, Map<String, int>>{};
   final seenClients = <int>{};
+  final seenPerPid = <int, Set<int>>{};
+
   final pids = await listProcessIds();
   for (final pid in pids) {
     final fdDirectory = Directory('/proc/$pid/fd');
@@ -76,8 +112,30 @@ Future<void> _forEachClient(
       }
 
       final clientId = info.clientId;
-      if (clientId != null && !seenClients.add(clientId)) continue;
-      visit(pid, info);
+      if (clientId == null) {
+        // No client id to key the per-client deltas on: still attribute the
+        // time to its process.
+        processNanoseconds[pid] =
+            (processNanoseconds[pid] ?? 0) + info.totalEngineNanoseconds;
+        continue;
+      }
+      if (seenClients.add(clientId)) {
+        final engines = clientEngines.putIfAbsent(
+          clientId,
+          () => <String, int>{},
+        );
+        info.engineNanoseconds.forEach((engine, nanoseconds) {
+          engines[engine] = (engines[engine] ?? 0) + nanoseconds;
+        });
+      }
+      final perPid = seenPerPid.putIfAbsent(pid, () => <int>{});
+      if (perPid.add(clientId)) {
+        processNanoseconds[pid] =
+            (processNanoseconds[pid] ?? 0) + info.totalEngineNanoseconds;
+      }
     }
   }
+
+  processNanoseconds.removeWhere((_, nanoseconds) => nanoseconds <= 0);
+  return DeviceEngineSample(processNanoseconds, clientEngines);
 }
