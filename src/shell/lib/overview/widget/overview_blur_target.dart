@@ -52,6 +52,14 @@ class OverviewBlurTarget extends HookConsumerWidget {
     final frozen = useState<ui.Image?>(null);
     final frozenSize = useRef<Size?>(null);
 
+    // An unmount while frozen (a screen subtree rebuilt with the overview
+    // open) would otherwise leak the full-screen capture.
+    useEffect(
+      () =>
+          () => frozen.value?.dispose(),
+      const [],
+    );
+
     useEffect(() {
       if (!isDisplayed) {
         // Thaw before the closing ramp: it has to lift from the live frost, and
@@ -114,10 +122,18 @@ class OverviewBlurTarget extends HookConsumerWidget {
         final maxSigma = frostSigmaFor(size);
         final image = frozen.value;
         // A resize invalidates the capture; the live frost takes over until
-        // the next open bakes a matching one.
+        // the next open bakes a matching one. The stale capture is released
+        // rather than kept: a later return to its size would show it again.
         final frozenImage = image != null && frozenSize.value == size
             ? image
             : null;
+        if (image != null && frozenImage == null) {
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (context.mounted && frozen.value == image) {
+              _thaw(frozen, frozenSize);
+            }
+          });
+        }
         return Stack(
           fit: StackFit.expand,
           children: [
