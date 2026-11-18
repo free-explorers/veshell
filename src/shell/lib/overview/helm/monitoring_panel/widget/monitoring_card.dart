@@ -76,7 +76,13 @@ class MonitoringCard extends StatelessWidget {
             children: [
               Stack(
                 children: [
-                  Positioned.fill(child: MonitoringChart(series: series)),
+                  Positioned.fill(
+                    // The sparklines animate on their own; keep that repaint
+                    // inside the card so it does not re-record the whole helm.
+                    child: RepaintBoundary(
+                      child: MonitoringChart(series: series),
+                    ),
+                  ),
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Row(
