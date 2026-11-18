@@ -820,9 +820,9 @@ pub fn run_drm_backend(real_session: bool) {
     state.determine_highest_hz_crtc();
     state.on_outputs_changed();
 
-    // Drive Flutter's vsync from a timer at the pacing refresh. The timer ticks
-    // every refresh and `on_vblank` may tick too; `deliver_vsync_tick` keeps one
-    // tick per refresh, so a missed flip cannot stall the loop at two refreshes.
+    // Fallback vsync source, armed at the pacing refresh: it only ticks when a
+    // page flip's vblank did not, so a missed flip cannot stall Flutter at two
+    // refreshes, while a presenting scene stays paced by the panel.
     let initial_interval = state.pacing_interval().unwrap_or(Duration::from_millis(16));
     event_loop
         .handle()
@@ -1921,19 +1921,6 @@ impl State<DrmBackend> {
     /// vblank already drove this frame. It does not render: presenting is the
     /// on-demand [`State::request_render`] path.
     fn deliver_vsync_tick(&mut self, now: Instant) {
-        // A vblank and the free-running timer can both fire for the same
-        // frame. Keep one tick per refresh: anything closer than a refresh
-        // (minus a small margin) is the same frame, not the next one.
-        if let Some(interval) = self.pacing_interval() {
-            let min_gap = interval.saturating_sub(interval / 10);
-            if self
-                .backend_data
-                .last_vsync_tick
-                .is_some_and(|last| now.saturating_duration_since(last) < min_gap)
-            {
-                return;
-            }
-        }
         self.backend_data.last_vsync_tick = Some(now);
 
         let Some((mhz, _node, _crtc)) = self.backend_data.pacing_crtc else {
@@ -2186,13 +2173,14 @@ impl State<DrmBackend> {
         }
     }
 
-    /// Vsync source armed at the pacing refresh.
+    /// Vsync fallback for a refresh that produced no page flip.
     ///
-    /// The pacing CRTC's page-flip vblank ([`Self::on_vblank`]) also ticks, so
-    /// a presenting scene stays in step with the panel. This timer ticks every
-    /// refresh regardless, which keeps a missed flip from stalling the loop at
-    /// two refreshes; [`Self::deliver_vsync_tick`] drops a tick that arrives
-    /// too soon after a vblank's, so neither source ticks twice.
+    /// A page flip's vblank ([`Self::on_vblank`]) always ticks, so a presenting
+    /// scene is paced by the panel. This timer only steps in when a whole
+    /// refresh plus a small slack passed without one: a missed flip, or a
+    /// static scene that flips nothing. It re-arms against the last tick rather
+    /// than a fixed period, so it stays phased to the panel instead of drifting
+    /// against it and eventually missing flips itself.
     ///
     /// It backs off while the output is blanked or the seat inactive, where no
     /// vblank can arrive and there is nothing to present.
@@ -2210,11 +2198,6 @@ impl State<DrmBackend> {
         let slack = Duration::from_millis(2);
         let now = Instant::now();
 
-        // Tick every refresh instead of waiting for a flip's vblank: a missed
-        // flip would otherwise leave the loop until the next timer period and
-        // lock a 60 Hz panel at 30 fps. `deliver_vsync_tick` drops a tick that
-        // lands too soon after a vblank's, so this never ticks twice.
-        self.deliver_vsync_tick(now);
         self.send_stale_game_frame_callbacks(now, slack);
 
         // An animated theme cursor changes with time alone; with on-demand
@@ -2223,7 +2206,16 @@ impl State<DrmBackend> {
             self.request_render();
         }
 
-        interval
+        if let Some(last) = self.backend_data.last_vsync_tick {
+            let due = last + interval + slack;
+            if now < due {
+                // No vblank has arrived since the last tick: wait for it, and
+                // stay phased to when it is due rather than to this callback.
+                return (due - now).max(Duration::from_millis(1));
+            }
+        }
+        self.deliver_vsync_tick(now);
+        interval + slack
     }
 
     // If crtc is `Some()`, render it, else render all crtcs

@@ -56,34 +56,38 @@ class GpuStatsState extends _$GpuStatsState {
   ///
   /// The deltas are taken per client, then summed per engine: a client that
   /// exits only loses its own counters instead of subtracting its lifetime
-  /// from the total. Engines run in parallel, so the busiest engine's delta
-  /// over the elapsed time is the GPU's busy share.
+  /// from the total, and a client absent from the previous sample is skipped
+  /// rather than reported as a one-sample spike. Engines run in parallel, so
+  /// the busiest engine's delta over the elapsed time is the busy share.
   ///
-  /// `null` until a second sample exists, and whenever the clients report no
-  /// engine counters (Xe reports `drm-cycles-*` instead of `drm-engine-*`), so
-  /// the caller keeps the reader's own value.
+  /// `null` until a second sample exists, and when the clients report no
+  /// `drm-engine-*` counters at all (Xe reports `drm-cycles-*`), so the caller
+  /// keeps the reader's own value. Engine counters with no work read 0.
   Future<int?> _engineLoad(GpuDevice device) async {
     final now = DateTime.now();
-    final clients = await sampleClientEngineNanoseconds(device);
+    final sample = await sampleDevice(device);
+    final clients = sample.clientEngines;
     final previous = _previousClients;
     final previousAt = _previousAt;
     _previousClients = clients;
     _previousAt = now;
     if (previous == null || previousAt == null || !ref.mounted) return null;
+    if (!sample.hasEngineCounters) return null;
     final elapsed = now.difference(previousAt).inMicroseconds * 1000;
     if (elapsed <= 0) return null;
 
     final totals = <String, int>{};
     clients.forEach((clientId, engines) {
       final before = previous[clientId];
+      // Absent last time: its counter covers the interval only partially, so
+      // reading it whole would spike the sample.
+      if (before == null) return;
       engines.forEach((engine, nanoseconds) {
-        // A client seen for the first time starts at zero: its whole counter
-        // is the work done since it opened.
-        final delta = nanoseconds - (before?[engine] ?? 0);
+        final delta = nanoseconds - (before[engine] ?? 0);
         if (delta > 0) totals[engine] = (totals[engine] ?? 0) + delta;
       });
     });
-    if (totals.isEmpty) return null;
+    if (totals.isEmpty) return 0;
     final busiest = totals.values.reduce((a, b) => a > b ? a : b);
     return (busiest * 100 / elapsed).clamp(0, 100).round();
   }

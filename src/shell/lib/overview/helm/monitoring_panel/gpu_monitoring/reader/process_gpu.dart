@@ -33,18 +33,29 @@ Future<Map<int, Map<String, int>>> sampleClientEngineNanoseconds(
 /// One walk of a [GpuDevice]'s DRM clients, shared by the card and the list.
 class DeviceEngineSample {
   /// Creates a sample.
-  const DeviceEngineSample(this.processNanoseconds, this.clientEngines);
+  const DeviceEngineSample(
+    this.processNanoseconds,
+    this.clientEngines, {
+    required this.hasEngineCounters,
+  });
 
   /// Per-pid total engine nanoseconds.
   final Map<int, int> processNanoseconds;
 
   /// Engine nanoseconds per `drm-client-id`, then per engine.
   final Map<int, Map<String, int>> clientEngines;
+
+  /// Whether the clients reported `drm-engine-*` counters at all.
+  ///
+  /// Xe reports `drm-cycles-*` instead, so an empty [clientEngines] is not the
+  /// same as an idle GPU.
+  final bool hasEngineCounters;
 }
 
 DeviceEngineSample? _cached;
 String? _cachedCard;
 DateTime? _cachedAt;
+Future<DeviceEngineSample>? _pending;
 
 /// How long one scan serves both callers.
 ///
@@ -53,20 +64,24 @@ DateTime? _cachedAt;
 const _cacheFor = Duration(milliseconds: 400);
 
 /// Samples [device]'s clients off the UI isolate and caches the walk briefly.
-Future<DeviceEngineSample> sampleDevice(GpuDevice device) async {
+Future<DeviceEngineSample> sampleDevice(GpuDevice device) {
   final now = DateTime.now();
   final cached = _cached;
   if (cached != null &&
       _cachedCard == device.cardPath &&
       _cachedAt != null &&
       now.difference(_cachedAt!) < _cacheFor) {
-    return cached;
+    return Future.value(cached);
   }
-  final sample = await Isolate.run(() => walkDeviceClients(device));
-  _cached = sample;
-  _cachedCard = device.cardPath;
-  _cachedAt = now;
-  return sample;
+  // Share the walk between callers that miss the cache together.
+  return _pending ??= Isolate.run(() => walkDeviceClients(device))
+      .then((sample) {
+        _cached = sample;
+        _cachedCard = device.cardPath;
+        _cachedAt = DateTime.now();
+        return sample;
+      })
+      .whenComplete(() => _pending = null);
 }
 
 /// Walks `/proc` for [device]'s clients. Top-level so it can run off-isolate.
@@ -75,6 +90,7 @@ Future<DeviceEngineSample> walkDeviceClients(GpuDevice device) async {
   final clientEngines = <int, Map<String, int>>{};
   final seenClients = <int>{};
   final seenPerPid = <int, Set<int>>{};
+  var hasEngineCounters = false;
 
   final pids = await listProcessIds();
   for (final pid in pids) {
@@ -111,6 +127,7 @@ Future<DeviceEngineSample> walkDeviceClients(GpuDevice device) async {
         continue;
       }
 
+      if (info.engineNanoseconds.isNotEmpty) hasEngineCounters = true;
       final clientId = info.clientId;
       if (clientId == null) {
         // No client id to key the per-client deltas on: still attribute the
@@ -137,5 +154,9 @@ Future<DeviceEngineSample> walkDeviceClients(GpuDevice device) async {
   }
 
   processNanoseconds.removeWhere((_, nanoseconds) => nanoseconds <= 0);
-  return DeviceEngineSample(processNanoseconds, clientEngines);
+  return DeviceEngineSample(
+    processNanoseconds,
+    clientEngines,
+    hasEngineCounters: hasEngineCounters,
+  );
 }
