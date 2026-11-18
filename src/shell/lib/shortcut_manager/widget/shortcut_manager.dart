@@ -9,6 +9,8 @@ import 'package:shell/notification/provider/system_notification_manager.dart';
 import 'package:shell/platform/model/request/adjust_brightness/adjust_brightness.serializable.dart';
 import 'package:shell/platform/model/request/switch_keyboard_layout/switch_keyboard_layout.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/settings/provider/settings_properties.dart';
+import 'package:shell/settings/provider/state/show_key_presses_setting.dart';
 import 'package:shell/shared/mpris/provider/mpris_manager.dart';
 import 'package:shell/shared/pulseaudio/provider/default_sink.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
@@ -154,6 +156,17 @@ class VeshellShortcutManager extends HookConsumerWidget {
           LockSessionIntent: CallbackAction<LockSessionIntent>(
             onInvoke: (_) {
               ref.read(lockScreenProvider.notifier).lock();
+              return null;
+            },
+          ),
+          ToggleKeyPressesIntent: CallbackAction<ToggleKeyPressesIntent>(
+            onInvoke: (_) {
+              ref
+                  .read(settingsPropertiesProvider.notifier)
+                  .updateProperty(
+                    showKeyPressesPath,
+                    !ref.read(showKeyPressesSettingProvider),
+                  );
               return null;
             },
           ),

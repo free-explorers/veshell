@@ -2,6 +2,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/capture/widget/capture_prompt_overlay.dart';
+import 'package:shell/key_press/widget/key_press_overlay.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/lock_screen/widget/lock_screen_overlay.dart';
 import 'package:shell/main.dart';
@@ -76,6 +77,8 @@ class MonitorWidget extends HookConsumerWidget {
                 children: [
                   child ?? const SizedBox.shrink(),
                   CapturePromptOverlay(monitorName: monitorName),
+                  // Below the lock screen, which also stops it recording.
+                  const KeyPressOverlay(),
                   // Display-setting confirmation sits above everything,
                   // including the capture prompts, so a pending rollback can
                   // never be hidden.

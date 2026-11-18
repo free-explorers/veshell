@@ -67,3 +67,25 @@ final curatedKeyboardOptions = <String>{
   for (final key in composeKeys)
     if (key != 'none') 'compose:$key',
 };
+
+/// Where the keys pressed are shown, in the order shown in the picker. The
+/// values are the names of `KeyPressPosition`.
+const keyPressPositions = <String>[
+  'bottomRight',
+  'bottomCenter',
+  'bottomLeft',
+  'topRight',
+  'topCenter',
+  'topLeft',
+];
+
+/// The localized label for a key press position string.
+String keyPressPositionLabel(AppLocalizations l10n, String value) =>
+    switch (value) {
+      'bottomCenter' => l10n.positionBottomCenter,
+      'bottomLeft' => l10n.positionBottomLeft,
+      'topRight' => l10n.positionTopRight,
+      'topCenter' => l10n.positionTopCenter,
+      'topLeft' => l10n.positionTopLeft,
+      _ => l10n.positionBottomRight,
+    };

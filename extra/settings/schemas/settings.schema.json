@@ -93,6 +93,22 @@
                     "type": "integer",
                     "minimum": 0
                 },
+                "showKeyPresses": {
+                    "description": "Show the keys pressed on screen, for screencasts and presentations.",
+                    "type": "boolean"
+                },
+                "keyPressPosition": {
+                    "description": "Where the keys pressed are shown on each monitor.",
+                    "type": "string",
+                    "enum": [
+                        "bottomRight",
+                        "bottomCenter",
+                        "bottomLeft",
+                        "topRight",
+                        "topCenter",
+                        "topLeft"
+                    ]
+                },
                 "hotkeys": {
                     "type": "object",
                     "properties": {
@@ -118,6 +134,9 @@
                                     "$ref": "#/$defs/hotkeyList"
                                 },
                                 "lockSession": {
+                                    "$ref": "#/$defs/hotkeyList"
+                                },
+                                "toggleKeyPresses": {
                                     "$ref": "#/$defs/hotkeyList"
                                 }
                             }
