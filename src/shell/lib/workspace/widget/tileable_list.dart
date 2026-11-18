@@ -140,14 +140,24 @@ class TileableListView extends HookConsumerWidget {
             builder: (context, constraints) {
               // call with delay to prevent FlutterError (setState() or markNeedsBuild() called during build.
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                final renderBox =
-                    tileableKeyList[index].currentContext!.findRenderObject()!
-                        as RenderBox;
-                final offset = renderBox.localToGlobal(Offset.zero);
+                final listBox = listKey.currentContext?.findRenderObject();
+                final renderBox = tileableKeyList[index].currentContext
+                    ?.findRenderObject();
+                if (listBox is! RenderBox || renderBox is! RenderBox) {
+                  return;
+                }
+                // Relative to the list, not the screen: the workspace slides
+                // the whole panel when it changes, and this is only measured
+                // when the tab is laid out, so a screen position taken during
+                // a slide would leave the indicator off the panel for good.
+                final offset = renderBox.localToGlobal(
+                  Offset.zero,
+                  ancestor: listBox,
+                );
                 if (offset != offsetMap.value[tileableKeyList[index]]) {
                   offsetMap.value = offsetMap.value.add(
                     tileableKeyList[index],
-                    renderBox.localToGlobal(Offset.zero),
+                    offset,
                   );
                 }
               });
@@ -280,7 +290,7 @@ class TileableIndicatorPainter extends CustomPainter {
   /// The key of the list containing the tabs.
   final GlobalKey listKey;
 
-  /// The offset of the tabs.
+  /// The offset of the tabs, relative to the list.
   final IMap<GlobalKey, Offset> offsetMap;
 
   Rect? _currentRect;
@@ -300,7 +310,6 @@ class TileableIndicatorPainter extends CustomPainter {
     _needsPaint = false;
     _painter ??= indicator.createBoxPainter(markNeedsPaint);
     final listBox = listKey.currentContext!.findRenderObject()! as RenderBox;
-    final listOffset = listBox.localToGlobal(Offset.zero);
     final value = controller.view.value;
     final ltr = index > value;
 
@@ -322,10 +331,9 @@ class TileableIndicatorPainter extends CustomPainter {
       fromBox = null;
     }
     final fromRelativeOffset =
-        (offsetMap.get(fromKey) ??
-            fromBox?.localToGlobal(Offset.zero) ??
-            Offset.zero) -
-        listOffset;
+        offsetMap.get(fromKey) ??
+        fromBox?.localToGlobal(Offset.zero, ancestor: listBox) ??
+        Offset.zero;
     final fromRect = Rect.fromLTWH(
       fromRelativeOffset.dx,
       fromRelativeOffset.dy,
@@ -342,10 +350,9 @@ class TileableIndicatorPainter extends CustomPainter {
       toBox = null;
     }
     final toRelativeOffset =
-        (offsetMap.get(toKey) ??
-            toBox?.localToGlobal(Offset.zero) ??
-            Offset.zero) -
-        listOffset;
+        offsetMap.get(toKey) ??
+        toBox?.localToGlobal(Offset.zero, ancestor: listBox) ??
+        Offset.zero;
     final toRect = Rect.fromLTWH(
       toRelativeOffset.dx,
       toRelativeOffset.dy,
