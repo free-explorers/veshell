@@ -28,7 +28,7 @@ List<FlSpot> _window(int first, {int? count}) => [
 ];
 
 void main() {
-  testWidgets('scrolls the chart window when a sample arrives', (tester) async {
+  testWidgets('steps the chart window when a sample arrives', (tester) async {
     await tester.pumpWidget(_chart(_window(0)));
     await tester.pump();
 
@@ -37,15 +37,26 @@ void main() {
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(_chart(_window(1)));
-    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump();
 
-    chart = tester.widget<LineChart>(find.byType(LineChart));
-    expect(chart.data.minX, closeTo(monitoringChartOverflowSamples + 0.5, 0.1));
-
-    await tester.pump(const Duration(milliseconds: 300));
-
+    // One step per sample, no 60 fps slide in between: while the panel is
+    // visible that slide kept the whole shell rendering (and re-frosted) for
+    // the entire sample interval.
     chart = tester.widget<LineChart>(find.byType(LineChart));
     expect(chart.data.minX, closeTo(monitoringChartOverflowSamples + 1, 0.01));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('does not keep scheduling frames between samples', (tester) async {
+    await tester.pumpWidget(_chart(_window(0)));
+    await tester.pump();
+
+    await tester.pumpWidget(_chart(_window(1)));
+    await tester.pump();
+
+    // The chart stepped: no animation is left ticking the shell until the next
+    // sample. A slide here would keep the whole overview rendering at 60 fps.
+    expect(tester.binding.hasScheduledFrame, isFalse);
     expect(tester.takeException(), isNull);
   });
 
