@@ -39,6 +39,7 @@ use smithay::wayland::idle_inhibit::{IdleInhibitHandler, IdleInhibitManagerState
 use smithay::wayland::idle_notify::{IdleNotifierHandler, IdleNotifierState};
 use smithay::wayland::output::OutputHandler;
 use smithay::wayland::pointer_constraints::PointerConstraintsState;
+use smithay::wayland::pointer_gestures::PointerGesturesState;
 use smithay::wayland::relative_pointer::RelativePointerManagerState;
 use smithay::wayland::seat::WaylandFocus;
 use smithay::wayland::selection::data_device::{
@@ -261,11 +262,16 @@ pub struct State<BackendData: Backend + 'static> {
     /// `view_id` and coordinate space even if the pointer crosses monitors
     /// mid-gesture. `None` when no gesture is in progress.
     pub pointer_gesture_view_id: Option<i64>,
-    /// Whether the libinput swipe gesture in progress is forwarded to the
-    /// Flutter shell. Decided at the begin event so the shell never sees an
-    /// update or end without its begin when the session state changes
-    /// mid-gesture (lock, gaming mode, screenshot selection).
-    pub shell_gesture_active: bool,
+    /// Finger count of the libinput swipe gesture being forwarded to the
+    /// Flutter shell, `None` when no swipe is forwarded. Decided at the begin
+    /// event so the shell never sees an update or end without its begin; if
+    /// the session state changes mid-gesture (lock, gaming mode, screenshot
+    /// selection), the shell gets a cancelled end instead of the remaining
+    /// events.
+    pub shell_swipe_fingers: Option<u32>,
+    /// Where the libinput pinch gesture in progress goes, `None` when it is
+    /// not forwarded. Decided at the begin event, like `shell_swipe_fingers`.
+    pub pinch_target: Option<crate::input_handling::PinchTarget>,
     /// Desired mirror source (connector name) per monitor, keyed by connector.
     ///
     /// Written from each monitor's `monitor/<connector>.json` when its
@@ -571,6 +577,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         }
         // Pointer lock and confinement (see `pointer_constraints`).
         PointerConstraintsState::new::<Self>(&display_handle);
+        // Swipe, pinch and hold gestures for clients (pinch-to-zoom).
+        PointerGesturesState::new::<Self>(&display_handle);
 
         let data_device_state = DataDeviceState::new::<Self>(&display_handle);
         let primary_selection_state = PrimarySelectionState::new::<Self>(&display_handle);
@@ -767,7 +775,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             notification_state,
             system_tray_state,
             pointer_gesture_view_id: None,
-            shell_gesture_active: false,
+            shell_swipe_fingers: None,
+            pinch_target: None,
             mirror_of: HashMap::new(),
             idle,
             lock,

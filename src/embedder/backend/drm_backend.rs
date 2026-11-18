@@ -914,16 +914,14 @@ pub fn run_drm_backend(real_session: bool) {
                     data.on_pointer_axis::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::GestureSwipeBegin { event } => {
-                    // 3-finger swipes drive shell navigation and 4-finger ones
-                    // the overview; neither belongs to a locked session, a game
-                    // that owns the output, or a frozen screenshot selection.
-                    data.shell_gesture_active = !data.is_locked()
-                        && !data.gaming_input_active()
-                        && data.capture_state.session.is_none();
-                    if !data.shell_gesture_active {
+                    // Whether the swipe goes to the shell is decided here, once,
+                    // so the shell sees a complete begin/update/end sequence.
+                    data.shell_swipe_fingers = None;
+                    if !data.shell_gestures_allowed() {
                         return;
                     }
                     let fingers = event.fingers();
+                    data.shell_swipe_fingers = Some(fingers);
                     data.flutter_engine_mut()
                         .platform_method_channel
                         .invoke_method(
@@ -931,12 +929,22 @@ pub fn run_drm_backend(real_session: bool) {
                             Some(Box::new(json!(GestureSwipeBeginEventMessage {
                                 time: event.time_msec(),
                                 fingers,
+                                natural_scroll: event
+                                    .device()
+                                    .config_scroll_natural_scroll_enabled(),
                             }))),
                             None,
                         );
                 }
                 InputEvent::GestureSwipeUpdate { event } => {
-                    if !data.shell_gesture_active {
+                    if data.shell_swipe_fingers.is_none() {
+                        return;
+                    }
+                    if !data.shell_gestures_allowed() {
+                        // The session locked, a game took the input or a
+                        // screenshot selection started mid-swipe: close the
+                        // shell's gesture without committing it.
+                        data.cancel_shell_swipe(event.time_msec());
                         return;
                     }
                     let fingers = event.fingers();
@@ -963,13 +971,10 @@ pub fn run_drm_backend(real_session: bool) {
                         );
                 }
                 InputEvent::GestureSwipeEnd { event } => {
-                    let active = data.shell_gesture_active;
-                    data.shell_gesture_active = false;
-                    if !active {
+                    let Some(fingers) = data.shell_swipe_fingers.take() else {
                         return;
-                    }
-                    let fingers = event.fingers();
-                    let cancelled = event.cancelled();
+                    };
+                    let cancelled = event.cancelled() || !data.shell_gestures_allowed();
                     data.flutter_engine_mut()
                         .platform_method_channel
                         .invoke_method(
@@ -983,24 +988,14 @@ pub fn run_drm_backend(real_session: bool) {
                         );
                 }
                 InputEvent::GesturePinchBegin { event } => {
-                    // Pinch belongs to the client under the pointer. Keep it
-                    // out of a locked or frozen session, where there is no
-                    // valid client target.
-                    if data.is_locked() || data.capture_state.session.is_some() {
-                        return;
-                    }
-                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event);
+                    let device_id = event.device().id_product() as i32;
+                    let view_id = data.view_id_under_pointer();
+                    data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::GesturePinchUpdate { event } => {
-                    if data.is_locked() || data.capture_state.session.is_some() {
-                        return;
-                    }
                     data.on_gesture_pinch_update::<LibinputInputBackend>(event);
                 }
                 InputEvent::GesturePinchEnd { event } => {
-                    if data.is_locked() || data.capture_state.session.is_some() {
-                        return;
-                    }
                     data.on_gesture_pinch_end::<LibinputInputBackend>(event);
                 }
                 InputEvent::GestureHoldBegin { event: _ } => {}

@@ -324,6 +324,10 @@ pub struct EnvironmentVariables<'k, 'v> {
 pub struct GestureSwipeBeginEventMessage {
     pub time: u32,
     pub fingers: u32,
+    /// Whether the touchpad has natural scrolling on. The update deltas are
+    /// then negated (content follows the fingers); a gesture that needs the
+    /// physical finger direction undoes it with this flag.
+    pub natural_scroll: bool,
 }
 
 #[derive(Debug, Serialize)]

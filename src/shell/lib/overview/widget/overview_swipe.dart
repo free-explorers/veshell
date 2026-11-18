@@ -27,12 +27,15 @@ class OverviewSwipeGesture extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final stream = ref.watch(platformManagerProvider);
     final active = useRef(false);
+    final naturalScroll = useRef(false);
+    // Physical vertical finger travel, negative upwards.
     final travel = useRef<double>(0);
 
     useEffect(() {
       final subscription = stream.listen((event) {
         if (event is GestureSwipeBeginEvent) {
           active.value = event.message.fingers == 4;
+          naturalScroll.value = event.message.naturalScroll;
           travel.value = 0;
           return;
         }
@@ -40,7 +43,11 @@ class OverviewSwipeGesture extends HookConsumerWidget {
           if (!active.value || event.message.fingers != 4) {
             return;
           }
-          travel.value += event.message.deltaY;
+          // The compositor negates the deltas under natural scrolling; the
+          // overview follows the fingers whatever that setting is.
+          travel.value += naturalScroll.value
+              ? -event.message.deltaY
+              : event.message.deltaY;
           return;
         }
         if (event is GestureSwipeEndEvent) {
@@ -59,7 +66,7 @@ class OverviewSwipeGesture extends HookConsumerWidget {
             return;
           }
           final overview = ref.read(overviewStateProvider(screenId));
-          final up = travel.value > 0;
+          final up = travel.value < 0;
           final shouldToggle = up
               ? !overview.isDisplayed
               : overview.isDisplayed;

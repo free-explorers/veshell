@@ -26,6 +26,7 @@ use crate::flutter_engine::embedder::{
     FlutterPointerSignalKind_kFlutterPointerSignalKindScroll,
 };
 use crate::flutter_engine::view::view_id_for_output;
+use crate::flutter_engine::wayland_messages::GestureSwipeEndEventMessage;
 use crate::flutter_engine::FlutterEngine;
 use crate::focus::PointerFocusTarget;
 use crate::settings::DEFAULT_WHEEL_SCROLL_PIXELS_PER_DETENT;
@@ -140,6 +141,22 @@ fn scale_client_wheel_frame(mut frame: AxisFrame, factor: f64) -> AxisFrame {
         *y = (*y as f64 * factor).round() as i32;
     }
     frame
+}
+
+/// Where a touchpad pinch goes, decided at its begin event so the receiver
+/// sees one complete gesture.
+pub enum PinchTarget {
+    /// The Wayland client under the pointer, through `zwp_pointer_gestures_v1`.
+    Client,
+    /// The Flutter shell, as a trackpad pan/zoom on `view_id`, with the pan and
+    /// rotation accumulated since the begin event.
+    Shell {
+        view_id: i64,
+        device_id: i32,
+        pan_x: f64,
+        pan_y: f64,
+        rotation: f64,
+    },
 }
 
 impl<BackendData: Backend> State<BackendData> {
@@ -663,6 +680,7 @@ impl<BackendData: Backend> State<BackendData> {
                     FlutterPointerPhase_kPanZoomEnd,
                     0.,
                     0.,
+                    1.,
                     0.,
                     gesture_view_id,
                 );
@@ -685,6 +703,7 @@ impl<BackendData: Backend> State<BackendData> {
                         FlutterPointerPhase_kPanZoomStart,
                         0.,
                         0.,
+                        1.,
                         0.,
                         gesture_view_id,
                     );
@@ -700,6 +719,7 @@ impl<BackendData: Backend> State<BackendData> {
                     FlutterPointerPhase_kPanZoomUpdate,
                     self.flutter_engine().trackpad_scrolling_manager.pan_x,
                     self.flutter_engine().trackpad_scrolling_manager.pan_y,
+                    1.,
                     0.,
                     gesture_view_id,
                 );
@@ -707,43 +727,155 @@ impl<BackendData: Backend> State<BackendData> {
         }
     }
 
-    /// Forwards a pinch gesture to the client under the pointer.
-    ///
-    /// Pinch is the client's gesture: the shell does not use it, and apps
-    /// expect `zwp_pointer_gesture_pinch_v1` (zoom, rotate) from the compositor.
-    pub fn on_gesture_pinch_begin<B: InputBackend>(&mut self, event: B::GesturePinchBeginEvent) {
-        let pointer = self.pointer.clone();
-        pointer.gesture_pinch_begin(
-            self,
-            &PointerPinchBeginEvent {
-                serial: SERIAL_COUNTER.next_serial(),
-                time: event.time_msec(),
-                fingers: event.fingers(),
-            },
-        );
+    /// Starts a pinch gesture and decides, once, where it goes: the Wayland
+    /// client under the pointer (`zwp_pointer_gesture_pinch_v1`: zoom, rotate)
+    /// or, over the shell's own UI, Flutter as a trackpad pan/zoom (an
+    /// `InteractiveViewer` or a scale gesture recognizer zooms with it).
+    pub fn on_gesture_pinch_begin<B: InputBackend>(
+        &mut self,
+        event: B::GesturePinchBeginEvent,
+        device_id: i32,
+        view_id: Option<i64>,
+    ) {
+        self.pinch_target = None;
+        if self.client_pointer_focus().is_some() {
+            if !self.client_gestures_allowed() {
+                return;
+            }
+            self.pinch_target = Some(PinchTarget::Client);
+            let pointer = self.pointer.clone();
+            pointer.gesture_pinch_begin(
+                self,
+                &PointerPinchBeginEvent {
+                    serial: SERIAL_COUNTER.next_serial(),
+                    time: event.time_msec(),
+                    fingers: event.fingers(),
+                },
+            );
+        } else if let Some(view_id) = view_id {
+            self.pinch_target = Some(PinchTarget::Shell {
+                view_id,
+                device_id,
+                pan_x: 0.,
+                pan_y: 0.,
+                rotation: 0.,
+            });
+            self.send_pointer_pan_zoom_event(
+                device_id,
+                FlutterPointerPhase_kPanZoomStart,
+                0.,
+                0.,
+                1.,
+                0.,
+                Some(view_id),
+            );
+        }
     }
+
     pub fn on_gesture_pinch_update<B: InputBackend>(&mut self, event: B::GesturePinchUpdateEvent) {
-        let pointer = self.pointer.clone();
-        pointer.gesture_pinch_update(
-            self,
-            &PointerPinchUpdateEvent {
-                time: event.time_msec(),
-                delta: (event.delta_x(), event.delta_y()).into(),
-                scale: event.scale(),
-                rotation: event.rotation(),
-            },
-        );
+        match &mut self.pinch_target {
+            None => {}
+            Some(PinchTarget::Client) => {
+                if !self.client_gestures_allowed() {
+                    // The session locked or a screenshot selection started
+                    // mid-pinch: close the client's gesture.
+                    self.pinch_target = None;
+                    self.end_client_pinch(event.time_msec(), true);
+                    return;
+                }
+                let pointer = self.pointer.clone();
+                pointer.gesture_pinch_update(
+                    self,
+                    &PointerPinchUpdateEvent {
+                        time: event.time_msec(),
+                        delta: (event.delta_x(), event.delta_y()).into(),
+                        scale: event.scale(),
+                        rotation: event.rotation(),
+                    },
+                );
+            }
+            Some(PinchTarget::Shell {
+                view_id,
+                device_id,
+                pan_x,
+                pan_y,
+                rotation,
+            }) => {
+                // Flutter wants the pan and the rotation (in radians) since
+                // the start of the gesture; libinput reports them per event.
+                // libinput's scale is already relative to the start.
+                *pan_x += event.delta_x();
+                *pan_y += event.delta_y();
+                *rotation += event.rotation().to_radians();
+                let (view_id, device_id, pan_x, pan_y, rotation) =
+                    (*view_id, *device_id, *pan_x, *pan_y, *rotation);
+                self.send_pointer_pan_zoom_event(
+                    device_id,
+                    FlutterPointerPhase_kPanZoomUpdate,
+                    pan_x,
+                    pan_y,
+                    event.scale(),
+                    rotation,
+                    Some(view_id),
+                );
+            }
+        }
     }
+
     pub fn on_gesture_pinch_end<B: InputBackend>(&mut self, event: B::GesturePinchEndEvent) {
+        match self.pinch_target.take() {
+            None => {}
+            Some(PinchTarget::Client) => {
+                let cancelled = event.cancelled() || !self.client_gestures_allowed();
+                self.end_client_pinch(event.time_msec(), cancelled);
+            }
+            Some(PinchTarget::Shell {
+                view_id, device_id, ..
+            }) => {
+                self.send_pointer_pan_zoom_event(
+                    device_id,
+                    FlutterPointerPhase_kPanZoomEnd,
+                    0.,
+                    0.,
+                    1.,
+                    0.,
+                    Some(view_id),
+                );
+            }
+        }
+    }
+
+    /// Ends the client's pinch, also used to cancel it when the session state
+    /// changes mid-gesture.
+    fn end_client_pinch(&mut self, time: u32, cancelled: bool) {
         let pointer = self.pointer.clone();
         pointer.gesture_pinch_end(
             self,
             &PointerPinchEndEvent {
                 serial: SERIAL_COUNTER.next_serial(),
-                time: event.time_msec(),
-                cancelled: event.cancelled(),
+                time,
+                cancelled,
             },
         );
+    }
+
+    /// Closes the swipe forwarded to the shell with a cancelled end, so it is
+    /// not committed.
+    pub fn cancel_shell_swipe(&mut self, time: u32) {
+        let Some(fingers) = self.shell_swipe_fingers.take() else {
+            return;
+        };
+        self.flutter_engine_mut()
+            .platform_method_channel
+            .invoke_method(
+                "gesture_swipe_end",
+                Some(Box::new(serde_json::json!(GestureSwipeEndEventMessage {
+                    time,
+                    fingers,
+                    cancelled: true,
+                }))),
+                None,
+            );
     }
 
     /// Pointer focus for the window that owns the input in gaming mode.
@@ -1006,6 +1138,7 @@ impl<BackendData: Backend> State<BackendData> {
         phase: FlutterPointerPhase,
         pan_x: f64,
         pan_y: f64,
+        scale: f64,
         rotation: f64,
         view_id: Option<i64>,
     ) {
@@ -1044,10 +1177,9 @@ impl<BackendData: Backend> State<BackendData> {
                 pan_x: pan_x * view_scale,
                 pan_y: pan_y * view_scale,
                 // The Flutter pan/zoom `scale` is a gesture scale (1.0 means no
-                // scaling). The output scale must not be used here: Flutter
-                // would read it as a pinch. The shell does not currently track
-                // a trackpad pinch scale, so the neutral value is sent.
-                scale: 1.0,
+                // scaling): the pinch's, never the output scale, which Flutter
+                // would read as a pinch.
+                scale,
                 rotation,
                 view_id,
                 pressure: 0.0,
