@@ -180,7 +180,7 @@ class SlidingContainer extends HookConsumerWidget {
     // Where the row was when the current gesture began. The end of the
     // gesture turns the travel into a direction instead of guessing it from
     // the page the viewport centre happens to sit on.
-    final swipeStartOffset = useState<double?>(null);
+    final swipeStartOffset = useRef<double?>(null);
     // Release speed and target of a swipe navigation, consumed by the
     // `scrollToIndex` effect that follows `onIndexChanged`. It turns the
     // settle animation into a velocity-aware one.
@@ -214,6 +214,23 @@ class SlidingContainer extends HookConsumerWidget {
       initialValue: index.toDouble(),
     );
 
+    /// The size of one page along the scroll axis, `null` while the row has
+    /// no laid-out scroll position.
+    double? pageDimension() {
+      if (!pageController.hasClients ||
+          !pageController.position.hasPixels ||
+          !pageController.position.hasViewportDimension) {
+        return null;
+      }
+      final dimension = pageController.position.viewportDimension / visible;
+      return dimension > 0 ? dimension : null;
+    }
+
+    // Finger travel, in normalized gesture units, that moves the row one page.
+    final pageSwipe = direction == Axis.horizontal
+        ? _horizontalPageSwipe
+        : _verticalPageSwipe;
+
     // The caller moved the leading tile itself, not to follow this container's
     // report: the pages before the view changed (a tile before it was
     // removed), so the shown pages now sit at other indices. The view and the
@@ -225,22 +242,31 @@ class SlidingContainer extends HookConsumerWidget {
     if (firstVisibleIndex != null &&
         previousFirstVisibleIndex != null &&
         firstVisibleIndex != previousFirstVisibleIndex &&
-        firstVisibleIndex != reportedFirstVisibleIndex.value &&
-        pageController.hasClients &&
-        pageController.position.hasPixels &&
-        pageController.position.hasViewportDimension) {
-      final pageDimension = pageController.position.viewportDimension / visible;
-      final leading = pageController.offset / pageDimension;
-      // Only shift a row that sits on a page boundary. During a gesture or an
-      // animation the offset is fractional, and an integer shift would leave
-      // the row between two pages; the running scroll settles it instead.
-      if ((leading - leading.round()).abs() < 0.01) {
-        final shift = previousFirstVisibleIndex - firstVisibleIndex;
-        pageController.position.correctPixels(
-          pageController.offset - shift * pageDimension,
-        );
-        selectionPosition.value -= shift;
-        reportedFirstVisibleIndex.value = firstVisibleIndex;
+        firstVisibleIndex != reportedFirstVisibleIndex.value) {
+      final shift = previousFirstVisibleIndex - firstVisibleIndex;
+      // The selection is an index too: it moves with the pages right away.
+      selectionPosition.value -= shift;
+      final dimension = pageDimension();
+      if (dimension != null) {
+        if (!pageController.position.isScrollingNotifier.value) {
+          // At rest or between two swipe updates: an integer shift keeps the
+          // row's place between pages, and the gesture's origin moves with
+          // it so its progress is still measured from the same tile.
+          pageController.position.correctPixels(
+            pageController.offset - shift * dimension,
+          );
+          final start = swipeStartOffset.value;
+          if (start != null) {
+            swipeStartOffset.value = start - shift * dimension;
+          }
+          reportedFirstVisibleIndex.value = firstVisibleIndex;
+        } else {
+          // A running animation would undo the correction on its next tick.
+          // The new children make `scrollToIndex` retarget it in the new
+          // indices; forget the stale report so the place the row lands on
+          // is reported again, even when it has the old number.
+          reportedFirstVisibleIndex.value = null;
+        }
       }
     }
 
@@ -328,18 +354,17 @@ class SlidingContainer extends HookConsumerWidget {
           swipeSettleVelocity.value = null;
           swipeSettleIndex.value = null;
 
-          if (!pageController.hasClients) {
+          final dimension = pageDimension();
+          if (dimension == null) {
             return;
           }
-          final viewportDimension = pageController.position.viewportDimension;
-          final pageDimension = viewportDimension / visible;
-          final firstPageInView = pageController.offset / pageDimension;
+          final firstPageInView = pageController.offset / dimension;
           double? target;
           // Depending on the direction calculate the minimal offset to animate
           if (indexToScrollTo < firstPageInView) {
-            target = pageDimension * indexToScrollTo;
+            target = dimension * indexToScrollTo;
           } else if (indexToScrollTo > firstPageInView + visible - 1) {
-            target = pageDimension * (indexToScrollTo - visible + 1);
+            target = dimension * (indexToScrollTo - visible + 1);
           } else {
             // The selected page is already visible, but a swipe can leave the
             // row between two slots: with more than one visible tile the
@@ -352,14 +377,14 @@ class SlidingContainer extends HookConsumerWidget {
                 swipeInProgress.value) {
               return;
             }
-            target = pageDimension * firstPageInView.round();
+            target = dimension * firstPageInView.round();
           }
           target = clampDouble(
             target,
             pageController.position.minScrollExtent,
             pageController.position.maxScrollExtent,
           );
-          reportFirstVisibleIndex((target / pageDimension).round());
+          reportFirstVisibleIndex((target / dimension).round());
           if ((target - pageController.offset).abs() < 0.5) {
             return;
           }
@@ -369,7 +394,7 @@ class SlidingContainer extends HookConsumerWidget {
             // A swipe navigation: carry the release speed into the landing so
             // a flick does not stop dead and then glide at a fixed pace.
             duration = _settleDuration(
-              (target - pageController.offset).abs() / pageDimension,
+              (target - pageController.offset).abs() / dimension,
               pendingVelocity,
             );
             curve = Curves.easeOutCubic;
@@ -383,20 +408,16 @@ class SlidingContainer extends HookConsumerWidget {
         /// the row returns to where the gesture started, not to the page
         /// nearest its displaced position.
         void settleTo(double offset) {
-          if (!pageController.hasClients) {
-            return;
-          }
-          final pageDimension =
-              pageController.position.viewportDimension / visible;
-          if (pageDimension <= 0) {
+          final dimension = pageDimension();
+          if (dimension == null) {
             return;
           }
           final target = clampDouble(
-            (offset / pageDimension).round() * pageDimension,
+            (offset / dimension).round() * dimension,
             pageController.position.minScrollExtent,
             pageController.position.maxScrollExtent,
           );
-          reportFirstVisibleIndex((target / pageDimension).round());
+          reportFirstVisibleIndex((target / dimension).round());
           if ((target - pageController.offset).abs() < 0.5) {
             return;
           }
@@ -459,14 +480,10 @@ class SlidingContainer extends HookConsumerWidget {
               swipeStartOffset.value ??= pageController.offset;
             }
 
-            final pageDimension =
-                pageController.position.viewportDimension / visible;
-            if (pageDimension <= 0) {
+            final dimension = pageDimension();
+            if (dimension == null) {
               return;
             }
-            final pageSwipe = direction == Axis.horizontal
-                ? _horizontalPageSwipe
-                : _verticalPageSwipe;
             // The gesture is normalized to a fixed finger travel per page, not
             // to the page size: a full-width tile used to need a hand movement
             // as wide as the screen. The row follows the normalized progress.
@@ -475,7 +492,7 @@ class SlidingContainer extends HookConsumerWidget {
 
             final position =
                 pageController.position as ScrollPositionWithSingleContext;
-            position.pointerScroll(progressDelta * pageDimension);
+            position.pointerScroll(progressDelta * dimension);
           },
           onSwipeEnd: (event) {
             if (!swipeInProgress.value) {
@@ -507,21 +524,17 @@ class SlidingContainer extends HookConsumerWidget {
               return;
             }
 
-            final pageDimension =
-                pageController.position.viewportDimension / visible;
-            if (pageDimension <= 0) {
+            final dimension = pageDimension();
+            if (dimension == null) {
               return;
             }
-            final pageSwipe = direction == Axis.horizontal
-                ? _horizontalPageSwipe
-                : _verticalPageSwipe;
             // Page fractions from the start of the gesture. Under the fling
             // threshold the release snaps to the nearest page; above it, the
             // deceleration is projected and the row lands where it would have
             // stopped. This is GNOME Shell's and Niri's end-of-swipe model.
             final progress = start == null
                 ? 0.0
-                : (pageController.offset - start) / pageDimension;
+                : (pageController.offset - start) / dimension;
             final flingSpeed = _flingThreshold / pageSwipe;
             final projected = velocity.abs() < flingSpeed
                 ? progress
@@ -692,8 +705,18 @@ class SlidingContainer extends HookConsumerWidget {
                                   buildsNeighbors || resizing,
                               onScrollStart: () =>
                                   cursorTransition.begin(transitionToken),
-                              onScrollEnd: () =>
-                                  cursorTransition.end(transitionToken),
+                              onScrollEnd: () {
+                                cursorTransition.end(transitionToken);
+                                // The leading tile moved while the row was
+                                // animating: report where the row landed.
+                                final dimension = pageDimension();
+                                if (reportedFirstVisibleIndex.value == null &&
+                                    dimension != null) {
+                                  reportFirstVisibleIndex(
+                                    (pageController.offset / dimension).round(),
+                                  );
+                                }
+                              },
                               delegate: SliverChildBuilderDelegate(
                                 (context, index) => children[index],
                                 childCount: children.length,

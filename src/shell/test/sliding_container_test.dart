@@ -719,6 +719,86 @@ void main() {
       },
     );
 
+    testWidgets(
+      'a tile removed before the view mid-swipe keeps the row on the selection',
+      (tester) async {
+        // The caller moves the leading tile while the row is between two
+        // pages. The shift must still be applied, with the gesture's origin,
+        // or the cancelled swipe returns to the old offset, which now shows
+        // the tiles one slot further.
+        final events = StreamController<PlatformEvent>.broadcast();
+        addTearDown(events.close);
+        tester.view
+          ..devicePixelRatio = 1.0
+          ..physicalSize = const Size(600, 600);
+        addTearDown(tester.view.reset);
+        final tiles = ValueNotifier([0, 1, 2, 3, 4]);
+        final selected = ValueNotifier(3);
+        final firstVisible = ValueNotifier(2);
+        addTearDown(tiles.dispose);
+        addTearDown(selected.dispose);
+        addTearDown(firstVisible.dispose);
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              platformManagerProvider.overrideWithValue(events.stream),
+            ],
+            child: MaterialApp(
+              home: Center(
+                child: SizedBox(
+                  width: 600,
+                  height: 100,
+                  child: ListenableBuilder(
+                    listenable: Listenable.merge([
+                      tiles,
+                      selected,
+                      firstVisible,
+                    ]),
+                    builder: (context, _) => SlidingContainer(
+                      index: selected.value,
+                      visible: 2,
+                      firstVisibleIndex: firstVisible.value,
+                      onIndexChanged: (next) => selected.value = next,
+                      onFirstVisibleIndexChanged: (next) =>
+                          firstVisible.value = next,
+                      children: [
+                        for (final tile in tiles.value)
+                          SizedBox(key: ValueKey(tile)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(_page(tester), 2);
+
+        // Leave the row partway between pages.
+        _swipeBegin(events);
+        _swipeUpdate(events, dx: 40, dy: 0, time: 0);
+        _swipeUpdate(events, dx: 40, dy: 0, time: 100);
+        await tester.pump();
+        expect(_page(tester), isNot(2));
+
+        // Tile 0 closes: every index shifts down by one, as the shell does.
+        tiles.value = [1, 2, 3, 4];
+        selected.value = 2;
+        firstVisible.value = 1;
+        await tester.pump();
+
+        _swipeEnd(events, time: 200, cancelled: true);
+        await tester.pumpAndSettle();
+        await tester.pump(const Duration(milliseconds: 150));
+
+        // Back on the tiles the gesture started from, now at index 1.
+        expect(selected.value, 2);
+        expect(_page(tester), 1);
+        expect(firstVisible.value, 1);
+      },
+    );
+
     /// Renders the two rows a swipe can reach: the tile row and, below it, the
     /// screen's workspace row, both listening to [events].
     Future<(List<int>, List<int>)> pumpBothRows(
