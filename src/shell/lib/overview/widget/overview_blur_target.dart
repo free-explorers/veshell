@@ -1,3 +1,8 @@
+import 'dart:async';
+import 'dart:ui' as ui;
+
+import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -15,6 +20,13 @@ import 'package:shell/shared/widget/frosted_surface.dart';
 /// An `ImageFiltered` has to wrap what it blurs, so a sibling overlay cannot
 /// apply it. The recipe lives here, with the overview: `ScreenWidget` composes
 /// the screen through this widget instead of owning the blur itself.
+///
+/// Once the frost has settled it is baked into an image and drawn as a plain
+/// blit. A filtered layer is not cached across frames: while the overview was
+/// open, any animation anywhere (a sparkline, a hover, the opening ramp) made
+/// the engine re-apply the full-screen blur, saturation and grain on every
+/// output, every frame. Freezing the settled result keeps the backdrop
+/// identical (it is occluded and blurred anyway) and makes those frames cheap.
 class OverviewBlurTarget extends HookConsumerWidget {
   /// Creates the blurred layer the overview sits over.
   const OverviewBlurTarget({
@@ -36,14 +48,48 @@ class OverviewBlurTarget extends HookConsumerWidget {
     );
 
     final animationController = useAnimationController(duration: frostDuration);
+    final boundaryKey = useMemoized(GlobalKey.new);
+    final frozen = useState<ui.Image?>(null);
+    final frozenSize = useRef<Size?>(null);
 
     useEffect(() {
-      if (isDisplayed) {
-        animationController.forward();
-      } else {
+      if (!isDisplayed) {
+        // Thaw before the closing ramp: it has to lift from the live frost, and
+        // drawing a stale snapshot while the scan runs would show the old
+        // backdrop sliding away from the real one.
+        _thaw(frozen, frozenSize);
         animationController.reverse();
+        return null;
       }
-      return null;
+
+      var cancelled = false;
+
+      Future<void> freeze() async {
+        if (cancelled) return;
+        // Read the ratio before the frame gap; the capture needs the settled
+        // frame painted.
+        final pixelRatio = View.of(context).devicePixelRatio;
+        await SchedulerBinding.instance.endOfFrame;
+        if (cancelled) return;
+        final boundary = boundaryKey.currentContext?.findRenderObject();
+        if (boundary is! RenderRepaintBoundary || boundary.size.isEmpty) return;
+        final ui.Image image;
+        try {
+          image = await boundary.toImage(pixelRatio: pixelRatio);
+        } on Object {
+          // A capture that fails leaves the live frost in place: slower, not
+          // broken.
+          return;
+        }
+        if (cancelled) {
+          image.dispose();
+          return;
+        }
+        _swap(frozen, frozenSize, boundary.size, image);
+      }
+
+      unawaited(animationController.forward().whenComplete(freeze));
+      return () => cancelled = true;
     }, [isDisplayed]);
 
     // A screen subtree rebuilt while the overview is displayed (a monitor
@@ -62,36 +108,86 @@ class OverviewBlurTarget extends HookConsumerWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final size = constraints.biggest;
         // Sigma grows with the screen so the frost is consistent across output
         // sizes.
-        final maxSigma = frostSigmaFor(constraints.biggest);
-        return AnimatedBuilder(
-          animation: animationController,
-          builder: (context, child) {
-            final progress = progressAnimation.value;
-            // Cache the frosted screen: while the overview is interacted with,
-            // the blur is reused instead of recomputed, as long as the desktop
-            // behind it is not itself repainting.
-            return RepaintBoundary(
-              child: FrostedSurface(
-                blurSigma: maxSigma * progress,
-                // A blurred background should read as glass, not merely out of
-                // focus: lift its vibrancy a touch while the overview opens.
-                saturation: 1 + 0.2 * progress,
-                // Grain rides the blur (it only paints once blurred) and fades
-                // with the ramp, so it lives here rather than on the scrim.
-                noise: true,
-                noiseOpacity: progress,
-                tintOverContent: true,
-                frame: false,
-                highlight: false,
+        final maxSigma = frostSigmaFor(size);
+        final image = frozen.value;
+        // A resize invalidates the capture; the live frost takes over until
+        // the next open bakes a matching one.
+        final frozenImage = image != null && frozenSize.value == size
+            ? image
+            : null;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            // Kept mounted while frozen: the workspaces, tiles and live
+            // surfaces behind the overview own state and focus hand-offs,
+            // which re-inflating would lose (see the test).
+            Offstage(
+              offstage: frozenImage != null,
+              child: AnimatedBuilder(
+                animation: animationController,
+                builder: (context, child) {
+                  final progress = progressAnimation.value;
+                  return RepaintBoundary(
+                    key: boundaryKey,
+                    child: FrostedSurface(
+                      blurSigma: maxSigma * progress,
+                      // A blurred background should read as glass, not merely
+                      // out of focus: lift its vibrancy a touch while the
+                      // overview opens.
+                      saturation: 1 + 0.2 * progress,
+                      // Grain rides the blur (it only paints once blurred) and
+                      // fades with the ramp, so it lives here rather than on
+                      // the scrim.
+                      noise: true,
+                      noiseOpacity: progress,
+                      tintOverContent: true,
+                      frame: false,
+                      highlight: false,
+                      child: child,
+                    ),
+                  );
+                },
                 child: child,
               ),
-            );
-          },
-          child: child,
+            ),
+            if (frozenImage != null)
+              RawImage(
+                image: frozenImage,
+                scale: View.of(context).devicePixelRatio,
+                fit: BoxFit.fill,
+              ),
+          ],
         );
       },
     );
+  }
+
+  /// Replaces the frozen backdrop, releasing the old image once the frame that
+  /// stopped painting it is done.
+  void _swap(
+    ValueNotifier<ui.Image?> frozen,
+    ObjectRef<Size?> frozenSize,
+    Size size,
+    ui.Image image,
+  ) {
+    final previous = frozen.value;
+    frozenSize.value = size;
+    frozen.value = image;
+    if (previous != null) {
+      SchedulerBinding.instance.addPostFrameCallback((_) => previous.dispose());
+    }
+  }
+
+  /// Drops the frozen backdrop before the closing ramp.
+  void _thaw(ValueNotifier<ui.Image?> frozen, ObjectRef<Size?> frozenSize) {
+    final previous = frozen.value;
+    frozenSize.value = null;
+    frozen.value = null;
+    if (previous != null) {
+      SchedulerBinding.instance.addPostFrameCallback((_) => previous.dispose());
+    }
   }
 }
