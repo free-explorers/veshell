@@ -143,10 +143,9 @@ class MonitoringCard extends StatelessWidget {
 /// The line chart shared by every monitoring card.
 ///
 /// Every series is drawn on the same `0..100` axis; a filled series sits under
-/// the stroked ones. The viewport slides by one sample over
-/// [monitoringSampleInterval] whenever a new sample arrives, so the graph
-/// scrolls instead of stepping. A few samples are kept beyond each edge of the
-/// visible window, so the line and area fill never stop at a chart edge.
+/// the stroked ones. The viewport advances one sample per sample interval, so
+/// the graph scrolls as samples arrive. A few samples are kept beyond each edge
+/// of the visible window, so the line and area fill never stop at a chart edge.
 class MonitoringChart extends StatefulWidget {
   /// Creates a chart for [series].
   const MonitoringChart({required this.series, super.key});
@@ -198,7 +197,21 @@ class _MonitoringChartState extends State<MonitoringChart>
       _controller.forward(from: 0);
     } else if (oldLastX != null && newLastX != null && newLastX != oldLastX) {
       _fillingIntoOverflow = false;
-      _controller.forward(from: 0);
+      if (newFull) {
+        // Step straight to the new window instead of sliding it over the whole
+        // sample interval. The slide lasted exactly as long as the next sample
+        // took to arrive, so the panel never stopped animating: the shell kept
+        // rendering at 60 fps for as long as it was visible, and every one of
+        // those frames re-rasterizes the screen *and* re-applies the overview's
+        // full-screen frost on every output. Two screens saturated the iGPU at
+        // ~100 %. One sample is a few pixels wide, so the step looks the same.
+        _controller.value = 1;
+      } else {
+        // While the buffer fills, new samples still slide in so the growing
+        // chart does not pop; this only lasts for the first
+        // [monitoringChartBufferSamples] samples after startup.
+        _controller.forward(from: 0);
+      }
     }
   }
 
