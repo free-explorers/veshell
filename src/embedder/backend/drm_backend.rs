@@ -2199,17 +2199,22 @@ impl State<DrmBackend> {
             return Duration::from_millis(100);
         }
 
-        // A page flip completes at most one refresh apart, so a vblank keeps
-        // `last_vsync_tick` within one refresh of now. Only step in once a
-        // whole refresh plus slack passed with no vblank: a static scene, or a
-        // dropped frame.
         let slack = Duration::from_millis(2);
         let now = Instant::now();
-        let due = match self.backend_data.last_vsync_tick {
-            Some(last) => now.saturating_duration_since(last) >= interval + slack,
-            None => true,
-        };
-        if due {
+
+        // Keep the tick free-running at the refresh instead of waiting for a
+        // flip's vblank to drive it. A missed flip otherwise locks the loop at
+        // two refreshes — the old fallback only stepped in once a whole
+        // refresh went by without a vblank — and a 60 Hz panel renders at
+        // 30 fps. A vblank tick within half a refresh still wins, so a
+        // presenting scene is paced by the panel and not ticked twice.
+        // Draining only the batons Flutter requested keeps this free when
+        // nothing repaints.
+        let recent = self
+            .backend_data
+            .last_vsync_tick
+            .is_some_and(|last| now.saturating_duration_since(last) < interval / 2);
+        if !recent {
             self.deliver_vsync_tick(now);
         }
         self.send_stale_game_frame_callbacks(now, slack);
@@ -2220,7 +2225,7 @@ impl State<DrmBackend> {
             self.request_render();
         }
 
-        interval + slack
+        interval
     }
 
     // If crtc is `Some()`, render it, else render all crtcs
