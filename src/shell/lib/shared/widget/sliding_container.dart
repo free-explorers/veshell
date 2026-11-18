@@ -173,6 +173,10 @@ class SlidingContainer extends HookConsumerWidget {
     );
 
     final swipeInProgress = useState(false);
+    // Set as soon as a gesture is recognised, before it has moved: the pages
+    // about to slide in are built during that first frame instead of in the
+    // middle of the animation, where the build would drop a frame.
+    final swipePending = useState(false);
     // The continuous page progress of the gesture and the speed of its last
     // 150 ms, both in page fractions (the swipe is normalized to a fixed
     // finger distance, not to the page size).
@@ -445,6 +449,7 @@ class SlidingContainer extends HookConsumerWidget {
             // their state across gestures, and a gesture that ended while this
             // one was disabled never reached it.
             swipeInProgress.value = false;
+            swipePending.value = true;
             swipeStartOffset.value = pageController.hasClients
                 ? pageController.offset
                 : null;
@@ -495,6 +500,7 @@ class SlidingContainer extends HookConsumerWidget {
             position.pointerScroll(progressDelta * dimension);
           },
           onSwipeEnd: (event) {
+            swipePending.value = false;
             if (!swipeInProgress.value) {
               return;
             }
@@ -652,7 +658,14 @@ class SlidingContainer extends HookConsumerWidget {
                     ? Alignment.centerLeft
                     : Alignment.topCenter,
                 child: AnimatedBuilder(
-                  animation: resizeController,
+                  // Rebuild when a swipe starts or ends too, so the pages
+                  // about to slide in are built before the animation reaches
+                  // them instead of during it.
+                  animation: Listenable.merge([
+                    resizeController,
+                    swipeInProgress,
+                    swipePending,
+                  ]),
                   builder: (context, _) {
                     final (extent, offset) = visualLayout();
                     if (resizing && pageController.hasClients) {
@@ -697,12 +710,19 @@ class SlidingContainer extends HookConsumerWidget {
                               direction: direction,
                               // One viewport of cache is enough for the tile
                               // just off either edge, which is already built
-                              // when a resize starts moving it in or out.
-                              cacheViewports: resizing || buildsNeighbors
+                              // when a resize starts moving it in or out. A
+                              // swipe builds its destination page up front for
+                              // the same reason.
+                              cacheViewports:
+                                  resizing ||
+                                      buildsNeighbors ||
+                                      swipeInProgress.value
                                   ? 1.0
                                   : 0.0,
                               allowImplicitScrolling:
-                                  buildsNeighbors || resizing,
+                                  buildsNeighbors ||
+                                  resizing ||
+                                  swipeInProgress.value,
                               onScrollStart: () =>
                                   cursorTransition.begin(transitionToken),
                               onScrollEnd: () {
@@ -718,7 +738,14 @@ class SlidingContainer extends HookConsumerWidget {
                                 }
                               },
                               delegate: SliverChildBuilderDelegate(
-                                (context, index) => children[index],
+                                // A page is its own repaint boundary, so
+                                // sliding the row translates a cached layer
+                                // instead of re-rasterising every page on
+                                // each frame of the swipe.
+                                (context, index) => RepaintBoundary(
+                                  key: children[index].key,
+                                  child: children[index],
+                                ),
                                 childCount: children.length,
                                 // A keyed page keeps its state when it moves
                                 // to another index, instead of the page now at
