@@ -173,6 +173,17 @@ class SlidingContainer extends HookConsumerWidget {
     );
 
     final swipeInProgress = useState(false);
+    // Set as soon as a gesture is recognised, before it has moved: the pages
+    // about to slide in are built during that first frame instead of in the
+    // middle of the animation, where the build would drop a frame.
+    final swipePending = useState(false);
+    // Whether the row is scrolling, including the settle after a release and a
+    // keyboard navigation. The neighbour cache has to outlive the gesture, or
+    // the page the settle reveals is built while the row is moving.
+    // Only the row's builder listens: a scroll can start from an effect that
+    // runs while this widget's subtree builds, where rebuilding the whole
+    // container is not allowed.
+    final scrollActive = useValueNotifier(false);
     // The continuous page progress of the gesture and the speed of its last
     // 150 ms, both in page fractions (the swipe is normalized to a fixed
     // finger distance, not to the page size).
@@ -200,6 +211,8 @@ class SlidingContainer extends HookConsumerWidget {
         return null;
       }
       swipeInProgress.value = false;
+      swipePending.value = false;
+      scrollActive.value = false;
       swipeStartOffset.value = null;
       swipeHistory.value.reset();
       return null;
@@ -445,6 +458,7 @@ class SlidingContainer extends HookConsumerWidget {
             // their state across gestures, and a gesture that ended while this
             // one was disabled never reached it.
             swipeInProgress.value = false;
+            swipePending.value = true;
             swipeStartOffset.value = pageController.hasClients
                 ? pageController.offset
                 : null;
@@ -495,6 +509,7 @@ class SlidingContainer extends HookConsumerWidget {
             position.pointerScroll(progressDelta * dimension);
           },
           onSwipeEnd: (event) {
+            swipePending.value = false;
             if (!swipeInProgress.value) {
               return;
             }
@@ -652,7 +667,15 @@ class SlidingContainer extends HookConsumerWidget {
                     ? Alignment.centerLeft
                     : Alignment.topCenter,
                 child: AnimatedBuilder(
-                  animation: resizeController,
+                  // Rebuild when a swipe starts or ends too, so the pages
+                  // about to slide in are built before the animation reaches
+                  // them instead of during it.
+                  animation: Listenable.merge([
+                    resizeController,
+                    swipeInProgress,
+                    swipePending,
+                    scrollActive,
+                  ]),
                   builder: (context, _) {
                     final (extent, offset) = visualLayout();
                     if (resizing && pageController.hasClients) {
@@ -697,15 +720,29 @@ class SlidingContainer extends HookConsumerWidget {
                               direction: direction,
                               // One viewport of cache is enough for the tile
                               // just off either edge, which is already built
-                              // when a resize starts moving it in or out.
-                              cacheViewports: resizing || buildsNeighbors
+                              // when a resize starts moving it in or out. A
+                              // swipe builds its destination page up front for
+                              // the same reason.
+                              cacheViewports:
+                                  resizing ||
+                                      buildsNeighbors ||
+                                      swipeInProgress.value ||
+                                      swipePending.value ||
+                                      scrollActive.value
                                   ? 1.0
                                   : 0.0,
                               allowImplicitScrolling:
-                                  buildsNeighbors || resizing,
-                              onScrollStart: () =>
-                                  cursorTransition.begin(transitionToken),
+                                  buildsNeighbors ||
+                                  resizing ||
+                                  swipeInProgress.value ||
+                                  swipePending.value ||
+                                  scrollActive.value,
+                              onScrollStart: () {
+                                scrollActive.value = true;
+                                cursorTransition.begin(transitionToken);
+                              },
                               onScrollEnd: () {
+                                scrollActive.value = false;
                                 cursorTransition.end(transitionToken);
                                 // The leading tile moved while the row was
                                 // animating: report where the row landed.
@@ -718,6 +755,10 @@ class SlidingContainer extends HookConsumerWidget {
                                 }
                               },
                               delegate: SliverChildBuilderDelegate(
+                                // The delegate already adds a keyed
+                                // RepaintBoundary per page, so sliding
+                                // translates layers instead of re-recording
+                                // both pages every frame.
                                 (context, index) => children[index],
                                 childCount: children.length,
                                 // A keyed page keeps its state when it moves

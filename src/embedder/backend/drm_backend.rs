@@ -820,11 +820,9 @@ pub fn run_drm_backend(real_session: bool) {
     state.determine_highest_hz_crtc();
     state.on_outputs_changed();
 
-    // Drive Flutter's vsync from a timer at the pacing refresh, as the idle
-    // fallback to the page-flip vblank (see `on_vsync_timer` / `on_vblank`): a
-    // running scene delivers its batons from the hardware vblank and this timer
-    // stays silent, so tying vsync to a free-running timer no longer drifts
-    // against the panel. It only ticks when nothing flipped for a whole refresh.
+    // Fallback vsync source, armed at the pacing refresh: it only ticks when a
+    // page flip's vblank did not, so a missed flip cannot stall Flutter at two
+    // refreshes, while a presenting scene stays paced by the panel.
     let initial_interval = state.pacing_interval().unwrap_or(Duration::from_millis(16));
     event_loop
         .handle()
@@ -2175,19 +2173,17 @@ impl State<DrmBackend> {
         }
     }
 
-    /// Fallback vsync source, armed at the pacing refresh.
+    /// Vsync fallback for a refresh that produced no page flip.
     ///
-    /// The primary source is the pacing CRTC's page-flip vblank
-    /// ([`Self::on_vblank`]): while the shell is presenting, its batons are
-    /// delivered in step with the panel instead of drifting against a timer.
-    /// This timer only covers the idle case, where a frame with no damage
-    /// produces no flip and therefore no vblank: it ticks only once a whole
-    /// refresh plus a small slack passed with no vblank, so a running scene is
-    /// never ticked twice.
+    /// A page flip's vblank ([`Self::on_vblank`]) always ticks, so a presenting
+    /// scene is paced by the panel. This timer only steps in when a whole
+    /// refresh plus a small slack passed without one: a missed flip, or a
+    /// static scene that flips nothing. It re-arms against the last tick rather
+    /// than a fixed period, so it stays phased to the panel instead of drifting
+    /// against it and eventually missing flips itself.
     ///
-    /// It keeps one cheap wake-up per refresh, so a client's pending frame
-    /// callback is never held back, and backs off while the output is blanked
-    /// or the seat inactive (where no vblank can arrive to cover it).
+    /// It backs off while the output is blanked or the seat inactive, where no
+    /// vblank can arrive and there is nothing to present.
     fn on_vsync_timer(&mut self) -> Duration {
         let Some(interval) = self.pacing_interval() else {
             // No output to pace against (a hotplug is in progress): retry
@@ -2199,19 +2195,9 @@ impl State<DrmBackend> {
             return Duration::from_millis(100);
         }
 
-        // A page flip completes at most one refresh apart, so a vblank keeps
-        // `last_vsync_tick` within one refresh of now. Only step in once a
-        // whole refresh plus slack passed with no vblank: a static scene, or a
-        // dropped frame.
         let slack = Duration::from_millis(2);
         let now = Instant::now();
-        let due = match self.backend_data.last_vsync_tick {
-            Some(last) => now.saturating_duration_since(last) >= interval + slack,
-            None => true,
-        };
-        if due {
-            self.deliver_vsync_tick(now);
-        }
+
         self.send_stale_game_frame_callbacks(now, slack);
 
         // An animated theme cursor changes with time alone; with on-demand
@@ -2220,6 +2206,15 @@ impl State<DrmBackend> {
             self.request_render();
         }
 
+        if let Some(last) = self.backend_data.last_vsync_tick {
+            let due = last + interval + slack;
+            if now < due {
+                // No vblank has arrived since the last tick: wait for it, and
+                // stay phased to when it is due rather than to this callback.
+                return (due - now).max(Duration::from_millis(1));
+            }
+        }
+        self.deliver_vsync_tick(now);
         interval + slack
     }
 
