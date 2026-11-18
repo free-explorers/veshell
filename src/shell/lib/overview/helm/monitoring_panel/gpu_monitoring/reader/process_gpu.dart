@@ -7,12 +7,39 @@ import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 
 /// Per-pid total GPU engine time, in nanoseconds, for clients of [device].
 ///
-/// Scans `/proc/<pid>/fd` for descriptors pointing at `/dev/dri/` before
-/// reading their `fdinfo`, which keeps the walk off the many non-DRM fds. Fds
-/// that share a DRM client (a `dup`) are counted once. Processes with no client
-/// on [device] are omitted; [GpuDevice.pciAddress] filters out other cards.
+/// Fds that share a DRM client (a `dup`) are counted once. Processes with no
+/// client on [device] are omitted; [GpuDevice.pciAddress] filters out other
+/// cards.
 Future<Map<int, int>> sampleProcessEngineNanoseconds(GpuDevice device) async {
   final result = <int, int>{};
+  await _forEachClient(device, (pid, info) {
+    result[pid] = (result[pid] ?? 0) + info.totalEngineNanoseconds;
+  });
+  result.removeWhere((_, nanoseconds) => nanoseconds <= 0);
+  return result;
+}
+
+/// Total engine time per engine over every client of [device], nanoseconds.
+///
+/// Engines run in parallel, so callers compare one engine against the elapsed
+/// time instead of summing the values: the busiest engine is the GPU's busy
+/// share, which is what a single "load" figure means.
+Future<Map<String, int>> sampleEngineNanoseconds(GpuDevice device) async {
+  final result = <String, int>{};
+  await _forEachClient(device, (_, info) {
+    info.engineNanoseconds.forEach((engine, nanoseconds) {
+      result[engine] = (result[engine] ?? 0) + nanoseconds;
+    });
+  });
+  return result;
+}
+
+/// Visits each DRM client of [device] once, with the pid that owns it.
+Future<void> _forEachClient(
+  GpuDevice device,
+  void Function(int pid, DrmFdInfo info) visit,
+) async {
+  final seenClients = <int>{};
   final pids = await listProcessIds();
   for (final pid in pids) {
     final fdDirectory = Directory('/proc/$pid/fd');
@@ -23,8 +50,6 @@ Future<Map<int, int>> sampleProcessEngineNanoseconds(GpuDevice device) async {
       continue; // The process exited between listing and opening its fds.
     }
 
-    final seenClients = <int>{};
-    var totalNanoseconds = 0;
     for (final fd in fds) {
       final name = p.basename(fd.path);
       if (int.tryParse(name) == null) continue;
@@ -52,10 +77,7 @@ Future<Map<int, int>> sampleProcessEngineNanoseconds(GpuDevice device) async {
 
       final clientId = info.clientId;
       if (clientId != null && !seenClients.add(clientId)) continue;
-      totalNanoseconds += info.totalEngineNanoseconds;
+      visit(pid, info);
     }
-
-    if (totalNanoseconds > 0) result[pid] = totalNanoseconds;
   }
-  return result;
 }

@@ -35,8 +35,10 @@ const _xeMin = ['device/tile0/gt0/freq0/rpn_freq'];
 /// Intel exposes no root-free busy counter: `i915_engine_info` is debugfs
 /// (root) and true engine busyness needs the i915 PMU through `perf_event_open`
 /// (privileged). [GpuStats.load] is therefore the RPS frequency relative to its
-/// min/max — a proxy for activity, not engine utilisation. Returns `null` when
-/// nothing at all is readable, so the card is then omitted.
+/// min/max — a proxy for activity, not engine utilisation. The GPU card
+/// overrides it with the engine times sampled from `fdinfo` (see
+/// `GpuStatsState`); this value is the first sample's fallback. Returns `null`
+/// when nothing at all is readable, so the card is then omitted.
 Future<GpuStats?> readIntelGpuStats(GpuDevice device) async {
   final card = device.cardPath;
   final current = await _firstInt(card, [..._i915Current, ..._xeCurrent]);
