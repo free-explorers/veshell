@@ -307,6 +307,34 @@ class SettingsProperties extends _$SettingsProperties {
             name: l10n.keyRepeatRate,
             description: l10n.keyRepeatRateDescription,
           ),
+          'showKeyPresses': SettingProperty<bool>(
+            name: l10n.showKeyPresses,
+            description: l10n.showKeyPressesDescription,
+          ),
+          'keyPressPosition': SettingProperty<String>(
+            name: l10n.keyPressPosition,
+            description: l10n.keyPressPositionDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<String>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      SettingPropertyChoiceValue(
+                        path: path,
+                        choices: keyPressPositions,
+                        defaultValue: 'bottomRight',
+                        label: keyPressPositionLabel,
+                      ),
+                  buildEditor: (context, {required isExpanded}) =>
+                      SettingPropertyChoiceEditor(
+                        path: path,
+                        property: property,
+                        choices: keyPressPositions,
+                        defaultValue: 'bottomRight',
+                        label: keyPressPositionLabel,
+                      ),
+                ),
+          ),
           'hotkeys': SettingGroup(
             name: l10n.hotkeys,
             description: l10n.hotkeysDescription,
@@ -345,6 +373,11 @@ class SettingsProperties extends _$SettingsProperties {
               'system.lockSession': SettingProperty<List<LogicalKeySet>>(
                 name: l10n.lockSession,
                 description: l10n.lockSessionDescription,
+                converter: const LogicalKeySetListConverter(),
+              ),
+              'system.toggleKeyPresses': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.toggleKeyPresses,
+                description: l10n.toggleKeyPressesDescription,
                 converter: const LogicalKeySetListConverter(),
               ),
               'media.playPause': SettingProperty<List<LogicalKeySet>>(

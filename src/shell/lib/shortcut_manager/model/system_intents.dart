@@ -41,3 +41,9 @@ class LockSessionIntent extends Intent {
   ///
   const LockSessionIntent();
 }
+
+/// An intent to show or hide the keys pressed on screen
+class ToggleKeyPressesIntent extends Intent {
+  ///
+  const ToggleKeyPressesIntent();
+}

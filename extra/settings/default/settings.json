@@ -14,6 +14,8 @@
         "repeat": true,
         "repeatDelayMs": 500,
         "repeatRate": 30,
+        "showKeyPresses": false,
+        "keyPressPosition": "bottomRight",
         "hotkeys": {
             "system": {
                 "increaseVolume": ["volumeUp"],
@@ -22,7 +24,8 @@
                 "increaseBrightness": ["brightnessUp"],
                 "decreaseBrightness": ["brightnessDown"],
                 "toggleKeyboardLayout": ["super+space"],
-                "lockSession": ["super+l"]
+                "lockSession": ["super+l"],
+                "toggleKeyPresses": ["super+k"]
             },
             "media": {
                 "playPause": ["mediaPlayPause"],

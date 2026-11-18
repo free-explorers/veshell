@@ -217,6 +217,50 @@ that matches nothing is dropped, as in GTK. Dead keys (`dead_acute`, from
 `us(altgr-intl)` for instance) go through the same compose table. A change of
 text field drops a sequence in progress.
 
+## Showing the key presses
+
+For screencasts and presentations, the shell can show the keys pressed on
+every monitor. It is off by default; `keyboard.showKeyPresses` turns it on,
+from the settings or with the `system.toggleKeyPresses` hotkey (`Super+K` by
+default).
+
+`keyboard.keyPressPosition` places it in a corner or at the middle of the top
+or bottom edge: `bottomRight` (the default), `bottomCenter`, `bottomLeft`,
+`topRight`, `topCenter` or `topLeft`. A missing or unknown value is read as
+`bottomRight`. It keeps clear of the shell's panels: 32 px past the screen
+panel down the left edge and past the workspace panel along the top (and the
+status bar's top panel, when shown), 32 px from the right edge and 72 px from
+the bottom one. A monitor split into several screens has panels inside it too;
+only the monitor's own edges are kept clear.
+
+Every key is offered to Flutter before any client, so the shell's global
+`HardwareKeyboard` sees the keys typed into clients too. `KeyPressRecorder`
+adds a handler there that only watches: it always answers unhandled, so a key
+goes on to the shell's shortcuts or to a client exactly as without it. The
+handler exists only while an overlay watches the recorder (the setting is on);
+keys that never reach Flutter (compositor hotkeys, gaming mode) are not shown.
+
+Only the latest chord is shown (`KeyPressHistory`), never the ones before:
+
+- a key is shown with the modifiers held, modifiers first, in the order Ctrl,
+  Alt, AltGr, Shift, Super (`Ctrl + Shift + T`); typing shows each key in
+  turn (`H`, `Shift + H`);
+- the same chord again, pressed or repeated by holding it, counts up
+  (`Backspace ×3`), until another chord replaces it;
+- modifiers held before their key are shown waiting for it (`Ctrl + Shift`);
+  pressed and released with no other key, they are a chord of their own (a
+  lone Super, which opens the overview);
+- a key held right now is lit in the accent color and sits lower, as a
+  pressed key does.
+
+Once every key is released the panel fades out after 1.6 s, and the next
+press starts afresh, its count back to one.
+
+Nothing is recorded while the session is locked, and locking drops the
+history, so a password typed at the lock screen is never shown; the overlay
+is also drawn below the lock screen. A password typed into a client's field
+is shown like any other typing: the shell cannot tell such a field apart.
+
 ## Invariants
 
 - Every physical key event is offered to Flutter before any client sees it.
