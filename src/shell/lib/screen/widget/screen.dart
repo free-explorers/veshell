@@ -32,6 +32,9 @@ class ScreenWidget extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final screenState = ref.watch(screenStateProvider(screenId));
+    final overviewDisplayed = ref.watch(
+      overviewStateProvider(screenId).select((state) => state.isDisplayed),
+    );
 
     final screenFocusScopeNode = useFocusScopeNode(
       debugLabel: 'ScreenFocusNode',
@@ -172,9 +175,10 @@ class ScreenWidget extends HookConsumerWidget {
                                             },
                                             isSwipeEnabled:
                                                 screenId ==
-                                                ref.watch(
-                                                  focusedScreenProvider,
-                                                ),
+                                                    ref.watch(
+                                                      focusedScreenProvider,
+                                                    ) &&
+                                                !overviewDisplayed,
                                             children: screenState.workspaceList
                                                 .mapIndexed(
                                                   (

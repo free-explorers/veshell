@@ -181,6 +181,20 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         self.meta_window_state.meta_window_in_gaming_mode.is_some() && !self.is_locked()
     }
 
+    /// Whether touchpad swipes drive the shell (3-finger navigation, 4-finger
+    /// overview). Not in a locked session, a game that owns the input, or a
+    /// frozen screenshot selection.
+    pub fn shell_gestures_allowed(&self) -> bool {
+        !self.is_locked() && !self.gaming_input_active() && self.capture_state.session.is_none()
+    }
+
+    /// Whether touchpad pinches reach the client under the pointer. Not in a
+    /// locked session or a frozen screenshot selection, which have no valid
+    /// client target.
+    pub fn client_gestures_allowed(&self) -> bool {
+        !self.is_locked() && self.capture_state.session.is_none()
+    }
+
     /// The pointer focus handed to Smithay. `None` while locked, so clients
     /// get a leave and no motion, button or scroll.
     pub fn client_pointer_focus(&self) -> Option<(PointerFocusTarget, Point<f64, Logical>)> {

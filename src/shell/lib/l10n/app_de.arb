@@ -451,5 +451,13 @@
   "statusBarBattery": "Akku",
   "statusBarBatteryDescription": "Akkustand anzeigen",
   "statusBarBatteryPercentage": "Akku in Prozent",
-  "statusBarBatteryPercentageDescription": "Akkustand als Prozentwert neben dem Symbol anzeigen"
+  "statusBarBatteryPercentageDescription": "Akkustand als Prozentwert neben dem Symbol anzeigen",
+  "touchpadTapToClick": "Touchpad: Tippen zum Klicken",
+  "touchpadTapToClickDescription": "Touchpad antippen, um zu klicken",
+  "touchpadDisableWhileTyping": "Touchpad: Beim Tippen deaktivieren",
+  "touchpadDisableWhileTypingDescription": "Touchpad-Eingaben beim Tippen ignorieren",
+  "mouseSpeed": "Maus: Zeigergeschwindigkeit",
+  "mouseSpeedDescription": "Zeigergeschwindigkeit von -1.0 (langsam) bis 1.0 (schnell); 0.0 ist der Standard",
+  "touchpadSpeed": "Touchpad: Zeigergeschwindigkeit",
+  "touchpadSpeedDescription": "Zeigergeschwindigkeit von -1.0 (langsam) bis 1.0 (schnell); 0.0 ist der Standard"
 }
