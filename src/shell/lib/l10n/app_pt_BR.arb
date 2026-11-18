@@ -463,5 +463,13 @@
   "statusBarBattery": "Bateria",
   "statusBarBatteryDescription": "Mostrar o nível da bateria",
   "statusBarBatteryPercentage": "Porcentagem da bateria",
-  "statusBarBatteryPercentageDescription": "Mostrar o nível da bateria em porcentagem ao lado do ícone"
+  "statusBarBatteryPercentageDescription": "Mostrar o nível da bateria em porcentagem ao lado do ícone",
+  "touchpadTapToClick": "Touchpad: tocar para clicar",
+  "touchpadTapToClickDescription": "Toque no touchpad para clicar",
+  "touchpadDisableWhileTyping": "Touchpad: desativar ao digitar",
+  "touchpadDisableWhileTypingDescription": "Ignorar o touchpad ao digitar",
+  "mouseSpeed": "Mouse: velocidade do ponteiro",
+  "mouseSpeedDescription": "Velocidade do ponteiro de -1.0 (lento) a 1.0 (rápido); 0.0 é o padrão",
+  "touchpadSpeed": "Touchpad: velocidade do ponteiro",
+  "touchpadSpeedDescription": "Velocidade do ponteiro de -1.0 (lento) a 1.0 (rápido); 0.0 é o padrão"
 }

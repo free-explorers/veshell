@@ -1,18 +1,105 @@
-import 'dart:ui' show lerpDouble;
+import 'dart:math' as math;
+import 'dart:ui' show clampDouble, lerpDouble;
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shell/platform/provider/swipe_gesture_arbiter.dart';
 import 'package:shell/platform/widget/swipe_gesture_detector.dart';
 import 'package:shell/shared/provider/cursor_transition.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/util/snapping.dart';
 
-const swipeVelocityThreshold = 800;
+/// Gesture travel for one full horizontal page, in the compositor's
+/// normalized swipe units (1000 dpi, so ~39 units per mm). GNOME Shell uses
+/// the same 400-unit touchpad base, which is about 10 mm of finger movement
+/// and makes a full-width tile reachable with a normal horizontal swipe.
+const _horizontalPageSwipe = 400.0;
+
+/// Gesture travel for one full vertical page (~7.6 mm), matching GNOME
+/// Shell's touchpad base height and the workspace swipe of Hyprland and Niri.
+const _verticalPageSwipe = 300.0;
+
+/// Fling speed below which a release snaps to the nearest page instead of
+/// projecting. 0.6 normalized units per millisecond, like GNOME Shell.
+const _flingThreshold = 600.0;
+
+/// Time constant of the touchpad fling deceleration (0.997 per millisecond),
+/// as used by GNOME Shell and Niri. The end position is
+/// `progress + velocity * _decelerationTime`.
+const _decelerationTime = 0.333;
+
+/// Duration of a settling animation, from the remaining distance and the
+/// release speed. GNOME Shell uses `remaining / velocity * 3`, clamped to
+/// 100–400 ms, so a fast flick lands quickly and a slow drag glides longer.
+Duration _settleDuration(double remainingPages, double velocity) {
+  if (velocity <= 0 || remainingPages <= 0) {
+    return const Duration(milliseconds: 200);
+  }
+  final milliseconds = remainingPages / velocity * 1000 * 3;
+  return Duration(
+    milliseconds: math.min(400, math.max(100, milliseconds.round())),
+  );
+}
 
 /// How long the row takes to resize into a new page count.
 const _resizeDuration = Duration(milliseconds: 120);
+
+/// Sums the gesture deltas of the last 150 ms to estimate the release
+/// velocity, like GNOME Shell and Niri. The short window lets a pause before
+/// lifting the fingers decay the fling instead of keeping the speed of a
+/// movement that ended long ago.
+class _SwipeHistory {
+  static const _windowMs = 150;
+
+  final _samples = <(int, double)>[];
+
+  void reset() => _samples.clear();
+
+  void append(int timeMs, double delta) {
+    if (_samples.isNotEmpty && timeMs < _samples.last.$1) {
+      return;
+    }
+    trim(timeMs);
+    _samples.add((timeMs, delta));
+  }
+
+  void trim(int timeMs) {
+    final oldest = timeMs - _windowMs;
+    while (_samples.isNotEmpty && _samples.first.$1 < oldest) {
+      _samples.removeAt(0);
+    }
+  }
+
+  /// Closes the gesture at [timeMs] and returns its release velocity.
+  ///
+  /// The zero sample lets a pause before lifting the fingers decay the fling,
+  /// and the history is reset for the next gesture.
+  double finish(int timeMs) {
+    append(timeMs, 0);
+    trim(timeMs);
+    final result = velocity();
+    reset();
+    return result;
+  }
+
+  /// Page fractions per second, over the samples still in the window.
+  double velocity() {
+    if (_samples.length < 2) {
+      return 0;
+    }
+    final first = _samples.first.$1;
+    final last = _samples.last.$1;
+    if (last <= first) {
+      return 0;
+    }
+    final delta = _samples
+        .skip(1)
+        .fold<double>(0, (sum, sample) => sum + sample.$2);
+    return delta * 1000 / (last - first);
+  }
+}
 
 class SlidingContainer extends HookConsumerWidget {
   const SlidingContainer({
@@ -86,9 +173,50 @@ class SlidingContainer extends HookConsumerWidget {
     );
 
     final swipeInProgress = useState(false);
-    final cumulatedSwipeDelta = useState<double>(0);
-    final swipeVelocityTracker = useState<VelocityTracker?>(null);
+    // Set as soon as a gesture is recognised, before it has moved: the pages
+    // about to slide in are built during that first frame instead of in the
+    // middle of the animation, where the build would drop a frame.
+    final swipePending = useState(false);
+    // Whether the row is scrolling, including the settle after a release and a
+    // keyboard navigation. The neighbour cache has to outlive the gesture, or
+    // the page the settle reveals is built while the row is moving.
+    // Only the row's builder listens: a scroll can start from an effect that
+    // runs while this widget's subtree builds, where rebuilding the whole
+    // container is not allowed.
+    final scrollActive = useValueNotifier(false);
+    // The continuous page progress of the gesture and the speed of its last
+    // 150 ms, both in page fractions (the swipe is normalized to a fixed
+    // finger distance, not to the page size).
+    final swipeHistory = useRef(_SwipeHistory());
+    // Where the row was when the current gesture began. The end of the
+    // gesture turns the travel into a direction instead of guessing it from
+    // the page the viewport centre happens to sit on.
+    final swipeStartOffset = useRef<double?>(null);
+    // Release speed and target of a swipe navigation, consumed by the
+    // `scrollToIndex` effect that follows `onIndexChanged`. It turns the
+    // settle animation into a velocity-aware one.
+    final swipeSettleVelocity = useRef<double?>(null);
+    final swipeSettleIndex = useRef<int?>(null);
+    // Identifies this container to the shared gesture arbiter.
+    final swipeToken = useMemoized(Object.new);
+    final swipeArbiter = ref.read(swipeGestureArbiterProvider);
     final reportedFirstVisibleIndex = useRef<int?>(null);
+
+    // The detector stops listening while disabled, so a gesture in progress
+    // never delivers its end here. A stale `swipeInProgress` makes
+    // `scrollToIndex` refuse to settle later selections, which leaves the row
+    // stuck between two pages.
+    useEffect(() {
+      if (isSwipeEnabled) {
+        return null;
+      }
+      swipeInProgress.value = false;
+      swipePending.value = false;
+      scrollActive.value = false;
+      swipeStartOffset.value = null;
+      swipeHistory.value.reset();
+      return null;
+    }, [isSwipeEnabled]);
 
     // The selected position as a fractional page index, eased between pages
     // with the same timing as the scroll so the indicator glides along.
@@ -98,6 +226,23 @@ class SlidingContainer extends HookConsumerWidget {
       upperBound: double.infinity,
       initialValue: index.toDouble(),
     );
+
+    /// The size of one page along the scroll axis, `null` while the row has
+    /// no laid-out scroll position.
+    double? pageDimension() {
+      if (!pageController.hasClients ||
+          !pageController.position.hasPixels ||
+          !pageController.position.hasViewportDimension) {
+        return null;
+      }
+      final dimension = pageController.position.viewportDimension / visible;
+      return dimension > 0 ? dimension : null;
+    }
+
+    // Finger travel, in normalized gesture units, that moves the row one page.
+    final pageSwipe = direction == Axis.horizontal
+        ? _horizontalPageSwipe
+        : _verticalPageSwipe;
 
     // The caller moved the leading tile itself, not to follow this container's
     // report: the pages before the view changed (a tile before it was
@@ -110,17 +255,32 @@ class SlidingContainer extends HookConsumerWidget {
     if (firstVisibleIndex != null &&
         previousFirstVisibleIndex != null &&
         firstVisibleIndex != previousFirstVisibleIndex &&
-        firstVisibleIndex != reportedFirstVisibleIndex.value &&
-        pageController.hasClients &&
-        pageController.position.hasPixels &&
-        pageController.position.hasViewportDimension) {
+        firstVisibleIndex != reportedFirstVisibleIndex.value) {
       final shift = previousFirstVisibleIndex - firstVisibleIndex;
-      final pageDimension = pageController.position.viewportDimension / visible;
-      pageController.position.correctPixels(
-        pageController.offset - shift * pageDimension,
-      );
+      // The selection is an index too: it moves with the pages right away.
       selectionPosition.value -= shift;
-      reportedFirstVisibleIndex.value = firstVisibleIndex;
+      final dimension = pageDimension();
+      if (dimension != null) {
+        if (!pageController.position.isScrollingNotifier.value) {
+          // At rest or between two swipe updates: an integer shift keeps the
+          // row's place between pages, and the gesture's origin moves with
+          // it so its progress is still measured from the same tile.
+          pageController.position.correctPixels(
+            pageController.offset - shift * dimension,
+          );
+          final start = swipeStartOffset.value;
+          if (start != null) {
+            swipeStartOffset.value = start - shift * dimension;
+          }
+          reportedFirstVisibleIndex.value = firstVisibleIndex;
+        } else {
+          // A running animation would undo the correction on its next tick.
+          // The new children make `scrollToIndex` retarget it in the new
+          // indices; forget the stale report so the place the row lands on
+          // is reported again, even when it has the old number.
+          reportedFirstVisibleIndex.value = null;
+        }
+      }
     }
 
     useEffect(() {
@@ -138,6 +298,10 @@ class SlidingContainer extends HookConsumerWidget {
       // mutating the caller's state mid-build is not allowed.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;
+        // A newer report replaced this one before the frame ended. Applying
+        // the stale leading index would make the correction above shift the
+        // row while it is still scrolling, leaving it between two pages.
+        if (reportedFirstVisibleIndex.value != clamped) return;
         onFirstVisibleIndexChanged?.call(clamped);
       });
     }
@@ -195,33 +359,86 @@ class SlidingContainer extends HookConsumerWidget {
         }
 
         void scrollToIndex(int indexToScrollTo) {
-          if (!pageController.hasClients) {
+          // A swipe navigation leaves its release speed for this effect. Take
+          // it whether or not the target needs an animation, so it cannot leak
+          // into a later keyboard navigation.
+          final pendingVelocity = swipeSettleVelocity.value;
+          final pendingIndex = swipeSettleIndex.value;
+          swipeSettleVelocity.value = null;
+          swipeSettleIndex.value = null;
+
+          final dimension = pageDimension();
+          if (dimension == null) {
             return;
           }
-          final viewportDimension = pageController.position.viewportDimension;
-          final pageDimension = viewportDimension / visible;
-          final firstPageInView = pageController.offset / pageDimension;
-          final visibleRangeStart = firstPageInView;
-          final visibleRangeEnd = firstPageInView + visible - 1;
-          double? offset;
+          final firstPageInView = pageController.offset / dimension;
+          double? target;
           // Depending on the direction calculate the minimal offset to animate
-          if (indexToScrollTo < visibleRangeStart) {
-            offset = pageDimension * indexToScrollTo;
-          } else if (indexToScrollTo > visibleRangeEnd) {
-            offset = pageDimension * (indexToScrollTo - visible + 1);
+          if (indexToScrollTo < firstPageInView) {
+            target = dimension * indexToScrollTo;
+          } else if (indexToScrollTo > firstPageInView + visible - 1) {
+            target = dimension * (indexToScrollTo - visible + 1);
+          } else {
+            // The selected page is already visible, but a swipe can leave the
+            // row between two slots: with more than one visible tile the
+            // selection can settle without the scroll position moving, so
+            // this branch is the only chance to put it back on a whole page.
+            // Leave in-progress resizes and gestures alone; their animation
+            // owns the offset.
+            if (resizePending.value ||
+                resizeTransition.value != null ||
+                swipeInProgress.value) {
+              return;
+            }
+            target = dimension * firstPageInView.round();
           }
-          reportFirstVisibleIndex(
-            offset == null
-                ? firstPageInView.round()
-                : (offset / pageDimension).round(),
+          target = clampDouble(
+            target,
+            pageController.position.minScrollExtent,
+            pageController.position.maxScrollExtent,
           );
-          if (offset != null) {
-            pageController.animateTo(
-              offset,
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeInOut,
-            );
+          reportFirstVisibleIndex((target / dimension).round());
+          if ((target - pageController.offset).abs() < 0.5) {
+            return;
           }
+          var duration = const Duration(milliseconds: 200);
+          var curve = Curves.easeInOut;
+          if (pendingIndex == indexToScrollTo && pendingVelocity != null) {
+            // A swipe navigation: carry the release speed into the landing so
+            // a flick does not stop dead and then glide at a fixed pace.
+            duration = _settleDuration(
+              (target - pageController.offset).abs() / dimension,
+              pendingVelocity,
+            );
+            curve = Curves.easeOutCubic;
+          }
+          pageController.animateTo(target, duration: duration, curve: curve);
+        }
+
+        /// Animates the row to the whole page closest to [offset].
+        ///
+        /// Used when a gesture is cancelled or does not reach the next page:
+        /// the row returns to where the gesture started, not to the page
+        /// nearest its displaced position.
+        void settleTo(double offset) {
+          final dimension = pageDimension();
+          if (dimension == null) {
+            return;
+          }
+          final target = clampDouble(
+            (offset / dimension).round() * dimension,
+            pageController.position.minScrollExtent,
+            pageController.position.maxScrollExtent,
+          );
+          reportFirstVisibleIndex((target / dimension).round());
+          if ((target - pageController.offset).abs() < 0.5) {
+            return;
+          }
+          pageController.animateTo(
+            target,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+          );
         }
 
         useEffect(() {
@@ -236,72 +453,138 @@ class SlidingContainer extends HookConsumerWidget {
         }, [index, children]);
         return SwipeGestureDetector(
           enabled: isSwipeEnabled,
+          onSwipeBegin: (event) {
+            // Reset anything the previous gesture left behind. Containers keep
+            // their state across gestures, and a gesture that ended while this
+            // one was disabled never reached it.
+            swipeInProgress.value = false;
+            swipePending.value = true;
+            swipeStartOffset.value = pageController.hasClients
+                ? pageController.offset
+                : null;
+            swipeSettleVelocity.value = null;
+            swipeSettleIndex.value = null;
+            swipeHistory.value
+              ..reset()
+              ..append(event.message.time, 0);
+          },
           onSwipeUpdate: (event) {
             if (event.message.fingers != 3) {
               return;
             }
-            // Determine the direction of the swipe (horizontal or vertical
-            final eventDirection =
-                event.message.deltaX.abs() > event.message.deltaY.abs()
-                ? Axis.horizontal
-                : Axis.vertical;
-
-            if (eventDirection != direction) {
+            if (!pageController.hasClients) {
+              return;
+            }
+            // One physical swipe moves one container: the first axis the
+            // arbiter sees owns the whole gesture, so a diagonal or noisy
+            // swipe cannot scroll the workspace row and the tile row at once.
+            if (!swipeArbiter.claim(swipeToken, direction)) {
+              return;
+            }
+            final delta = direction == Axis.horizontal
+                ? event.message.deltaX
+                : event.message.deltaY;
+            // The gesture can move on the other axis only; `pointerScroll`
+            // rejects a zero delta.
+            if (delta == 0) {
               return;
             }
             if (!swipeInProgress.value) {
               swipeInProgress.value = true;
-              swipeVelocityTracker.value = VelocityTracker.withKind(
-                PointerDeviceKind.trackpad,
-              );
-              cumulatedSwipeDelta.value = 0;
+              swipeStartOffset.value ??= pageController.offset;
             }
 
-            final delta = direction == Axis.horizontal
-                ? event.message.deltaX
-                : event.message.deltaY;
-            cumulatedSwipeDelta.value += delta;
+            final dimension = pageDimension();
+            if (dimension == null) {
+              return;
+            }
+            // The gesture is normalized to a fixed finger travel per page, not
+            // to the page size: a full-width tile used to need a hand movement
+            // as wide as the screen. The row follows the normalized progress.
+            final progressDelta = delta / pageSwipe;
+            swipeHistory.value.append(event.message.time, progressDelta);
+
             final position =
                 pageController.position as ScrollPositionWithSingleContext;
-            position.pointerScroll(delta);
-            swipeVelocityTracker.value?.addPosition(
-              Duration(milliseconds: event.message.time),
-              direction == Axis.horizontal
-                  ? Offset(cumulatedSwipeDelta.value, 0)
-                  : Offset(0, cumulatedSwipeDelta.value),
-            );
+            position.pointerScroll(progressDelta * dimension);
           },
           onSwipeEnd: (event) {
-            if (swipeInProgress.value) {
-              swipeInProgress.value = false;
-              final velocity = direction == Axis.horizontal
-                  ? swipeVelocityTracker.value
-                            ?.getVelocity()
-                            .pixelsPerSecond
-                            .dx ??
-                        0
-                  : swipeVelocityTracker.value
-                            ?.getVelocity()
-                            .pixelsPerSecond
-                            .dy ??
-                        0;
-              swipeVelocityTracker.value = null;
-              final target = pageController.offset;
-              final viewportDimension =
-                  pageController.position.viewportDimension;
-              final pageDimension = viewportDimension / visible;
-              final viewportCenter = target + (viewportDimension / 2);
-              final targetPage = (viewportCenter / pageDimension).floor();
-              if (targetPage < index ||
-                  (velocity < -swipeVelocityThreshold && index > 0)) {
-                onIndexChanged?.call(index - 1);
-              } else if (targetPage > index ||
-                  (velocity > swipeVelocityThreshold &&
-                      index < children.length - 1)) {
-                onIndexChanged?.call(index + 1);
+            swipePending.value = false;
+            if (!swipeInProgress.value) {
+              return;
+            }
+            swipeInProgress.value = false;
+            // Niri pushes a zero delta at release: a pause before lifting the
+            // fingers decays the fling instead of carrying an old speed.
+            final velocity = swipeHistory.value.finish(event.message.time);
+            final start = swipeStartOffset.value;
+            swipeStartOffset.value = null;
+
+            if (!pageController.hasClients) {
+              return;
+            }
+
+            // libinput cancels a swipe when the finger count changes (say, a
+            // fourth finger lands) or the touches turn out to be a palm. The
+            // user committed to nothing, so put the row back where it started
+            // instead of navigating. Snapping to the nearest page is not
+            // enough: a cancelled drag may have passed the half-page mark.
+            if (event.message.cancelled) {
+              gestureLog.info('3-finger ${direction.name} swipe cancelled');
+              if (start != null) {
+                settleTo(start);
               } else {
                 scrollToIndex(index);
               }
+              return;
+            }
+
+            final dimension = pageDimension();
+            if (dimension == null) {
+              return;
+            }
+            // Page fractions from the start of the gesture. Under the fling
+            // threshold the release snaps to the nearest page; above it, the
+            // deceleration is projected and the row lands where it would have
+            // stopped. This is GNOME Shell's and Niri's end-of-swipe model.
+            final progress = start == null
+                ? 0.0
+                : (pageController.offset - start) / dimension;
+            final flingSpeed = _flingThreshold / pageSwipe;
+            final projected = velocity.abs() < flingSpeed
+                ? progress
+                : progress + velocity * _decelerationTime;
+            final steps = math.min(1, math.max(-1, projected.round()));
+            gestureLog.info(
+              '3-finger ${direction.name} swipe: '
+              'progress=${progress.toStringAsFixed(2)} '
+              'velocity=${velocity.toStringAsFixed(2)} pages/s '
+              'projected=${projected.toStringAsFixed(2)} steps=$steps',
+            );
+
+            final int? nextIndex;
+            if (steps > 0) {
+              nextIndex = index < children.length - 1 ? index + 1 : null;
+            } else if (steps < 0) {
+              nextIndex = index > 0 ? index - 1 : null;
+            } else {
+              nextIndex = null;
+            }
+
+            if (nextIndex != null && onIndexChanged != null) {
+              // The rebuilt container runs `scrollToIndex` for the new index,
+              // which either scrolls it into view or settles the row on whole
+              // pages with the release velocity.
+              swipeSettleVelocity.value = velocity.abs();
+              swipeSettleIndex.value = nextIndex;
+              onIndexChanged!(nextIndex);
+            } else if (start != null) {
+              // The gesture did not change the tile (or the selection is
+              // already at the end): return to where it started rather than
+              // to whatever page happens to be nearest the displaced offset.
+              settleTo(start);
+            } else {
+              scrollToIndex(index);
             }
           },
           child: LayoutBuilder(
@@ -384,7 +667,15 @@ class SlidingContainer extends HookConsumerWidget {
                     ? Alignment.centerLeft
                     : Alignment.topCenter,
                 child: AnimatedBuilder(
-                  animation: resizeController,
+                  // Rebuild when a swipe starts or ends too, so the pages
+                  // about to slide in are built before the animation reaches
+                  // them instead of during it.
+                  animation: Listenable.merge([
+                    resizeController,
+                    swipeInProgress,
+                    swipePending,
+                    scrollActive,
+                  ]),
                   builder: (context, _) {
                     final (extent, offset) = visualLayout();
                     if (resizing && pageController.hasClients) {
@@ -429,17 +720,45 @@ class SlidingContainer extends HookConsumerWidget {
                               direction: direction,
                               // One viewport of cache is enough for the tile
                               // just off either edge, which is already built
-                              // when a resize starts moving it in or out.
-                              cacheViewports: resizing || buildsNeighbors
+                              // when a resize starts moving it in or out. A
+                              // swipe builds its destination page up front for
+                              // the same reason.
+                              cacheViewports:
+                                  resizing ||
+                                      buildsNeighbors ||
+                                      swipeInProgress.value ||
+                                      swipePending.value ||
+                                      scrollActive.value
                                   ? 1.0
                                   : 0.0,
                               allowImplicitScrolling:
-                                  buildsNeighbors || resizing,
-                              onScrollStart: () =>
-                                  cursorTransition.begin(transitionToken),
-                              onScrollEnd: () =>
-                                  cursorTransition.end(transitionToken),
+                                  buildsNeighbors ||
+                                  resizing ||
+                                  swipeInProgress.value ||
+                                  swipePending.value ||
+                                  scrollActive.value,
+                              onScrollStart: () {
+                                scrollActive.value = true;
+                                cursorTransition.begin(transitionToken);
+                              },
+                              onScrollEnd: () {
+                                scrollActive.value = false;
+                                cursorTransition.end(transitionToken);
+                                // The leading tile moved while the row was
+                                // animating: report where the row landed.
+                                final dimension = pageDimension();
+                                if (reportedFirstVisibleIndex.value == null &&
+                                    dimension != null) {
+                                  reportFirstVisibleIndex(
+                                    (pageController.offset / dimension).round(),
+                                  );
+                                }
+                              },
                               delegate: SliverChildBuilderDelegate(
+                                // The delegate already adds a keyed
+                                // RepaintBoundary per page, so sliding
+                                // translates layers instead of re-recording
+                                // both pages every frame.
                                 (context, index) => children[index],
                                 childCount: children.length,
                                 // A keyed page keeps its state when it moves

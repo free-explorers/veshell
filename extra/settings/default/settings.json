@@ -52,7 +52,11 @@
         "touchpadNaturalScrolling": true,
         "wheelScrollFactor": 1.0,
         "mouseAccelerationProfile": "default",
-        "touchpadAccelerationProfile": "default"
+        "touchpadAccelerationProfile": "default",
+        "touchpadTapToClick": true,
+        "touchpadDisableWhileTyping": true,
+        "mouseSpeed": 0.0,
+        "touchpadSpeed": 0.0
     },
     "gamepad": {
         "repeatDelayMs": 400,

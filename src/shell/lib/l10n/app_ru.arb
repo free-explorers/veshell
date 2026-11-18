@@ -463,5 +463,13 @@
   "statusBarBattery": "Батарея",
   "statusBarBatteryDescription": "Показывать заряд батареи",
   "statusBarBatteryPercentage": "Заряд в процентах",
-  "statusBarBatteryPercentageDescription": "Показывать заряд батареи в процентах рядом со значком"
+  "statusBarBatteryPercentageDescription": "Показывать заряд батареи в процентах рядом со значком",
+  "touchpadTapToClick": "Тачпад: нажатие для щелчка",
+  "touchpadTapToClickDescription": "Нажмите на тачпад, чтобы щёлкнуть",
+  "touchpadDisableWhileTyping": "Тачпад: отключать при вводе",
+  "touchpadDisableWhileTypingDescription": "Игнорировать тачпад во время ввода",
+  "mouseSpeed": "Мышь: скорость указателя",
+  "mouseSpeedDescription": "Скорость указателя от -1.0 (медленно) до 1.0 (быстро); 0.0 — по умолчанию",
+  "touchpadSpeed": "Тачпад: скорость указателя",
+  "touchpadSpeedDescription": "Скорость указателя от -1.0 (медленно) до 1.0 (быстро); 0.0 — по умолчанию"
 }

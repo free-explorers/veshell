@@ -462,5 +462,13 @@
   "statusBarBattery": "Батарея",
   "statusBarBatteryDescription": "Показувати заряд батареї",
   "statusBarBatteryPercentage": "Заряд у відсотках",
-  "statusBarBatteryPercentageDescription": "Показувати заряд батареї у відсотках поруч зі значком"
+  "statusBarBatteryPercentageDescription": "Показувати заряд батареї у відсотках поруч зі значком",
+  "touchpadTapToClick": "Сенсорна панель: натискання для клацання",
+  "touchpadTapToClickDescription": "Натисніть на сенсорну панель, щоб клацнути",
+  "touchpadDisableWhileTyping": "Сенсорна панель: вимикати під час введення",
+  "touchpadDisableWhileTypingDescription": "Ігнорувати сенсорну панель під час введення",
+  "mouseSpeed": "Миша: швидкість вказівника",
+  "mouseSpeedDescription": "Швидкість вказівника від -1.0 (повільно) до 1.0 (швидко); 0.0 — типово",
+  "touchpadSpeed": "Сенсорна панель: швидкість вказівника",
+  "touchpadSpeedDescription": "Швидкість вказівника від -1.0 (повільно) до 1.0 (швидко); 0.0 — типово"
 }

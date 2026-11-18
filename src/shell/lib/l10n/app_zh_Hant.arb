@@ -463,5 +463,13 @@
   "statusBarBattery": "電池",
   "statusBarBatteryDescription": "顯示電池電量",
   "statusBarBatteryPercentage": "電池百分比",
-  "statusBarBatteryPercentageDescription": "在圖示旁以百分比顯示電池電量"
+  "statusBarBatteryPercentageDescription": "在圖示旁以百分比顯示電池電量",
+  "touchpadTapToClick": "觸控板：輕觸以按一下",
+  "touchpadTapToClickDescription": "輕觸觸控板以按一下",
+  "touchpadDisableWhileTyping": "觸控板：輸入時停用",
+  "touchpadDisableWhileTypingDescription": "輸入時忽略觸控板操作",
+  "mouseSpeed": "滑鼠：指標速度",
+  "mouseSpeedDescription": "指標速度從 -1.0（慢）到 1.0（快）；0.0 為預設值",
+  "touchpadSpeed": "觸控板：指標速度",
+  "touchpadSpeedDescription": "指標速度從 -1.0（慢）到 1.0（快）；0.0 為預設值"
 }

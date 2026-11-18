@@ -8,6 +8,7 @@ final navigationLog = logging.Logger('Navigation');
 final platformLog = logging.Logger('Platform');
 final persistenceLog = logging.Logger('Persistence');
 final geometryLog = logging.Logger('Geometry');
+final gestureLog = logging.Logger('Gesture');
 final matchingLog = logging.Logger('Matching');
 final notificationLog = logging.Logger('Notification');
 final mprisLog = logging.Logger('Mpris');

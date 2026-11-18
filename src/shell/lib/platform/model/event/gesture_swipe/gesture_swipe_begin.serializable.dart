@@ -10,8 +10,14 @@ abstract class GestureSwipeBeginMessage
     with _$GestureSwipeBeginMessage
     implements PlatformMessage {
   /// Factory
-  factory GestureSwipeBeginMessage({required int time, required int fingers}) =
-      _GestureSwipeBeginMessage;
+  factory GestureSwipeBeginMessage({
+    required int time,
+    required int fingers,
+
+    /// Whether the touchpad has natural scrolling on, in which case the
+    /// update deltas are negated (content follows the fingers).
+    @Default(false) bool naturalScroll,
+  }) = _GestureSwipeBeginMessage;
 
   factory GestureSwipeBeginMessage.fromJson(Map<String, dynamic> json) =>
       _$GestureSwipeBeginMessageFromJson(json);

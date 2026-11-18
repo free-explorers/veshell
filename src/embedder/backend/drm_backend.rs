@@ -566,11 +566,6 @@ pub fn run_drm_backend(real_session: bool) {
             let settings = data.settings_manager.get_settings();
             let environment_changed = data.apply_veshell_settings(&settings);
             for mut device in data.input_devices.clone() {
-                if device.config_tap_finger_count() > 0 {
-                    device
-                        .config_tap_set_enabled(true)
-                        .expect("Failed to enable tap");
-                }
                 State::<DrmBackend>::apply_libinput_settings(
                     &settings.mouse_and_touchpad,
                     &mut device,
@@ -825,11 +820,9 @@ pub fn run_drm_backend(real_session: bool) {
     state.determine_highest_hz_crtc();
     state.on_outputs_changed();
 
-    // Drive Flutter's vsync from a timer at the pacing refresh, as the idle
-    // fallback to the page-flip vblank (see `on_vsync_timer` / `on_vblank`): a
-    // running scene delivers its batons from the hardware vblank and this timer
-    // stays silent, so tying vsync to a free-running timer no longer drifts
-    // against the panel. It only ticks when nothing flipped for a whole refresh.
+    // Fallback vsync source, armed at the pacing refresh: it only ticks when a
+    // page flip's vblank did not, so a missed flip cannot stall Flutter at two
+    // refreshes, while a presenting scene stays paced by the panel.
     let initial_interval = state.pacing_interval().unwrap_or(Duration::from_millis(16));
     event_loop
         .handle()
@@ -878,11 +871,6 @@ pub fn run_drm_backend(real_session: bool) {
             match event {
                 InputEvent::DeviceAdded { mut device } => {
                     data.input_devices.insert(device.clone());
-                    if device.config_tap_finger_count() > 0 {
-                        device
-                            .config_tap_set_enabled(true)
-                            .expect("Failed to enable tap");
-                    }
                     let settings = data.settings_manager.get_settings();
                     State::<DrmBackend>::apply_libinput_settings(
                         &settings.mouse_and_touchpad,
@@ -924,7 +912,14 @@ pub fn run_drm_backend(real_session: bool) {
                     data.on_pointer_axis::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::GestureSwipeBegin { event } => {
+                    // Whether the swipe goes to the shell is decided here, once,
+                    // so the shell sees a complete begin/update/end sequence.
+                    data.shell_swipe_fingers = None;
+                    if !data.shell_gestures_allowed() {
+                        return;
+                    }
                     let fingers = event.fingers();
+                    data.shell_swipe_fingers = Some(fingers);
                     data.flutter_engine_mut()
                         .platform_method_channel
                         .invoke_method(
@@ -932,11 +927,24 @@ pub fn run_drm_backend(real_session: bool) {
                             Some(Box::new(json!(GestureSwipeBeginEventMessage {
                                 time: event.time_msec(),
                                 fingers,
+                                natural_scroll: event
+                                    .device()
+                                    .config_scroll_natural_scroll_enabled(),
                             }))),
                             None,
                         );
                 }
                 InputEvent::GestureSwipeUpdate { event } => {
+                    if data.shell_swipe_fingers.is_none() {
+                        return;
+                    }
+                    if !data.shell_gestures_allowed() {
+                        // The session locked, a game took the input or a
+                        // screenshot selection started mid-swipe: close the
+                        // shell's gesture without committing it.
+                        data.cancel_shell_swipe(event.time_msec());
+                        return;
+                    }
                     let fingers = event.fingers();
                     let mut delta_x = event.dx_unaccelerated();
                     let mut delta_y = event.dy_unaccelerated();
@@ -961,8 +969,10 @@ pub fn run_drm_backend(real_session: bool) {
                         );
                 }
                 InputEvent::GestureSwipeEnd { event } => {
-                    let fingers = event.fingers();
-                    let cancelled = event.cancelled();
+                    let Some(fingers) = data.shell_swipe_fingers.take() else {
+                        return;
+                    };
+                    let cancelled = event.cancelled() || !data.shell_gestures_allowed();
                     data.flutter_engine_mut()
                         .platform_method_channel
                         .invoke_method(
@@ -981,14 +991,10 @@ pub fn run_drm_backend(real_session: bool) {
                     data.on_gesture_pinch_begin::<LibinputInputBackend>(event, device_id, view_id);
                 }
                 InputEvent::GesturePinchUpdate { event } => {
-                    let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer();
-                    data.on_gesture_pinch_update::<LibinputInputBackend>(event, device_id, view_id);
+                    data.on_gesture_pinch_update::<LibinputInputBackend>(event);
                 }
                 InputEvent::GesturePinchEnd { event } => {
-                    let device_id = event.device().id_product() as i32;
-                    let view_id = data.view_id_under_pointer();
-                    data.on_gesture_pinch_end::<LibinputInputBackend>(event, device_id, view_id);
+                    data.on_gesture_pinch_end::<LibinputInputBackend>(event);
                 }
                 InputEvent::GestureHoldBegin { event: _ } => {}
                 InputEvent::GestureHoldEnd { event: _ } => {}
@@ -2167,19 +2173,17 @@ impl State<DrmBackend> {
         }
     }
 
-    /// Fallback vsync source, armed at the pacing refresh.
+    /// Vsync fallback for a refresh that produced no page flip.
     ///
-    /// The primary source is the pacing CRTC's page-flip vblank
-    /// ([`Self::on_vblank`]): while the shell is presenting, its batons are
-    /// delivered in step with the panel instead of drifting against a timer.
-    /// This timer only covers the idle case, where a frame with no damage
-    /// produces no flip and therefore no vblank: it ticks only once a whole
-    /// refresh plus a small slack passed with no vblank, so a running scene is
-    /// never ticked twice.
+    /// A page flip's vblank ([`Self::on_vblank`]) always ticks, so a presenting
+    /// scene is paced by the panel. This timer only steps in when a whole
+    /// refresh plus a small slack passed without one: a missed flip, or a
+    /// static scene that flips nothing. It re-arms against the last tick rather
+    /// than a fixed period, so it stays phased to the panel instead of drifting
+    /// against it and eventually missing flips itself.
     ///
-    /// It keeps one cheap wake-up per refresh, so a client's pending frame
-    /// callback is never held back, and backs off while the output is blanked
-    /// or the seat inactive (where no vblank can arrive to cover it).
+    /// It backs off while the output is blanked or the seat inactive, where no
+    /// vblank can arrive and there is nothing to present.
     fn on_vsync_timer(&mut self) -> Duration {
         let Some(interval) = self.pacing_interval() else {
             // No output to pace against (a hotplug is in progress): retry
@@ -2191,19 +2195,9 @@ impl State<DrmBackend> {
             return Duration::from_millis(100);
         }
 
-        // A page flip completes at most one refresh apart, so a vblank keeps
-        // `last_vsync_tick` within one refresh of now. Only step in once a
-        // whole refresh plus slack passed with no vblank: a static scene, or a
-        // dropped frame.
         let slack = Duration::from_millis(2);
         let now = Instant::now();
-        let due = match self.backend_data.last_vsync_tick {
-            Some(last) => now.saturating_duration_since(last) >= interval + slack,
-            None => true,
-        };
-        if due {
-            self.deliver_vsync_tick(now);
-        }
+
         self.send_stale_game_frame_callbacks(now, slack);
 
         // An animated theme cursor changes with time alone; with on-demand
@@ -2212,6 +2206,15 @@ impl State<DrmBackend> {
             self.request_render();
         }
 
+        if let Some(last) = self.backend_data.last_vsync_tick {
+            let due = last + interval + slack;
+            if now < due {
+                // No vblank has arrived since the last tick: wait for it, and
+                // stay phased to when it is due rather than to this callback.
+                return (due - now).max(Duration::from_millis(1));
+            }
+        }
+        self.deliver_vsync_tick(now);
         interval + slack
     }
 
@@ -2514,26 +2517,51 @@ impl State<DrmBackend> {
     /// inversion to do. Mice and touchpads have separate preferences.
     pub fn apply_libinput_settings(config: &MouseAndTouchpadSettings, device: &mut input::Device) {
         // Mice and touchpads have separate preferences, mirroring GNOME's
-        // per-device `natural-scroll` and `accel-profile` keys and libinput's
-        // own natural-scrolling defaults (mouse off, touchpad on).
+        // per-device `natural-scroll`, `accel-speed` and `accel-profile` keys
+        // and libinput's own natural-scrolling defaults (mouse off, touchpad
+        // on).
         let touchpad = is_touchpad(device);
-        let (natural_scrolling, acceleration_profile) = if touchpad {
+        let (natural_scrolling, acceleration_profile, speed) = if touchpad {
             (
                 config.touchpad_natural_scrolling,
                 config.touchpad_acceleration_profile,
+                config.touchpad_speed,
             )
         } else {
             (
                 config.mouse_natural_scrolling,
                 config.mouse_acceleration_profile,
+                config.mouse_speed,
             )
         };
         if device.config_scroll_has_natural_scroll() {
-            device
-                .config_scroll_set_natural_scroll_enabled(natural_scrolling)
-                .expect("Failed to set natural scrolling");
+            if let Err(err) = device.config_scroll_set_natural_scroll_enabled(natural_scrolling) {
+                warn!(?err, device = %device.name(), "Failed to set natural scrolling");
+            }
         }
         apply_acceleration_profile(device, acceleration_profile);
+        if device.config_accel_is_available() {
+            let speed = speed.clamp(-1.0, 1.0);
+            if let Err(err) = device.config_accel_set_speed(speed) {
+                warn!(?err, speed, device = %device.name(), "Failed to set pointer speed");
+            }
+        }
+        if touchpad {
+            // Tap-to-click is a touchpad-only capability; libinput reports the
+            // supported finger count (zero when the hardware cannot tap).
+            if device.config_tap_finger_count() > 0 {
+                if let Err(err) = device.config_tap_set_enabled(config.touchpad_tap_to_click) {
+                    warn!(?err, device = %device.name(), "Failed to set tap-to-click");
+                }
+            }
+            if device.config_dwt_is_available() {
+                if let Err(err) =
+                    device.config_dwt_set_enabled(config.touchpad_disable_while_typing)
+                {
+                    warn!(?err, device = %device.name(), "Failed to set disable-while-typing");
+                }
+            }
+        }
     }
 
     fn apply_monitor_configuration_to_drm_surface(

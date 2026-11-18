@@ -463,5 +463,13 @@
   "statusBarBattery": "البطارية",
   "statusBarBatteryDescription": "إظهار مستوى البطارية",
   "statusBarBatteryPercentage": "نسبة البطارية",
-  "statusBarBatteryPercentageDescription": "إظهار مستوى البطارية كنسبة مئوية بجوار رمزها"
+  "statusBarBatteryPercentageDescription": "إظهار مستوى البطارية كنسبة مئوية بجوار رمزها",
+  "touchpadTapToClick": "لوحة اللمس: النقر بلمسة",
+  "touchpadTapToClickDescription": "المس لوحة اللمس للنقر",
+  "touchpadDisableWhileTyping": "لوحة اللمس: التعطيل أثناء الكتابة",
+  "touchpadDisableWhileTypingDescription": "تجاهل إدخال لوحة اللمس أثناء الكتابة",
+  "mouseSpeed": "الفأرة: سرعة المؤشر",
+  "mouseSpeedDescription": "سرعة المؤشر من -1.0 (بطيء) إلى 1.0 (سريع)؛ 0.0 هو الافتراضي",
+  "touchpadSpeed": "لوحة اللمس: سرعة المؤشر",
+  "touchpadSpeedDescription": "سرعة المؤشر من -1.0 (بطيء) إلى 1.0 (سريع)؛ 0.0 هو الافتراضي"
 }

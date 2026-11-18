@@ -25,6 +25,7 @@ import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu
 import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/provider/memory_stats.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/battery_notification.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/upower_client.dart';
+import 'package:shell/overview/widget/overview_swipe.dart';
 import 'package:shell/platform/model/request/get_environment_variables/get_environment_variables.serializable.dart';
 import 'package:shell/platform/model/request/get_monitor_layout/get_monitor_layout.serializable.dart';
 import 'package:shell/platform/model/request/shell_ready/shell_ready.serializable.dart';
@@ -168,18 +169,20 @@ class _VeshellState extends ConsumerState<Veshell> with WidgetsBindingObserver {
         .toList();
     print('views: $views');
 
-    return ViewCollection(
-      views: views
-          .map(
-            (view) => View(
-              view: view,
-              // `MonitorWidget` owns the shortcut manager: it lives inside the
-              // monitor's `MaterialApp` so the shell's chords beat the
-              // framework's default shortcuts (see `MonitorWidget`).
-              child: MonitorWidget(viewId: view.viewId),
-            ),
-          )
-          .toList(),
+    return OverviewSwipeGesture(
+      child: ViewCollection(
+        views: views
+            .map(
+              (view) => View(
+                view: view,
+                // `MonitorWidget` owns the shortcut manager: it lives inside
+                // the monitor's `MaterialApp` so the shell's chords beat the
+                // framework's default shortcuts (see `MonitorWidget`).
+                child: MonitorWidget(viewId: view.viewId),
+              ),
+            )
+            .toList(),
+      ),
     );
   }
 }

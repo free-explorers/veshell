@@ -463,5 +463,13 @@
   "statusBarBattery": "बैटरी",
   "statusBarBatteryDescription": "बैटरी स्तर दिखाएँ",
   "statusBarBatteryPercentage": "बैटरी प्रतिशत",
-  "statusBarBatteryPercentageDescription": "आइकन के पास बैटरी स्तर प्रतिशत में दिखाएँ"
+  "statusBarBatteryPercentageDescription": "आइकन के पास बैटरी स्तर प्रतिशत में दिखाएँ",
+  "touchpadTapToClick": "टचपैड: टैप करके क्लिक करें",
+  "touchpadTapToClickDescription": "क्लिक करने के लिए टचपैड पर टैप करें",
+  "touchpadDisableWhileTyping": "टचपैड: टाइप करते समय अक्षम करें",
+  "touchpadDisableWhileTypingDescription": "टाइप करते समय टचपैड इनपुट को अनदेखा करें",
+  "mouseSpeed": "माउस: पॉइंटर गति",
+  "mouseSpeedDescription": "पॉइंटर गति -1.0 (धीमी) से 1.0 (तेज़); 0.0 डिफ़ॉल्ट है",
+  "touchpadSpeed": "टचपैड: पॉइंटर गति",
+  "touchpadSpeedDescription": "पॉइंटर गति -1.0 (धीमी) से 1.0 (तेज़); 0.0 डिफ़ॉल्ट है"
 }
