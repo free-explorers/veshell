@@ -272,7 +272,6 @@ impl<BackendData: Backend> State<BackendData> {
             return;
         }
         let current_view_id = self.view_id_under_pointer();
-        self.focus_view_under_pointer();
         let view_id = if self
             .flutter_engine()
             .mouse_button_tracker
@@ -373,7 +372,6 @@ impl<BackendData: Backend> State<BackendData> {
             return;
         }
         let current_view_id = self.view_id_under_pointer();
-        self.focus_view_under_pointer();
         let view_id = if self
             .flutter_engine()
             .mouse_button_tracker
@@ -450,6 +448,13 @@ impl<BackendData: Backend> State<BackendData> {
                         .then_some(PopupPointerGrab { surface_id })
                 })
             });
+        }
+        // A click is what moves the keyboard to another monitor; moving the
+        // pointer across does not. The view is focused before the press
+        // reaches Flutter, so the press lands in a view that already owns the
+        // keyboard.
+        if event.state() == ButtonState::Pressed && !had_buttons_pressed {
+            self.focus_view_under_pointer();
         }
         let event_view_id = self.pointer_gesture_view_id.or(view_id);
         let phase = if event.state() == ButtonState::Pressed {
@@ -1064,10 +1069,11 @@ impl<BackendData: Backend> State<BackendData> {
 
     /// Makes the output view under the pointer the platform-focused view.
     ///
-    /// This is the compositor side of the focus source of truth: moving the
-    /// pointer onto a monitor focuses it even when no Flutter widget focus
-    /// transition happens, so trusted prompts and window placement follow the
-    /// pointer. The engine is only notified when the view actually changes.
+    /// This is the compositor side of the keyboard's monitor: a click on a
+    /// monitor focuses it even when no Flutter widget focus transition
+    /// happens, so the keyboard follows the click, never the pointer's motion
+    /// alone (the shell tracks the monitor under the pointer separately, for
+    /// placement). The engine is only notified when the view actually changes.
     ///
     /// A pointer over no output (outputs not mapped yet, or a stale position
     /// right after an output went away) keeps the current focus: unfocusing
@@ -1075,6 +1081,33 @@ impl<BackendData: Backend> State<BackendData> {
     /// widget to receive keystrokes or the shell's hotkeys.
     pub(crate) fn focus_view_under_pointer(&mut self) {
         let Some(view_id) = self.view_id_under_pointer() else {
+            return;
+        };
+        self.flutter_engine_mut().set_focused_view(Some(view_id));
+    }
+
+    /// Gives the keyboard a monitor again when the one holding it went away.
+    ///
+    /// Monitor focus only moves on a click, so an unplugged monitor would
+    /// otherwise keep the keyboard until the next click: the monitor under the
+    /// pointer takes it, or the first remaining one.
+    pub(crate) fn refocus_view_if_gone(&mut self) {
+        let mapped_view_ids = self
+            .space
+            .outputs()
+            .filter_map(|output| {
+                let target = self.mirror_source(output).unwrap_or_else(|| output.clone());
+                view_id_for_output(&target)
+            })
+            .collect::<Vec<_>>();
+        let focused = self.flutter_engine().focused_view_id();
+        if focused.is_some_and(|view_id| mapped_view_ids.contains(&view_id)) {
+            return;
+        }
+        let Some(view_id) = self
+            .view_id_under_pointer()
+            .or_else(|| mapped_view_ids.first().copied())
+        else {
             return;
         };
         self.flutter_engine_mut().set_focused_view(Some(view_id));

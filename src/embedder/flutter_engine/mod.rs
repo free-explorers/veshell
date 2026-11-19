@@ -574,6 +574,12 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     /// The unfocused view is notified before the newly focused one so that a
     /// common consumer (e.g. a keyboard-parked root scope) is released first.
     /// Passing `None` clears platform focus without focusing another view.
+    /// The output view that owns platform focus, as last reported to the
+    /// engine.
+    pub fn focused_view_id(&self) -> Option<i64> {
+        self.focused_view_id
+    }
+
     pub fn set_focused_view(&mut self, view_id: Option<i64>) {
         if self.focused_view_id == view_id {
             return;

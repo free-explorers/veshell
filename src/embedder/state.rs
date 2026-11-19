@@ -1199,6 +1199,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         };
 
         self.update_xwayland_scale(highest_scale);
+        self.refocus_view_if_gone();
     }
 }
 

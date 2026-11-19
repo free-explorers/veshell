@@ -9,6 +9,7 @@ import 'package:shell/overview/widget/overview.dart';
 import 'package:shell/overview/widget/overview_blur_target.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
+import 'package:shell/screen/provider/pointer_screen.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/screen/widget/screen_panel.dart';
@@ -65,156 +66,179 @@ class ScreenWidget extends HookConsumerWidget {
             },
           ),
         },
+        // The pointer entering a screen only records where the user is
+        // looking (for what surfaces on its own); the keyboard moves on a
+        // click. A press anywhere on the screen focuses it, panels and empty
+        // space included: the tile under it, if any, has already asked for
+        // focus, and the scope restores that request.
         child: MouseRegion(
           onEnter: (event) {
-            screenFocusScopeNode.requestFocus();
-            focusLog.info('screenFocusScopeNode.requestFocus on MouseEnter');
+            ref.read(pointerScreenProvider.notifier).set(screenId);
           },
-          child: FocusScope(
-            node: screenFocusScopeNode,
-            onFocusChange: (value) {
-              focusLog.info('screenFocusScopeNode.onFocusChange: $value');
-              if (value) {
-                ref
-                    .read(focusedScreenProvider.notifier)
-                    .setFocusedScreen(screenId);
+          child: Listener(
+            onPointerDown: (event) {
+              if (screenFocusScopeNode.hasFocus) {
+                return;
               }
+              screenFocusScopeNode.requestFocus();
+              focusLog.info('screenFocusScopeNode.requestFocus on press');
             },
-            // Marks the screen under a held tile, which Super+WASD navigates.
-            child: MetaData(
-              metaData: TileGrabScreenMarker(screenId),
-              behavior: HitTestBehavior.translucent,
-              child: Stack(
-                children: [
-                  // Screen-level notification popups (workspace buttons, screen
-                  // panel) are hosted in an Overlay below the overview. An
-                  // OverlayPortal would otherwise land in the root overlay and
-                  // float above the overview.
-                  // Composed through `OverviewBlurTarget` so the overview owns
-                  // the blur it applies to the rest of the screen while open.
-                  OverviewBlurTarget(
-                    screenId: screenId,
-                    child: Overlay.wrap(
-                      child: Actions(
-                        actions: {
-                          // The screen owns the vertical axis: workspaces are
-                          // stacked per screen. Horizontal navigation is owned
-                          // by the focused workspace, whose handler sits closer
-                          // to focus, so the screen leaves it alone.
-                          NavigateIntent: CallbackAction<NavigateIntent>(
-                            onInvoke: (intent) {
-                              final notifier = ref.read(
-                                screenStateProvider(screenId).notifier,
-                              );
-                              switch (intent.direction) {
-                                case NavigationDirection.up:
-                                  notifier.selectAdjacentWorkspace(-1);
-                                case NavigationDirection.down:
-                                  notifier.selectAdjacentWorkspace(1);
-                                case NavigationDirection.left:
-                                case NavigationDirection.right:
-                                  break;
-                              }
-                              return null;
-                            },
-                          ),
-                          // Vertically, a move sends the selected tile to the
-                          // workspace above/below; horizontal reordering is
-                          // owned by the workspace itself (its handler is
-                          // closer to focus and delegates up here).
-                          MoveIntent: CallbackAction<MoveIntent>(
-                            onInvoke: (intent) {
-                              final notifier = ref.read(
-                                screenStateProvider(screenId).notifier,
-                              );
-                              switch (intent.direction) {
-                                case NavigationDirection.up:
-                                  notifier.moveSelectedTileableToWorkspace(-1);
-                                case NavigationDirection.down:
-                                  notifier.moveSelectedTileableToWorkspace(1);
-                                case NavigationDirection.left:
-                                case NavigationDirection.right:
-                                  break;
-                              }
-                              return null;
-                            },
-                          ),
-                        },
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          textDirection: TextDirection.rtl,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  // The top panel style of the status bar
-                                  // lays the workspaces out below it.
-                                  if (ref.watch(
-                                    statusBarSettingsProvider.select(
-                                      (settings) => settings.showsTopPanel,
-                                    ),
-                                  ))
-                                    const StatusTopPanel(),
-                                  Expanded(
-                                    child: Stack(
-                                      children: [
-                                        Positioned.fill(
-                                          child: SlidingContainer(
-                                            direction: Axis.vertical,
-                                            index: screenState.selectedIndex,
-                                            onIndexChanged: (newIndex) {
-                                              ref
-                                                  .read(
-                                                    screenStateProvider(
-                                                      screenId,
-                                                    ).notifier,
-                                                  )
-                                                  .selectWorkspace(newIndex);
-                                            },
-                                            isSwipeEnabled:
-                                                screenId ==
-                                                    ref.watch(
-                                                      focusedScreenProvider,
-                                                    ) &&
-                                                !overviewDisplayed,
-                                            children: screenState.workspaceList
-                                                .mapIndexed(
-                                                  (
-                                                    index,
-                                                    workspaceId,
-                                                  ) => WorkspaceWidget(
-                                                    workspaceId: workspaceId,
-                                                    isSelected:
-                                                        screenState
-                                                            .selectedIndex ==
-                                                        index,
-                                                  ),
-                                                )
-                                                .toList(),
-                                          ),
-                                        ),
-                                        // Hung from the top of the screen,
-                                        // above the workspaces sliding
-                                        // under it.
-                                        _PlacedStatusNotch(screenId: screenId),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
+            child: FocusScope(
+              node: screenFocusScopeNode,
+              onFocusChange: (value) {
+                focusLog.info('screenFocusScopeNode.onFocusChange: $value');
+                if (value) {
+                  ref
+                      .read(focusedScreenProvider.notifier)
+                      .setFocusedScreen(screenId);
+                }
+              },
+              // Marks the screen under a held tile, which Super+WASD navigates.
+              child: MetaData(
+                metaData: TileGrabScreenMarker(screenId),
+                behavior: HitTestBehavior.translucent,
+                child: Stack(
+                  children: [
+                    // Screen-level notification popups (workspace buttons,
+                    // screen panel) are hosted in an Overlay below the
+                    // overview. An OverlayPortal would otherwise land in the
+                    // root overlay and float above the overview. Composed
+                    // through `OverviewBlurTarget` so the overview owns the
+                    // blur it applies to the rest of the screen while open.
+                    OverviewBlurTarget(
+                      screenId: screenId,
+                      child: Overlay.wrap(
+                        child: Actions(
+                          actions: {
+                            // The screen owns the vertical axis: workspaces are
+                            // stacked per screen. Horizontal navigation is
+                            // owned by the focused workspace, whose handler
+                            // sits closer to focus, so the screen leaves it
+                            // alone.
+                            NavigateIntent: CallbackAction<NavigateIntent>(
+                              onInvoke: (intent) {
+                                final notifier = ref.read(
+                                  screenStateProvider(screenId).notifier,
+                                );
+                                switch (intent.direction) {
+                                  case NavigationDirection.up:
+                                    notifier.selectAdjacentWorkspace(-1);
+                                  case NavigationDirection.down:
+                                    notifier.selectAdjacentWorkspace(1);
+                                  case NavigationDirection.left:
+                                  case NavigationDirection.right:
+                                    break;
+                                }
+                                return null;
+                              },
                             ),
-                            const Material(elevation: 4, child: ScreenPanel()),
-                          ],
+                            // Vertically, a move sends the selected tile to the
+                            // workspace above/below; horizontal reordering is
+                            // owned by the workspace itself (its handler is
+                            // closer to focus and delegates up here).
+                            MoveIntent: CallbackAction<MoveIntent>(
+                              onInvoke: (intent) {
+                                final notifier = ref.read(
+                                  screenStateProvider(screenId).notifier,
+                                );
+                                switch (intent.direction) {
+                                  case NavigationDirection.up:
+                                    notifier.moveSelectedTileableToWorkspace(
+                                      -1,
+                                    );
+                                  case NavigationDirection.down:
+                                    notifier.moveSelectedTileableToWorkspace(1);
+                                  case NavigationDirection.left:
+                                  case NavigationDirection.right:
+                                    break;
+                                }
+                                return null;
+                              },
+                            ),
+                          },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            textDirection: TextDirection.rtl,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    // The top panel style of the status bar
+                                    // lays the workspaces out below it.
+                                    if (ref.watch(
+                                      statusBarSettingsProvider.select(
+                                        (settings) => settings.showsTopPanel,
+                                      ),
+                                    ))
+                                      const StatusTopPanel(),
+                                    Expanded(
+                                      child: Stack(
+                                        children: [
+                                          Positioned.fill(
+                                            child: SlidingContainer(
+                                              direction: Axis.vertical,
+                                              index: screenState.selectedIndex,
+                                              onIndexChanged: (newIndex) {
+                                                ref
+                                                    .read(
+                                                      screenStateProvider(
+                                                        screenId,
+                                                      ).notifier,
+                                                    )
+                                                    .selectWorkspace(newIndex);
+                                              },
+                                              isSwipeEnabled:
+                                                  screenId ==
+                                                      ref.watch(
+                                                        placementScreenProvider,
+                                                      ) &&
+                                                  !overviewDisplayed,
+                                              children: screenState
+                                                  .workspaceList
+                                                  .mapIndexed(
+                                                    (
+                                                      index,
+                                                      workspaceId,
+                                                    ) => WorkspaceWidget(
+                                                      workspaceId: workspaceId,
+                                                      isSelected:
+                                                          screenState
+                                                              .selectedIndex ==
+                                                          index,
+                                                    ),
+                                                  )
+                                                  .toList(),
+                                            ),
+                                          ),
+                                          // Hung from the top of the screen,
+                                          // above the workspaces sliding
+                                          // under it.
+                                          _PlacedStatusNotch(
+                                            screenId: screenId,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Material(
+                                elevation: 4,
+                                child: ScreenPanel(),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const OverviewWidget(),
-                  if (ref.watch(devToolsEnabledProvider))
-                    const DevToolsOverview(),
-                ],
+                    const OverviewWidget(),
+                    if (ref.watch(devToolsEnabledProvider))
+                      const DevToolsOverview(),
+                  ],
+                ),
               ),
             ),
           ),

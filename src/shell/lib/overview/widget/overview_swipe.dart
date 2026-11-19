@@ -4,7 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
-import 'package:shell/screen/provider/focused_screen.dart';
+import 'package:shell/screen/provider/pointer_screen.dart';
 import 'package:shell/shared/util/logger.dart';
 
 /// Finger travel that turns a four-finger swipe into an overview open/close.
@@ -61,7 +61,7 @@ class OverviewSwipeGesture extends HookConsumerWidget {
           if (travel.value.abs() < _overviewSwipeThreshold) {
             return;
           }
-          final screenId = ref.read(focusedScreenProvider);
+          final screenId = ref.read(placementScreenProvider);
           if (screenId == null) {
             return;
           }
