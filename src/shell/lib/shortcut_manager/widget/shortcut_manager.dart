@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -39,13 +40,22 @@ class VeshellShortcutManager extends HookConsumerWidget {
       ),
       [hotkeysActivator],
     );
-    // The Super press that grabbed a tile was a chord, not a sole press.
-    ref.listen(tileGrabControllerProvider.select((grab) => grab != null), (
-      _,
-      isGrabbing,
-    ) {
-      if (isGrabbing) manager.claimSuperPress();
-    });
+    // A pointer press while Super is held (a tile grab, any Super + click) is
+    // a chord, not a sole press: its release must not toggle the overview.
+    // Watching the pointer itself, rather than what the press started, holds
+    // whatever the press ends up doing.
+    useEffect(() {
+      void handlePointer(PointerEvent event) {
+        if (event is PointerDownEvent && isSuperKeyPressed()) {
+          manager.claimSuperPress();
+        }
+      }
+
+      GestureBinding.instance.pointerRouter.addGlobalRoute(handlePointer);
+      return () => GestureBinding.instance.pointerRouter.removeGlobalRoute(
+        handlePointer,
+      );
+    }, [manager]);
     // A chord consumed by a local `Shortcuts` widget (for example Super+W in
     // the overview) never reaches the shortcut manager, which would then still
     // toggle the overview when Super is released. Track the Super-sole-press
@@ -215,10 +225,13 @@ class _ShortcutManager extends ShortcutManager {
   /// key without dispatching the intent to the focused context.
   final bool Function(Intent intent)? interceptIntent;
 
-  /// Whether the held Super key was used by a pointer gesture (a tile grab).
+  /// Whether the held Super key was used by a pointer press.
   bool _isSuperClaimed = false;
 
-  /// Marks the held Super key as used by a pointer gesture: its release
+  /// Whether a Super press was seen without its release yet.
+  bool _isSuperDown = false;
+
+  /// Marks the held Super key as used by a pointer press: its release
   /// neither toggles the overview nor reaches the client as a lone Super tap.
   void claimSuperPress() {
     _isOverviewKeySolePressed = false;
@@ -231,14 +244,24 @@ class _ShortcutManager extends ShortcutManager {
   /// chord like Super+W handled inside the overview would otherwise leave this
   /// flag set and toggle the overview when Super is released.
   void trackHardwareKey(KeyEvent event) {
+    // Any release ends the press, a synthesized one (focus change) included.
+    if (event is KeyUpEvent && event.logicalKey == overviewKey) {
+      _isSuperDown = false;
+      return;
+    }
     if (event.synthesized) {
       return;
     }
-    if (event is KeyDownEvent && event.logicalKey == overviewKey) {
-      _isOverviewKeySolePressed = true;
-      _isSuperClaimed = false;
-    } else if (event.logicalKey != overviewKey &&
-        (event is KeyDownEvent || event is KeyRepeatEvent)) {
+    if (event.logicalKey == overviewKey) {
+      if (event is KeyDownEvent && !_isSuperDown) {
+        // Only a fresh press starts a sole press: a duplicate press of the
+        // held key (which release builds let through) must keep the chord a
+        // pointer press or another key already made of it.
+        _isSuperDown = true;
+        _isOverviewKeySolePressed = true;
+        _isSuperClaimed = false;
+      }
+    } else if (event is KeyDownEvent || event is KeyRepeatEvent) {
       _isOverviewKeySolePressed = false;
     }
   }
