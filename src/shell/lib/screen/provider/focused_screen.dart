@@ -33,6 +33,15 @@ class FocusedScreen extends _$FocusedScreen {
   /// that default once the notifier keeps its state across rebuilds.
   ScreenId? _manualScreen;
 
+  /// The keyboard's view when [_manualScreen] was chosen, while the
+  /// compositor has not reported another one since; `null` once it has.
+  ///
+  /// A choice on another monitor (a hotkey sent to the screen under the
+  /// pointer) is kept until the compositor reports a different view: the
+  /// compositor is still moving the keyboard to that monitor, and dropping the
+  /// choice before it reports back would hand the keyboard straight back.
+  ({int? viewId})? _awaitedViewChange;
+
   @override
   ScreenId? build() {
     final screenIds = ref.watch(
@@ -48,11 +57,20 @@ class FocusedScreen extends _$FocusedScreen {
         ? null
         : ref.watch(monitorByViewIdProvider(focusedViewId));
 
+    final awaited = _awaitedViewChange;
+    final awaitingViewChange =
+        awaited != null && awaited.viewId == focusedViewId;
+    if (!awaitingViewChange) {
+      _awaitedViewChange = null;
+    }
+
     final manual = _manualScreen;
     if (manual != null && screenIds.contains(manual)) {
       // Keep a specific screen chosen within the focused monitor (for example
-      // by a click); a change of focused monitor overrides it below.
+      // by a click), or one chosen since the compositor last reported the
+      // focused monitor; a later change of focused monitor overrides it below.
       if (focusedMonitor == null ||
+          awaitingViewChange ||
           ref.watch(monitorForScreenProvider(manual)) == focusedMonitor) {
         return manual;
       }
@@ -98,6 +116,7 @@ class FocusedScreen extends _$FocusedScreen {
       return;
     }
     _manualScreen = screenId;
+    _awaitedViewChange = (viewId: ref.read(platformFocusedViewIdProvider));
     state = screenId;
   }
 }

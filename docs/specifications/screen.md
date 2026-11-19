@@ -68,3 +68,13 @@ the system notifications (volume, brightness), trusted prompts and the lock
 screen's password field (through `focusedMonitor`), and decides which screen
 touchpad swipes act on. A prompt that takes the keyboard moves the keyboard's
 monitor to it.
+
+The shell's hotkeys follow the pointer too. A Super chord bound to a screen
+action (navigation, moving or closing a tile) and the Super tap that toggles
+the overview act on the screen under the pointer: when the keyboard is on
+another screen, that screen takes the keyboard first, as a click on it would,
+and the action runs there once it has. System hotkeys (volume, brightness,
+media, keyboard layout, lock, the key display) act wherever the pointer is
+and move nothing. Plain-key bindings (Enter for `navigation.activate`) belong
+to the focused widget and never follow the pointer. The shortcut manager
+(`VeshellShortcutManager`) implements this.
