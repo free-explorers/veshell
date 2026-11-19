@@ -96,6 +96,7 @@
         "focusIndicator": "grayscale",
         "workspaceIcon": "hybrid",
         "animationSpeed": 1,
+        "optimizedOverview": true,
         "statusBar": "none",
         "statusBarContent": {
             "showClock": true,

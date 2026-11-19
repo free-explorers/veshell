@@ -407,6 +407,8 @@
   "invalidValue": "유효한 값을 입력하세요",
   "animationSpeed": "애니메이션 속도",
   "animationSpeedDescription": "셸 애니메이션의 속도: 1은 설계대로, 0.5는 절반 속도(확인용), 2는 두 배 속도.",
+  "optimizedOverview": "최적화된 개요",
+  "optimizedOverviewDescription": "열린 개요가 뒤의 화면을 다시 그리지 않도록 합니다. 흐린 배경은 정지 이미지가 되고 모니터링 그래프는 미끄러지지 않고 한 칸씩 이동합니다. 끄면 배경이 살아 움직이고 그래프가 부드러워지지만 GPU 사용량이 늘어납니다.",
   "focusIndicator": "포커스 표시",
   "focusIndicatorDescription": "여러 창이 표시될 때 활성 창을 강조하는 방식",
   "focusIndicatorBorder": "슬라이드 테두리",

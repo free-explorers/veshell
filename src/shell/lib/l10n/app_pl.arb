@@ -407,6 +407,8 @@
   "invalidValue": "Wprowadź prawidłową wartość",
   "animationSpeed": "Szybkość animacji",
   "animationSpeedDescription": "Szybkość animacji powłoki: 1 zgodnie z projektem, 0,5 o połowę wolniej (do obejrzenia), 2 dwa razy szybciej.",
+  "optimizedOverview": "Zoptymalizowany przegląd",
+  "optimizedOverviewDescription": "Otwarty przegląd nie odrysowuje ekranu za sobą: rozmyte tło staje się nieruchomym obrazem, a wykresy monitorowania przeskakują zamiast się przesuwać. Wyłącz, aby mieć żywe tło i płynne wykresy kosztem większego obciążenia GPU.",
   "focusIndicator": "Wskaźnik fokusu",
   "focusIndicatorDescription": "Jak wyróżnia się aktywne okno, gdy wyświetlanych jest kilka okien",
   "focusIndicatorBorder": "Przesuwana ramka",

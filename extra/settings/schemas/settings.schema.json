@@ -406,6 +406,10 @@
                     "maximum": 10,
                     "description": "Speed of the shell's animations: 1 as designed, 0.5 at half speed, 2 at double speed"
                 },
+                "optimizedOverview": {
+                    "type": "boolean",
+                    "description": "Keep the open overview from repainting the screen behind it: the blurred backdrop is a still image and the monitoring graphs step instead of sliding. Off for a live backdrop and smooth graphs, at a higher GPU cost."
+                },
                 "statusBar": {
                     "type": "string",
                     "enum": [

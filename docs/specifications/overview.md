@@ -40,6 +40,22 @@ Its search engine offers three modes: applications, files and settings. The
 **files** mode is the [FileExplorer](file_explorer.md), an in-shell file
 browser replacing the former placeholder.
 
+## Frost
+
+While the overview is displayed, the screen behind it is frosted (blur,
+saturation and grain, `OverviewBlurTarget`), ramping in and out with the
+overview and clipped to its screen. A filtered layer is re-applied on every
+frame, so with `theme.optimizedOverview` on (the default) the settled frost is
+baked into an image once the opening ramp completes and drawn as a plain blit
+until the overview closes; the screen behind stays mounted (offstage), so its
+state and focus hand-offs are untouched. Closing thaws back to the live frost
+before the ramp, and a resize while open falls back to the live frost. The
+trade-off: motion behind the overview (a video, a spinner) does not show
+through the frost until the next open. Together with the stepped monitoring
+graphs ([Monitoring](monitoring.md)) this lets an untouched overview stop
+rendering. Turning the setting off keeps a live backdrop and sliding graphs, at
+a continuous GPU cost while the overview is open.
+
 ## Keyboard
 
 Veshell favours left-hand shortcuts. While the overview is open, navigation

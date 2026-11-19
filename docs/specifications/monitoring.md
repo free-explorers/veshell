@@ -76,6 +76,13 @@ for the whole session.
   120 samples — about a minute at 500 ms. A sampler appends through `add()`, so
   the chart always ends at *now* and a recent spike or a rising curve is visible
   the moment the overview opens.
+- **Graphs step by default.** With `theme.optimizedOverview` on (the default),
+  every new sample moves the chart window in one step, from the first sample:
+  while the buffer fills and when it first overflows too. Off, the window
+  slides by one sample over the 500 ms interval instead; since the slide lasts
+  until the next sample arrives, the shell then renders at 60 fps for as long
+  as the panel is visible. Either way the chart repaints inside its own
+  `RepaintBoundary`.
 - **Disk is polled slower.** `DiskSpaceState` rescans every 5 s while the panel
   is open; a `df` subprocess is far more expensive than the `/proc` reads. Its
   last reading lives in the keep-alive `DiskSpaceCache`, so a reopened card

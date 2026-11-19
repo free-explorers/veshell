@@ -407,6 +407,8 @@
   "invalidValue": "Insira um valor válido",
   "animationSpeed": "Velocidade das animações",
   "animationSpeedDescription": "Velocidade das animações do shell: 1 como projetadas, 0,5 na metade da velocidade (para inspecionar), 2 no dobro.",
+  "optimizedOverview": "Visão geral otimizada",
+  "optimizedOverviewDescription": "Evita que a visão geral aberta redesenhe a tela atrás dela: o fundo desfocado vira uma imagem fixa e os gráficos de monitoramento avançam em saltos em vez de deslizar. Desative para um fundo ao vivo e gráficos suaves, com maior uso da GPU.",
   "focusIndicator": "Indicador de foco",
   "focusIndicatorDescription": "Como a janela ativa se destaca quando várias janelas são exibidas",
   "focusIndicatorBorder": "Borda deslizante",

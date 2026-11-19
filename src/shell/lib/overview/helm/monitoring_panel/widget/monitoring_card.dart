@@ -8,6 +8,7 @@ import 'package:shell/l10n/l10n.dart';
 import 'package:shell/overview/helm/monitoring_panel/model/process_ranking.dart';
 import 'package:shell/overview/helm/monitoring_panel/provider/process_name.dart';
 import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
+import 'package:shell/settings/provider/state/optimized_overview_setting.dart';
 import 'package:shell/shared/widget/expandable_card.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
 
@@ -76,7 +77,20 @@ class MonitoringCard extends StatelessWidget {
             children: [
               Stack(
                 children: [
-                  Positioned.fill(child: MonitoringChart(series: series)),
+                  Positioned.fill(
+                    // The sparklines animate on their own; keep that repaint
+                    // inside the card so it does not re-record the whole helm.
+                    child: RepaintBoundary(
+                      child: Consumer(
+                        builder: (context, ref, _) => MonitoringChart(
+                          series: series,
+                          stepSamples: ref.watch(
+                            optimizedOverviewSettingProvider,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Row(
@@ -144,14 +158,28 @@ class MonitoringCard extends StatelessWidget {
 ///
 /// Every series is drawn on the same `0..100` axis; a filled series sits under
 /// the stroked ones. The viewport advances one sample per sample interval, so
-/// the graph scrolls as samples arrive. A few samples are kept beyond each edge
-/// of the visible window, so the line and area fill never stop at a chart edge.
+/// the graph scrolls as samples arrive: it steps when [stepSamples] is set,
+/// and otherwise slides by one sample over [monitoringSampleInterval]. A few
+/// samples are kept beyond each edge of the visible window, so the line and
+/// area fill never stop at a chart edge.
 class MonitoringChart extends StatefulWidget {
   /// Creates a chart for [series].
-  const MonitoringChart({required this.series, super.key});
+  const MonitoringChart({
+    required this.series,
+    this.stepSamples = true,
+    super.key,
+  });
 
   /// Lines to draw, oldest first.
   final List<MonitoringSeries> series;
+
+  /// Whether a new sample steps the window instead of sliding it in.
+  ///
+  /// The slide lasts exactly as long as the next sample takes to arrive, so a
+  /// sliding chart never stops animating: the shell renders at 60 fps for as
+  /// long as it is visible. Stepping, from the first sample on, lets an idle
+  /// overview stop rendering between samples (`theme.optimizedOverview`).
+  final bool stepSamples;
 
   @override
   State<MonitoringChart> createState() => _MonitoringChartState();
@@ -189,29 +217,26 @@ class _MonitoringChartState extends State<MonitoringChart>
     final newLastX = _lastX(widget.series);
     final oldFull = _hasOverflow(oldWidget.series);
     final newFull = _hasOverflow(widget.series);
-    if (!oldFull && newFull) {
+    final grew = !oldFull && newFull;
+    final advanced =
+        oldLastX != null && newLastX != null && newLastX != oldLastX;
+    if (!grew && !advanced) return;
+    if (widget.stepSamples) {
+      // Step straight to the new window instead of sliding it over the whole
+      // sample interval (see [MonitoringChart.stepSamples]), from the first
+      // sample on: while the buffer fills and when it first overflows too.
+      // One sample is a few pixels wide, so the step reads the same.
+      _fillingIntoOverflow = false;
+      _controller.value = 1;
+    } else if (grew) {
       // The right-aligned filling chart has to make room for the right-side
       // overflow. Move it there over one sample instead of jumping.
       _fillingFrom = (oldLastX ?? 0) - (monitoringWindowSamples - 1);
       _fillingIntoOverflow = true;
       _controller.forward(from: 0);
-    } else if (oldLastX != null && newLastX != null && newLastX != oldLastX) {
+    } else {
       _fillingIntoOverflow = false;
-      if (newFull) {
-        // Step straight to the new window instead of sliding it over the whole
-        // sample interval. The slide lasted exactly as long as the next sample
-        // took to arrive, so the panel never stopped animating: the shell kept
-        // rendering at 60 fps for as long as it was visible, and every one of
-        // those frames re-rasterizes the screen *and* re-applies the overview's
-        // full-screen frost on every output. Two screens saturated the iGPU at
-        // ~100 %. One sample is a few pixels wide, so the step looks the same.
-        _controller.value = 1;
-      } else {
-        // While the buffer fills, new samples still slide in so the growing
-        // chart does not pop; this only lasts for the first
-        // [monitoringChartBufferSamples] samples after startup.
-        _controller.forward(from: 0);
-      }
+      _controller.forward(from: 0);
     }
   }
 
