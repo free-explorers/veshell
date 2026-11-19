@@ -72,20 +72,28 @@ class OverviewBlurTarget extends HookConsumerWidget {
             // Cache the frosted screen: while the overview is interacted with,
             // the blur is reused instead of recomputed, as long as the desktop
             // behind it is not itself repainting.
-            return RepaintBoundary(
-              child: FrostedSurface(
-                blurSigma: maxSigma * progress,
-                // A blurred background should read as glass, not merely out of
-                // focus: lift its vibrancy a touch while the overview opens.
-                saturation: 1 + 0.2 * progress,
-                // Grain rides the blur (it only paints once blurred) and fades
-                // with the ramp, so it lives here rather than on the scrim.
-                noise: true,
-                noiseOpacity: progress,
-                tintOverContent: true,
-                frame: false,
-                highlight: false,
-                child: child,
+            //
+            // A blur paints past the bounds of what it blurs (a few sigmas):
+            // clip it to the screen, or on a monitor split into several
+            // screens the frost spills over the neighbouring screen.
+            return ClipRect(
+              child: RepaintBoundary(
+                child: FrostedSurface(
+                  blurSigma: maxSigma * progress,
+                  // A blurred background should read as glass, not merely out
+                  // of focus: lift its vibrancy a touch while the overview
+                  // opens.
+                  saturation: 1 + 0.2 * progress,
+                  // Grain rides the blur (it only paints once blurred) and
+                  // fades with the ramp, so it lives here rather than on the
+                  // scrim.
+                  noise: true,
+                  noiseOpacity: progress,
+                  tintOverContent: true,
+                  frame: false,
+                  highlight: false,
+                  child: child,
+                ),
               ),
             );
           },
