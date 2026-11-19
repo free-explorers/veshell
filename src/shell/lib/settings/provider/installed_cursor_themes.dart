@@ -1,6 +1,7 @@
 import 'dart:isolate';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/settings/provider/util/cursor_theme_preview.dart';
 import 'package:shell/settings/provider/util/theme_detection.dart';
 
@@ -18,3 +19,9 @@ List<String> installedCursorThemeNames(Ref ref) =>
 @riverpod
 Future<CursorImage?> cursorThemePreview(Ref ref, String theme) =>
     Isolate.run(() => findCursorThemePreview(theme));
+
+/// The theme "System default" stands for: the session's cursor, else a
+/// polished installed theme the compositor settled on. Fixed for the session.
+@Riverpod(keepAlive: true)
+Future<String?> systemCursorThemeName(Ref ref) =>
+    ref.watch(platformManagerProvider.notifier).fetchSystemCursorTheme();

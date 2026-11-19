@@ -284,8 +284,70 @@ impl CursorStateInner {
 /// Size used when neither the setting nor the environment chooses one.
 pub const DEFAULT_CURSOR_SIZE: u32 = 24;
 
-/// The cursor theme and size the session asked for before Veshell applied its
-/// own setting (`XCURSOR_THEME`/`XCURSOR_SIZE`, else `default`/24).
+/// Themes tried, in order, when neither the session nor the `default` theme
+/// provides a usable arrow. Widely packaged, complete and current, so a session
+/// that never chose a cursor still gets one with every shape instead of the
+/// built-in arrow.
+const FALLBACK_CURSOR_THEMES: &[&str] = &[
+    "Adwaita",
+    "breeze_cursors",
+    "Bibata-Modern-Classic",
+    "Yaru",
+    "Vanilla-DMZ",
+    "DMZ-White",
+];
+
+/// The X11 core cursor themes (`xcursor-themes`), which some distributions
+/// install as `default`. They work, but date from another era.
+const DATED_CURSOR_THEMES: &[&str] = &["whiteglass", "redglass", "handhelds"];
+
+/// Names under which a theme ships its arrow: the freedesktop name, then the
+/// legacy X11 one.
+const ARROW_CURSOR_NAMES: &[&str] = &["default", "left_ptr"];
+
+/// The theme directory that provides the arrow of `theme`, following its
+/// `Inherits` chain, or `None` when it has none.
+fn arrow_provider(theme: &str) -> Option<String> {
+    let theme = CursorTheme::load(theme);
+    let path = ARROW_CURSOR_NAMES
+        .iter()
+        .find_map(|name| theme.load_icon(name))?;
+    // `<base>/<theme>/cursors/<name>`
+    let provider = path.parent()?.parent()?.file_name()?.to_str()?;
+    Some(provider.to_owned())
+}
+
+/// Whether `provider` (a theme directory providing the arrow) is one the
+/// system default may settle on.
+fn is_polished_provider(provider: &str) -> bool {
+    !DATED_CURSOR_THEMES.contains(&provider)
+}
+
+/// The session's theme when it provides an arrow (whatever it is: the user
+/// chose it), else the first of `default` and [`FALLBACK_CURSOR_THEMES`] whose
+/// arrow `provider_of` finds in a polished theme, else the session's theme or
+/// `default`, drawn with what exists (down to the built-in arrow).
+fn choose_system_cursor_theme(
+    session_theme: Option<&str>,
+    provider_of: impl Fn(&str) -> Option<String>,
+) -> String {
+    if let Some(theme) = session_theme {
+        if provider_of(theme).is_some() {
+            return theme.to_owned();
+        }
+    }
+    std::iter::once("default")
+        .chain(FALLBACK_CURSOR_THEMES.iter().copied())
+        .find(|theme| provider_of(theme).is_some_and(|p| is_polished_provider(&p)))
+        .or(session_theme)
+        .unwrap_or("default")
+        .to_owned()
+}
+
+/// The cursor theme and size "System default" stands for: what the session
+/// asked for before Veshell applied its own setting (`XCURSOR_THEME`/
+/// `XCURSOR_SIZE`), else the `default` theme, else a polished installed theme
+/// ([`FALLBACK_CURSOR_THEMES`]), and 24.
 ///
 /// Read once: applying the setting rewrites those variables, so later reads
 /// would only see Veshell's own value and clearing the setting could never go
@@ -293,10 +355,18 @@ pub const DEFAULT_CURSOR_SIZE: u32 = 24;
 fn session_cursor_defaults() -> &'static (String, u32) {
     static DEFAULTS: OnceLock<(String, u32)> = OnceLock::new();
     DEFAULTS.get_or_init(|| {
-        let name = env::var("XCURSOR_THEME")
+        let session_theme = env::var("XCURSOR_THEME")
             .ok()
-            .filter(|name| !name.is_empty())
-            .unwrap_or_else(|| "default".into());
+            .map(|name| name.trim().to_owned())
+            .filter(|name| !name.is_empty());
+        let name = choose_system_cursor_theme(session_theme.as_deref(), arrow_provider);
+        if session_theme.as_deref() != Some(name.as_str()) {
+            tracing::info!(
+                ?session_theme,
+                theme = name,
+                "System default cursor theme resolved"
+            );
+        }
         let size = env::var("XCURSOR_SIZE")
             .ok()
             .and_then(|s| s.parse().ok())
@@ -304,6 +374,19 @@ fn session_cursor_defaults() -> &'static (String, u32) {
             .unwrap_or(DEFAULT_CURSOR_SIZE);
         (name, size)
     })
+}
+
+/// The theme "System default" stands for, named for display: the theme that
+/// actually draws its arrow when it is the `default` alias (for example
+/// `Adwaita` rather than `default`).
+pub fn system_cursor_theme_label() -> String {
+    let (theme, _) = session_cursor_defaults();
+    if theme == "default" {
+        if let Some(provider) = arrow_provider(theme) {
+            return provider;
+        }
+    }
+    theme.clone()
 }
 
 /// The effective cursor theme name and nominal size for the `theme.cursorTheme`
@@ -591,6 +674,58 @@ mod tests {
         assert_eq!(
             resolve_cursor_config("", 0),
             session_cursor_defaults().clone()
+        );
+    }
+
+    /// A provider lookup over a fixed table of `theme -> arrow provider`.
+    fn providers<'a>(table: &'a [(&'a str, &'a str)]) -> impl Fn(&str) -> Option<String> + 'a {
+        move |theme| {
+            table
+                .iter()
+                .find(|(name, _)| *name == theme)
+                .map(|(_, provider)| (*provider).to_owned())
+        }
+    }
+
+    #[test]
+    fn system_cursor_keeps_an_installed_session_theme() {
+        let lookup = providers(&[("whiteglass", "whiteglass"), ("Adwaita", "Adwaita")]);
+        // Even a dated one: the session chose it.
+        assert_eq!(
+            choose_system_cursor_theme(Some("whiteglass"), &lookup),
+            "whiteglass"
+        );
+    }
+
+    #[test]
+    fn system_cursor_uses_a_polished_default() {
+        let lookup = providers(&[("default", "Bibata-Modern-Classic"), ("Adwaita", "Adwaita")]);
+        assert_eq!(choose_system_cursor_theme(None, &lookup), "default");
+        // A session theme that is not installed falls through too.
+        assert_eq!(
+            choose_system_cursor_theme(Some("Missing"), &lookup),
+            "default"
+        );
+    }
+
+    #[test]
+    fn system_cursor_skips_a_missing_or_dated_default() {
+        let dated = providers(&[
+            ("default", "whiteglass"),
+            ("breeze_cursors", "breeze_cursors"),
+        ]);
+        assert_eq!(choose_system_cursor_theme(None, &dated), "breeze_cursors");
+        let missing = providers(&[("Adwaita", "Adwaita"), ("Yaru", "Yaru")]);
+        assert_eq!(choose_system_cursor_theme(None, &missing), "Adwaita");
+    }
+
+    #[test]
+    fn system_cursor_without_any_theme_keeps_the_request() {
+        let nothing = providers(&[]);
+        assert_eq!(choose_system_cursor_theme(None, &nothing), "default");
+        assert_eq!(
+            choose_system_cursor_theme(Some("Missing"), &nothing),
+            "Missing"
         );
     }
 

@@ -160,6 +160,18 @@ class PlatformManager extends _$PlatformManager {
         if (group is Map) group.cast<String, dynamic>(),
     ];
   }
+
+  /// The cursor theme "System default" (an empty `theme.cursorTheme`) draws
+  /// with, or `null` when the compositor does not say.
+  Future<String?> fetchSystemCursorTheme() async {
+    const channel = MethodChannel('platform', JSONMethodCodec());
+    final response = await channel.invokeMapMethod<dynamic, dynamic>(
+      'get_system_cursor_theme',
+      const <String, dynamic>{},
+    );
+    final theme = response?['theme'];
+    return theme is String && theme.isNotEmpty ? theme : null;
+  }
 }
 
 /// base class for a wayland interaction
