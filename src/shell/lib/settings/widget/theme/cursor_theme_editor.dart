@@ -53,6 +53,7 @@ class CursorThemeEditor extends HookConsumerWidget
     }, [stored]);
 
     final themes = [...ref.watch(installedCursorThemeNamesProvider)];
+    final systemTheme = ref.watch(systemCursorThemeNameProvider).value;
     if (stored != systemCursorTheme && !themes.contains(stored)) {
       themes
         ..add(stored)
@@ -67,7 +68,9 @@ class CursorThemeEditor extends HookConsumerWidget
         DropdownMenuItem(
           value: systemCursorTheme,
           child: _CursorThemeLabel(
+            theme: systemTheme,
             label: context.l10n.cursorThemeSystemDefault,
+            detail: systemTheme,
           ),
         ),
         for (final theme in themes)
@@ -100,7 +103,13 @@ class CursorThemeValue extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final value = ref.watch(jsonValueByPathProvider(path));
     if (value is! String || value.trim().isEmpty) {
-      return Text(context.l10n.cursorThemeSystemDefault);
+      final systemTheme = ref.watch(systemCursorThemeNameProvider).value;
+      return _CursorThemeLabel(
+        theme: systemTheme,
+        label: context.l10n.cursorThemeSystemDefault,
+        detail: systemTheme,
+        compact: true,
+      );
     }
     return _CursorThemeLabel(theme: value, label: value, compact: true);
   }
@@ -182,17 +191,21 @@ class CursorSizeValue extends ConsumerWidget {
   }
 }
 
-/// A theme name led by that theme's arrow, or by an empty slot for the
-/// session default.
+/// A theme name led by that theme's arrow, or by an empty slot while the
+/// system default is unknown.
 class _CursorThemeLabel extends StatelessWidget {
   const _CursorThemeLabel({
     required this.label,
     this.theme,
+    this.detail,
     this.compact = false,
   });
 
   final String label;
   final String? theme;
+
+  /// Secondary text after [label]: the theme "System default" resolves to.
+  final String? detail;
 
   /// Size to the content instead of filling the dropdown row.
   final bool compact;
@@ -209,6 +222,16 @@ class _CursorThemeLabel extends StatelessWidget {
           child: theme == null ? null : CursorThemePreview(theme: theme),
         ),
         Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
+        if (detail case final detail?)
+          Flexible(
+            child: Text(
+              detail,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
       ],
     );
   }

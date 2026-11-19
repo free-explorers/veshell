@@ -16,6 +16,7 @@ mod get_keyboard_layouts;
 mod get_keyboard_options;
 mod get_monitor_layout;
 mod get_process_info;
+mod get_system_cursor_theme;
 mod lock_auth_respond;
 mod lock_screen_shown;
 mod lock_session;
@@ -50,6 +51,7 @@ use self::get_keyboard_layouts::get_keyboard_layouts;
 use self::get_keyboard_options::get_keyboard_options;
 use self::get_monitor_layout::get_monitor_layout;
 use self::get_process_info::get_process_info;
+use self::get_system_cursor_theme::get_system_cursor_theme;
 use self::meta_popup_patches::meta_popup_patches;
 use self::meta_window_patches::meta_window_patches;
 use self::mouse_buttons_event::mouse_buttons_event;
@@ -88,6 +90,7 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             "get_environment_variables" => get_environment_variables(method_call, result, data),
             "get_keyboard_layouts" => get_keyboard_layouts(method_call, result, data),
             "get_keyboard_options" => get_keyboard_options(method_call, result, data),
+            "get_system_cursor_theme" => get_system_cursor_theme(method_call, result, data),
             "get_process_info" => get_process_info(method_call, result, data),
             "meta_window_patches" => meta_window_patches(method_call, result, data),
             "meta_popup_patches" => meta_popup_patches(method_call, result, data),
