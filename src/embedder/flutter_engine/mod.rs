@@ -39,9 +39,9 @@ use smithay::{
 
 use crate::backend::Backend;
 use crate::flutter_engine::callbacks::{
-    gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage,
-    post_task_callback, runs_task_on_current_thread_callback, view_focus_change_request_callback,
-    vsync_callback,
+    gl_external_texture_frame_callback, gl_proc_resolver, platform_message_callback,
+    populate_existing_damage, post_task_callback, runs_task_on_current_thread_callback,
+    view_focus_change_request_callback, vsync_callback,
 };
 use crate::flutter_engine::embedder::{
     FlutterCompositor, FlutterCustomTaskRunners, FlutterEngineAOTData, FlutterEngineAOTDataSource,
@@ -213,12 +213,16 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let observatory_port = CString::new(format!("--vm-service-port={}", port))?;
         let disable_service_auth_codes = CString::new("--disable-service-auth-codes")?;
 
-        let command_line_argv = [
+        let enable_impeller = CString::new("--enable-impeller")?;
+        let mut command_line_argv = vec![
             executable_path.as_ptr(),
             observatory_host.as_ptr(),
             observatory_port.as_ptr(),
             disable_service_auth_codes.as_ptr(),
         ];
+        if std::env::var_os("VESHELL_ENABLE_IMPELLER").is_some() {
+            command_line_argv.push(enable_impeller.as_ptr());
+        }
 
         let elf_path = CString::new(format!("{lib_path}/libapp.so"))?;
         let mut aot_data: FlutterEngineAOTData = null_mut();
@@ -320,7 +324,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                             clear_current: Some(clear_current::<BackendData>),
                             make_resource_current: Some(make_resource_current::<BackendData>),
                             surface_transformation: Some(surface_transformation::<BackendData>),
-                            gl_proc_resolver: None,
+                            gl_proc_resolver: Some(gl_proc_resolver),
                             gl_external_texture_frame_callback: Some(
                                 gl_external_texture_frame_callback::<BackendData>,
                             ),

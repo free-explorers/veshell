@@ -12,7 +12,11 @@
 
 use core::ffi::{c_char, CStr};
 
+use std::collections::HashMap;
+
+use smithay::backend::allocator::Buffer;
 use smithay::backend::egl::EGLDisplay;
+use smithay::backend::renderer::Texture;
 use smithay::backend::{
     allocator::dmabuf::{Dmabuf, WeakDmabuf},
     egl::{
@@ -30,6 +34,9 @@ pub struct GlesFramebufferImporter {
 
     // caches
     buffers: Vec<GlesFramebuffer>,
+    /// The depth/stencil renderbuffer of each framebuffer made by
+    /// [`Self::import_texture`], released with it.
+    texture_depth_stencils: HashMap<ffi::types::GLuint, ffi::types::GLuint>,
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +44,7 @@ struct GlesFramebuffer {
     dmabuf: WeakDmabuf,
     image: EGLImage,
     rbo: ffi::types::GLuint,
+    depth_stencil: ffi::types::GLuint,
     fbo: ffi::types::GLuint,
 }
 
@@ -62,6 +70,7 @@ impl GlesFramebufferImporter {
             gl,
             egl_display,
             buffers: vec![],
+            texture_depth_stencils: HashMap::new(),
         })
     }
 
@@ -93,13 +102,17 @@ impl GlesFramebufferImporter {
                 texture.tex_id(),
                 0,
             );
+            let size = texture.size();
+            let depth_stencil = self.attach_depth_stencil(size.w, size.h);
             let status = self.gl.CheckFramebufferStatus(ffi::FRAMEBUFFER);
             self.gl.BindFramebuffer(ffi::FRAMEBUFFER, 0);
 
             if status != ffi::FRAMEBUFFER_COMPLETE {
                 self.gl.DeleteFramebuffers(1, &fbo as *const _);
+                self.gl.DeleteRenderbuffers(1, &depth_stencil as *const _);
                 return Err(GlesError::FramebufferBindingError);
             }
+            self.texture_depth_stencils.insert(fbo, depth_stencil);
 
             trace!(
                 texture_id = texture.tex_id(),
@@ -119,6 +132,9 @@ impl GlesFramebufferImporter {
         self.make_current(egl_context)?;
         unsafe {
             self.gl.DeleteFramebuffers(1, &fbo as *const _);
+            if let Some(depth_stencil) = self.texture_depth_stencils.remove(&fbo) {
+                self.gl.DeleteRenderbuffers(1, &depth_stencil as *const _);
+            }
         }
         Ok(())
     }
@@ -165,11 +181,14 @@ impl GlesFramebufferImporter {
                         ffi::RENDERBUFFER,
                         rbo,
                     );
+                    let depth_stencil =
+                        self.attach_depth_stencil(dmabuf.width() as i32, dmabuf.height() as i32);
                     let status = self.gl.CheckFramebufferStatus(ffi::FRAMEBUFFER);
                     self.gl.BindFramebuffer(ffi::FRAMEBUFFER, 0);
 
                     if status != ffi::FRAMEBUFFER_COMPLETE {
                         //TODO wrap image and drop here
+                        self.gl.DeleteRenderbuffers(1, &depth_stencil as *const _);
                         return Err(GlesError::FramebufferBindingError);
                     }
 
@@ -177,6 +196,7 @@ impl GlesFramebufferImporter {
                         dmabuf: dmabuf.weak(),
                         image,
                         rbo,
+                        depth_stencil,
                         fbo,
                     };
 
@@ -188,6 +208,29 @@ impl GlesFramebufferImporter {
 
         self.make_current(egl_context)?;
         Ok(fbo)
+    }
+
+    /// Attaches a depth/stencil renderbuffer of `width`x`height` to the
+    /// bound framebuffer and returns it.
+    ///
+    /// Impeller fills paths through the stencil buffer, and a framebuffer the
+    /// embedder hands it must come with its own: Impeller only describes the
+    /// attachment (a placeholder) and draws with what is bound. Without one,
+    /// every path fill covers its whole bounds.
+    unsafe fn attach_depth_stencil(&self, width: i32, height: i32) -> ffi::types::GLuint {
+        let mut depth_stencil = 0;
+        self.gl.GenRenderbuffers(1, &mut depth_stencil as *mut _);
+        self.gl.BindRenderbuffer(ffi::RENDERBUFFER, depth_stencil);
+        self.gl
+            .RenderbufferStorage(ffi::RENDERBUFFER, ffi::DEPTH24_STENCIL8, width, height);
+        self.gl.BindRenderbuffer(ffi::RENDERBUFFER, 0);
+        self.gl.FramebufferRenderbuffer(
+            ffi::FRAMEBUFFER,
+            ffi::DEPTH_STENCIL_ATTACHMENT,
+            ffi::RENDERBUFFER,
+            depth_stencil,
+        );
+        depth_stencil
     }
 
     pub fn make_current(&mut self, egl_context: &EGLContext) -> Result<(), MakeCurrentError> {
@@ -215,6 +258,8 @@ impl GlesFramebufferImporter {
         unsafe {
             self.gl.DeleteFramebuffers(1, &gles_buffer.fbo as *const _);
             self.gl.DeleteRenderbuffers(1, &gles_buffer.rbo as *const _);
+            self.gl
+                .DeleteRenderbuffers(1, &gles_buffer.depth_stencil as *const _);
             ffi_egl::DestroyImageKHR(**self.egl_display.get_display_handle(), gles_buffer.image);
         }
     }
@@ -224,6 +269,11 @@ impl Drop for GlesFramebufferImporter {
     fn drop(&mut self) {
         while let Some(buffer) = self.buffers.pop() {
             self.drop_buffer(buffer);
+        }
+        for (_, depth_stencil) in self.texture_depth_stencils.drain() {
+            unsafe {
+                self.gl.DeleteRenderbuffers(1, &depth_stencil as *const _);
+            }
         }
     }
 }

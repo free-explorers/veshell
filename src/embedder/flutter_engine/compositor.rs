@@ -229,7 +229,7 @@ where
                             target: 0x8058,
                             name,
                             user_data: std::ptr::null_mut(),
-                            destruction_callback: None,
+                            destruction_callback: Some(framebuffer_destruction_callback),
                         },
                     },
                 },
@@ -240,6 +240,13 @@ where
     }
     true
 }
+
+/// Called when the engine drops its wrapper of a backing store's framebuffer.
+///
+/// The framebuffer itself is released in [collect_backing_store_callback].
+/// The callback still has to exist: the Impeller render target calls it
+/// without checking for null, where Skia's path checks.
+unsafe extern "C" fn framebuffer_destruction_callback(_user_data: *mut c_void) {}
 
 pub unsafe extern "C" fn collect_backing_store_callback<BackendData>(
     renderer: *const FlutterBackingStore,

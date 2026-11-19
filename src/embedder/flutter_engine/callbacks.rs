@@ -27,6 +27,27 @@ where
     }
 }
 
+/// Resolves GL entry points through EGL.
+///
+/// Without a resolver the engine falls back to `dlsym` on the process, which
+/// only finds the symbols the GL library exports: extension entry points
+/// come back null. Skia resolves its own and never notices; Impeller builds
+/// its whole proc table from this resolver and calls what it gets.
+pub unsafe extern "C" fn gl_proc_resolver(
+    _user_data: *mut c_void,
+    name: *const std::ffi::c_char,
+) -> *mut c_void {
+    let Ok(name_str) = std::ffi::CStr::from_ptr(name).to_str() else {
+        return null_mut();
+    };
+    let proc = smithay::backend::egl::get_proc_address(name_str);
+    if !proc.is_null() {
+        return proc as *mut c_void;
+    }
+    // EGL before 1.5 need not resolve core entry points.
+    libc::dlsym(libc::RTLD_DEFAULT, name) as *mut c_void
+}
+
 pub unsafe extern "C" fn make_resource_current<BackendData>(user_data: *mut c_void) -> bool
 where
     BackendData: Backend + 'static,
