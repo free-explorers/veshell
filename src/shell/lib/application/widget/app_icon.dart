@@ -84,7 +84,8 @@ class AppIconByPath extends StatelessWidget {
     if (iconFile.path.endsWith('.svg')) {
       // Grid-fitted, so the icon stays crisp at fractional scales; it falls
       // back to flutter_svg (through the CSS-normalizing loader) for what the
-      // fitter cannot draw.
+      // fitter cannot draw. A symbolic icon (an application that only ships
+      // `-symbolic` ones) is tinted with the ambient `IconTheme` colour.
       return GridFitSvgIcon(file: iconFile, size: logicalSize);
     }
     // `cacheWidth` is in physical pixels; the decoded frame lives in Flutter's
