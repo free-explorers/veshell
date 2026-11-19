@@ -69,8 +69,7 @@ class ScreenWidget extends HookConsumerWidget {
         // The pointer entering a screen only records where the user is
         // looking (for what surfaces on its own); the keyboard moves on a
         // click. A press anywhere on the screen focuses it, panels and empty
-        // space included: the tile under it, if any, has already asked for
-        // focus, and the scope restores that request.
+        // space included.
         child: MouseRegion(
           onEnter: (event) {
             ref.read(pointerScreenProvider.notifier).set(screenId);
@@ -80,13 +79,22 @@ class ScreenWidget extends HookConsumerWidget {
               if (screenFocusScopeNode.hasFocus) {
                 return;
               }
+              // The focused screen is set as state, not only asked of
+              // Flutter's focus: a focus request alone can lose to a widget
+              // that takes focus during the same press (a text field on
+              // another screen unfocuses on a press outside it, handing focus
+              // to its own scope). The state opens this screen's workspace,
+              // whose selected tile then takes the keyboard.
+              ref
+                  .read(focusedScreenProvider.notifier)
+                  .setFocusedScreen(screenId);
               screenFocusScopeNode.requestFocus();
-              focusLog.info('screenFocusScopeNode.requestFocus on press');
+              focusLog.info('screen $screenId: requestFocus on press');
             },
             child: FocusScope(
               node: screenFocusScopeNode,
               onFocusChange: (value) {
-                focusLog.info('screenFocusScopeNode.onFocusChange: $value');
+                focusLog.info('screen $screenId: onFocusChange $value');
                 if (value) {
                   ref
                       .read(focusedScreenProvider.notifier)
