@@ -11,7 +11,8 @@ part 'pointer_screen.g.dart';
 /// The keyboard follows a click, not the pointer ([focusedScreenProvider]).
 /// What surfaces without being asked for (a new window, an unresolved
 /// notification, a system prompt) goes where the user is looking instead,
-/// which [placementScreenProvider] derives from this.
+/// which [placementScreenProvider] derives from this, and the shell's Super
+/// hotkeys act on this screen (see `VeshellShortcutManager`).
 @Riverpod(keepAlive: true)
 class PointerScreen extends _$PointerScreen {
   @override

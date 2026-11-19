@@ -2,8 +2,15 @@ import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:shell/screen/model/screen_manager_state.serializable.dart';
+import 'package:shell/screen/provider/focused_screen.dart';
+import 'package:shell/screen/provider/monitor_for_screen.dart';
+import 'package:shell/screen/provider/pointer_screen.dart';
+import 'package:shell/screen/provider/screen_manager.dart';
+import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/shared/mpris/model/mpris_manager_state.dart';
 import 'package:shell/shared/mpris/model/mpris_player.dart';
 import 'package:shell/shared/mpris/provider/mpris_manager.dart';
@@ -64,6 +71,52 @@ class _FakeTileGrab extends TileGrabController {
     intents.add(intent);
     return true;
   }
+}
+
+/// A screen for the hotkey tests: it takes the keyboard while it is the
+/// focused screen, as `ScreenWidget` does, and records the screen intents it
+/// receives.
+class _TestScreen extends HookConsumerWidget {
+  const _TestScreen(this.screenId, this.received);
+
+  final String screenId;
+  final List<String> received;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final node = useFocusNode(debugLabel: 'screen $screenId');
+    final isFocused = ref.watch(focusedScreenProvider) == screenId;
+    useEffect(() {
+      if (isFocused) {
+        node.requestFocus();
+      }
+      return null;
+    }, [isFocused]);
+    void record(String name) => received.add('$name@$screenId');
+    return CurrentScreenId(
+      screenId: screenId,
+      child: Actions(
+        actions: {
+          ToggleOverviewIntent: CallbackAction<ToggleOverviewIntent>(
+            onInvoke: (_) => record('overview'),
+          ),
+          NavigateIntent: CallbackAction<NavigateIntent>(
+            onInvoke: (_) => record('navigate'),
+          ),
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) => record('activate'),
+          ),
+        },
+        child: Focus(focusNode: node, child: const SizedBox(height: 10)),
+      ),
+    );
+  }
+}
+
+/// The screen holding the primary focus.
+String? _focusedTestScreen() {
+  final context = primaryFocus?.context;
+  return context == null ? null : CurrentScreenId.maybeOf(context);
 }
 
 void main() {
@@ -309,5 +362,90 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.mediaStop);
 
     expect(fake.calls, ['playPause', 'next', 'previous', 'stop']);
+  });
+
+  testWidgets('Super hotkeys act on the screen under the pointer', (
+    tester,
+  ) async {
+    final received = <String>[];
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          hotkeysActivatorProvider.overrideWithValue({
+            LogicalKeySet(
+              LogicalKeyboardKey.superKey,
+              LogicalKeyboardKey.arrowRight,
+            ): const NavigateIntent(
+              NavigationDirection.right,
+            ),
+            LogicalKeySet(LogicalKeyboardKey.enter): const ActivateIntent(),
+          }),
+          screenManagerProvider.overrideWithValue(
+            ScreenManagerState(screenIds: {'a', 'b'}.lock),
+          ),
+          // Two screens of one monitor: no compositor view to move.
+          monitorForScreenProvider('a').overrideWithValue(null),
+          monitorForScreenProvider('b').overrideWithValue(null),
+        ],
+        child: VeshellShortcutManager(
+          child: Column(
+            children: [_TestScreen('a', received), _TestScreen('b', received)],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(_focusedTestScreen(), 'a');
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(VeshellShortcutManager)),
+    );
+
+    void dispatchSuper({required bool down}) {
+      final event = down
+          ? const KeyDownEvent(
+              physicalKey: PhysicalKeyboardKey.metaLeft,
+              logicalKey: LogicalKeyboardKey.superKey,
+              timeStamp: Duration.zero,
+            )
+          : const KeyUpEvent(
+              physicalKey: PhysicalKeyboardKey.metaLeft,
+              logicalKey: LogicalKeyboardKey.superKey,
+              timeStamp: Duration.zero,
+            );
+      HardwareKeyboard.instance.handleKeyEvent(event);
+      ServicesBinding.instance.keyEventManager.keyMessageHandler!(
+        KeyMessage([event], null),
+      );
+    }
+
+    Future<void> pressSuper(LogicalKeyboardKey? key) async {
+      dispatchSuper(down: true);
+      if (key != null) {
+        await simulateKeyDownEvent(key);
+        await simulateKeyUpEvent(key);
+      }
+      dispatchSuper(down: false);
+      await tester.pumpAndSettle();
+    }
+
+    // The keyboard is on screen a, the pointer on screen b: plain keys stay
+    // with the focused widget.
+    container.read(pointerScreenProvider.notifier).set('b');
+    await simulateKeyDownEvent(LogicalKeyboardKey.enter);
+    await simulateKeyUpEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(received, ['activate@a']);
+    expect(_focusedTestScreen(), 'a');
+
+    // A Super chord acts on screen b, which takes the keyboard.
+    await pressSuper(LogicalKeyboardKey.arrowRight);
+    expect(received, ['activate@a', 'navigate@b']);
+    expect(_focusedTestScreen(), 'b');
+
+    // A Super tap opens the overview under the pointer, back on screen a.
+    container.read(pointerScreenProvider.notifier).set('a');
+    await pressSuper(null);
+    expect(received, ['activate@a', 'navigate@b', 'overview@a']);
+    expect(_focusedTestScreen(), 'a');
   });
 }
