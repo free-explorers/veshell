@@ -459,6 +459,11 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     /// its swapchain and in-flight slots) is only dropped once the engine
     /// reports the view as removed, as required by the embedder API.
     pub fn remove_view(&mut self, view_id: i64) {
+        // A removed view cannot be told it lost focus; forget it so the next
+        // focused view is not preceded by an event for a view that is gone.
+        if self.focused_view_id == Some(view_id) {
+            self.focused_view_id = None;
+        }
         let (tx_done, rx_done) = channel::channel::<(i64, bool)>();
 
         let remove_view_data = Box::new(RemoveViewData { tx_done, view_id });

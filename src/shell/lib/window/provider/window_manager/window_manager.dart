@@ -8,7 +8,7 @@ import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/meta_window/model/meta_window.serializable.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
-import 'package:shell/screen/provider/focused_screen.dart';
+import 'package:shell/screen/provider/pointer_screen.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
@@ -175,7 +175,8 @@ class WindowManager extends _$WindowManager {
 
     state = state.copyWith(windows: state.windows.add(windowId));
 
-    final focusedScreenId = ref.read(focusedScreenProvider);
+    // A window nobody placed opens where the user is looking.
+    final focusedScreenId = ref.read(placementScreenProvider);
     final screenIds = ref.read(screenManagerProvider).screenIds;
     final targetScreenId =
         focusedScreenId ?? (screenIds.isEmpty ? null : screenIds.first);

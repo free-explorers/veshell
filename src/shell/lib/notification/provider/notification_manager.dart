@@ -27,7 +27,7 @@ import 'package:shell/notification/provider/notification_channel.dart';
 import 'package:shell/notification/provider/notification_routing.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
-import 'package:shell/screen/provider/focused_screen.dart';
+import 'package:shell/screen/provider/pointer_screen.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/window/provider/window_navigation.dart';
@@ -387,7 +387,7 @@ class NotificationManager extends _$NotificationManager {
       TileNotificationTarget(:final windowId) => windowNotificationChannel(
         windowId,
       ),
-      UnresolvedNotificationTarget() => ref.read(focusedScreenProvider),
+      UnresolvedNotificationTarget() => ref.read(placementScreenProvider),
     };
   }
 

@@ -147,10 +147,10 @@ class _VeshellState extends ConsumerState<Veshell> with WidgetsBindingObserver {
     setState(() {});
   }
 
-  /// The compositor is the single source of truth for which monitor is
-  /// focused. Platform view focus follows the pointer (and keyboard view
-  /// transitions); record it so `focusedScreenProvider` and monitor placement
-  /// derive from it.
+  /// The compositor is the single source of truth for which monitor holds the
+  /// keyboard. Platform view focus follows clicks (and keyboard view
+  /// transitions), not pointer motion; record it so `focusedScreenProvider`
+  /// derives from it.
   @override
   void didChangeViewFocus(ViewFocusEvent event) {
     if (event.state != ViewFocusState.focused) {

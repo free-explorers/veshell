@@ -7,7 +7,7 @@ import 'package:shell/notification/model/system_notification_category.dart';
 import 'package:shell/notification/provider/notification_channel.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
-import 'package:shell/screen/provider/focused_screen.dart';
+import 'package:shell/screen/provider/pointer_screen.dart';
 
 part 'system_notification_manager.g.dart';
 
@@ -112,7 +112,7 @@ class SystemNotificationManager extends _$SystemNotificationManager {
     required int value,
     required Duration? timeout,
   }) {
-    final screenId = ref.read(focusedScreenProvider);
+    final screenId = ref.read(placementScreenProvider);
     if (screenId == null) {
       return;
     }

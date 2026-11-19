@@ -10,6 +10,7 @@ import 'package:shell/workspace/model/launch_morph_request.dart';
 import 'package:shell/workspace/provider/launch_morphs.dart';
 import 'package:shell/workspace/widget/tileable/persistent_application_launcher/app_drawer/app_drawer.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
+import 'package:shell/workspace/widget/workspace_focusable.dart';
 
 /// The [Tileable] that launches applications as persistent window tiles (see
 /// `docs/specifications/persistent_application_launcher.md`).
@@ -70,13 +71,16 @@ class PersistentApplicationLauncher extends Tileable {
     // `canRequestFocus && ...`, so writing that value back onto the node
     // latches it to false the first time the tile is deselected and the search
     // field becomes unreachable (see `WorkspaceWidget`).
+    // Re-take the keyboard as well when the workspace may hold it again (its
+    // monitor or screen got the keyboard back): see `WorkspaceFocusable`.
+    final workspaceCanFocus = WorkspaceFocusable.of(context);
     useEffect(() {
-      if (isSelected) {
+      if (isSelected && workspaceCanFocus) {
         focusNode.requestFocus();
         focusLog.info('PersistentApplicationLauncher requesting focus');
       }
       return null;
-    }, [isSelected]);
+    }, [isSelected, workspaceCanFocus]);
 
     return FocusScope(
       node: focusNode,

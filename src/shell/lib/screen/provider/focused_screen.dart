@@ -11,20 +11,22 @@ import 'package:shell/screen/provider/screen_manager.dart';
 
 part 'focused_screen.g.dart';
 
-/// Provide the current Focused screen, or `null` while no screen exists.
+/// Provide the screen that holds the keyboard, or `null` while no screen
+/// exists.
 ///
-/// The compositor is the source of truth for which monitor is focused
-/// ([platformFocusedViewIdProvider]); this provider mirrors it onto a screen.
-/// Within the focused monitor, pointer entry can still pick a specific screen,
-/// and `setFocusedScreen` records that choice.
+/// The compositor is the source of truth for which monitor holds the keyboard
+/// ([platformFocusedViewIdProvider]): it moves on a click, never on pointer
+/// motion alone. This provider mirrors it onto a screen. Within that monitor, a
+/// click on a specific screen picks it, and `setFocusedScreen` records that
+/// choice. Where things that surface on their own appear follows the pointer
+/// instead (`placementScreenProvider`).
 ///
 /// Startup is deterministic: while the platform-focused monitor is not yet
 /// known, the first connected monitor (the compositor's first output) is used;
-/// once known, the monitor's primary screen wins until pointer entry refines
-/// it.
+/// once known, the monitor's primary screen wins until a click refines it.
 @Riverpod(keepAlive: true)
 class FocusedScreen extends _$FocusedScreen {
-  /// The screen the user explicitly focused via pointer entry, if any.
+  /// The screen the user explicitly focused by clicking it, if any.
   ///
   /// This is tracked separately from [state] because [build] assigns a startup
   /// default; the current state alone cannot distinguish a manual choice from
@@ -49,7 +51,7 @@ class FocusedScreen extends _$FocusedScreen {
     final manual = _manualScreen;
     if (manual != null && screenIds.contains(manual)) {
       // Keep a specific screen chosen within the focused monitor (for example
-      // by pointer entry); a change of focused monitor overrides it below.
+      // by a click); a change of focused monitor overrides it below.
       if (focusedMonitor == null ||
           ref.watch(monitorForScreenProvider(manual)) == focusedMonitor) {
         return manual;
@@ -109,7 +111,7 @@ class FocusedScreen extends _$FocusedScreen {
 /// focus would make the engine report that view back as focused and pin the
 /// wrong monitor at startup. Once the layout is known, [focusedScreenProvider]
 /// picks the first connected monitor (the compositor's first output) and
-/// follows pointer entry from there.
+/// follows clicks from there.
 @riverpod
 ScreenId? platformFocusedScreen(Ref ref) {
   if (ref.watch(platformFocusedViewIdProvider) == null &&

@@ -38,6 +38,7 @@ import 'package:shell/workspace/provider/launch_morphs.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/current_workspace_id.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
+import 'package:shell/workspace/widget/workspace_focusable.dart';
 
 /// Tileable Window that persist when closed
 class PersistentWindowTileable extends Tileable {
@@ -69,15 +70,14 @@ class PersistentWindowTileable extends Tileable {
       debugLabel: 'FloatingFocusNode ${window.properties.title}',
     );
 
-    useEffect(() {
-      persistentFocusNode
-        ..canRequestFocus = isSelected
-        ..descendantsAreFocusable = isSelected;
+    // Whether this tile's workspace may hold the keyboard: when it turns true
+    // again (its monitor or screen got the keyboard back), the selected tile
+    // re-takes it.
+    final workspaceCanFocus = WorkspaceFocusable.of(context);
 
-      if (!isSelected) {
-        return null;
-      }
-
+    // Hands the keyboard to the selected tile: to the node inside it that last
+    // had focus (a dialog, the window), or to the tile itself.
+    void focusTile() {
       if (window.displayMode == DisplayMode.game) {
         // The gaming overlay never builds the tile's `primaryFocusNode`, so
         // that node goes defunct when the mode switches to `game` and Flutter
@@ -88,7 +88,7 @@ class PersistentWindowTileable extends Tileable {
         // child (`requestFocus` would reparent and refocus it), so navigation
         // keeps working while the game tile is shown.
         persistentFocusNode.requestScopeFocus();
-        return null;
+        return;
       }
 
       if (persistentFocusNode.focusedChild != null) {
@@ -96,8 +96,18 @@ class PersistentWindowTileable extends Tileable {
       } else {
         persistentFocusNode.requestFocus();
       }
+    }
+
+    useEffect(() {
+      persistentFocusNode
+        ..canRequestFocus = isSelected
+        ..descendantsAreFocusable = isSelected;
+
+      if (isSelected && workspaceCanFocus) {
+        focusTile();
+      }
       return null;
-    }, [isSelected, window.displayMode]);
+    }, [isSelected, workspaceCanFocus, window.displayMode]);
 
     final metaWindowId = window.metaWindowId;
     // A maximized client can resize after it is first shown (the initial
@@ -272,16 +282,29 @@ class PersistentWindowTileable extends Tileable {
                             workspaceStateProvider(currentWorkspaceId).notifier,
                           )
                           .selectWindow(windowId);
+                      // A press on the tile that is already selected changes
+                      // no selection, so the effect above does not run; the
+                      // compositor hands the window the keyboard on the press,
+                      // and the shell's focus must follow, or keys a client
+                      // expects (Tab, arrows) move the shell's focus instead.
+                      // Requests made by widgets under the press come first
+                      // and are kept: they are the scope's focused child.
+                      if (isSelected &&
+                          workspaceCanFocus &&
+                          !persistentFocusNode.hasFocus) {
+                        focusTile();
+                      }
                     },
                     child: FocusScope(
                       node: persistentFocusNode,
                       autofocus: true,
                       onFocusChange: (value) {
                         // In game mode the overlay never builds
-                        // `primaryFocusNode`, so it is detached. Re-autofocusing
-                        // it here would reparent it and make the defunct node
-                        // the primary focus again, which breaks the shell's
-                        // hotkeys while the pause overlay shows.
+                        // `primaryFocusNode`, so it is detached.
+                        // Re-autofocusing it here would reparent it and make
+                        // the defunct node the primary focus again, which
+                        // breaks the shell's hotkeys while the pause overlay
+                        // shows.
                         if (value && window.displayMode != DisplayMode.game) {
                           persistentFocusNode.autofocus(
                             window.displayMode == DisplayMode.floating
@@ -294,8 +317,8 @@ class PersistentWindowTileable extends Tileable {
                       // file chooser: it presents them as a tabbed panel over a
                       // blurred tile and keeps the selection. Native dialogs
                       // stay out of the area in game mode (the overlay must not
-                      // be covered). Floating tiles bypass it entirely and float
-                      // every native child instead.
+                      // be covered). Floating tiles bypass it entirely and
+                      // float every native child instead.
                       child: RepaintBoundary(key: frameKey, child: area),
                     ),
                   ),

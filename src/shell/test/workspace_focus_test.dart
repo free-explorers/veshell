@@ -9,6 +9,7 @@ import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/provider/monitor_by_view_id.dart';
 import 'package:shell/monitor/provider/platform_focused_view.dart';
+import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/screen/model/screen_manager_state.serializable.dart';
 import 'package:shell/screen/provider/screen_for_view.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
@@ -323,5 +324,128 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_focusedWorkspaceId(), workspaceB);
+  });
+
+  testWidgets('the selected tile takes the keyboard back with its monitor', (
+    tester,
+  ) async {
+    const screenA = 'screen-a';
+    const screenB = 'screen-b';
+    const workspaceA = 'ws-a';
+    const workspaceB = 'ws-b';
+
+    final container = ProviderContainer(
+      overrides: [
+        screenManagerProvider.overrideWithValue(
+          ScreenManagerState(screenIds: {screenA, screenB}.lock),
+        ),
+        connectedMonitorListProvider.overrideWithValue([
+          _monitor('DP-1', viewId: 7),
+          _monitor('HDMI-1', viewId: 8),
+        ]),
+        windowManagerProvider.overrideWith(_FakeWindowManager.new),
+        focusIndicatorSettingProvider.overrideWithValue(FocusIndicator.border),
+        statusBarSettingsProvider.overrideWithValue(statusBarSettingsFallback),
+        workspaceStateProvider(
+          workspaceA,
+        ).overrideWith(_FakeWorkspaceState.new),
+        workspaceStateProvider(
+          workspaceB,
+        ).overrideWith(_FakeWorkspaceState.new),
+        appDrawerFilteredDesktopEntriesProvider(
+          '',
+        ).overrideWith((ref) => const AsyncData(<LocalizedDesktopEntry>[])),
+        monitorByViewIdProvider(7).overrideWithValue('DP-1'),
+        screenForViewProvider(7).overrideWithValue(screenA),
+        monitorByViewIdProvider(8).overrideWithValue('HDMI-1'),
+        screenForViewProvider(8).overrideWithValue(screenB),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.read(platformFocusedViewIdProvider.notifier).set(7);
+
+    // Each screen sits in a scope of its own, as `ScreenWidget` does.
+    final screenScopeA = FocusScopeNode(debugLabel: 'screen A');
+    final screenScopeB = FocusScopeNode(debugLabel: 'screen B');
+    addTearDown(screenScopeA.dispose);
+    addTearDown(screenScopeB.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Material(
+            child: Column(
+              children: [
+                Expanded(
+                  child: CurrentScreenId(
+                    screenId: screenA,
+                    child: FocusScope(
+                      node: screenScopeA,
+                      child: const WorkspaceWidget(
+                        workspaceId: workspaceA,
+                        isSelected: true,
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: CurrentScreenId(
+                    screenId: screenB,
+                    child: FocusScope(
+                      node: screenScopeB,
+                      child: const WorkspaceWidget(
+                        workspaceId: workspaceB,
+                        isSelected: true,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(_focusedWorkspaceId(), workspaceA);
+    expect(_focusIsInSearchField(), isTrue);
+
+    // A click on the other monitor hands it the keyboard: the engine parks
+    // focus on the root, the newly focused view restores its scope, then
+    // the shell learns which monitor is focused.
+    void moveKeyboardTo(int viewId, FocusScopeNode screenScope) {
+      FocusManager.instance.rootScope.requestScopeFocus();
+      screenScope.requestFocus();
+      container.read(platformFocusedViewIdProvider.notifier).set(viewId);
+    }
+
+    moveKeyboardTo(8, screenScopeB);
+    await tester.pumpAndSettle();
+    expect(_focusedWorkspaceId(), workspaceB);
+    expect(_focusIsInSearchField(), isTrue);
+
+    // Back on the first monitor, the keyboard must reach its selected tile
+    // again, not stop at the workspace: there the keys a tile expects (Tab,
+    // arrows, Space, Enter) would drive the shell's focus instead.
+    moveKeyboardTo(7, screenScopeA);
+    await tester.pumpAndSettle();
+    expect(_focusedWorkspaceId(), workspaceA);
+    expect(_focusIsInSearchField(), isTrue);
+
+    // The overview takes the keyboard while it is shown (the screen's own
+    // scope stands in for it); hiding it hands the keyboard back to the
+    // selected tile, not just to the workspace.
+    container.read(overviewStateProvider(screenA).notifier).toggle();
+    screenScopeA.requestScopeFocus();
+    await tester.pumpAndSettle();
+    expect(_focusIsInSearchField(), isFalse);
+
+    container.read(overviewStateProvider(screenA).notifier).hide();
+    await tester.pumpAndSettle();
+    expect(_focusedWorkspaceId(), workspaceA);
+    expect(_focusIsInSearchField(), isTrue);
   });
 }
