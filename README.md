@@ -10,7 +10,7 @@ It provides an [innovative workflow](#the-innovative-workflow) that utilizes hum
 
 # Support the project
 This project is under the umbrella of the [Free Explorers Collective](https://free-explorers.com), a community of Open Source enthusiast that funds and collaborate on Open Source software. 
-By becoming a Free Explorer you can get involve into the project and support it.
+By becoming a Free Explorer you can get involved in the project and support it.
 
 # Installation
 
@@ -112,9 +112,9 @@ prebuilt releases live in
 
 # The innovative workflow
 
-The workflow is designed to synergize with your spatial awareness in order to provide a most intuitive and ergonomic navigation and organization in the digital environment.
+The workflow is designed to synergize with your spatial awareness in order to provide a more intuitive and ergonomic navigation and organization in the digital environment.
 
-Organize all your applications in a two-dimensional space where you can group them by use-cases, categories or or any other criteria that makes sense to you.
+Organize all your applications in a two-dimensional space where you can group them by use-cases, categories or any other criteria that makes sense to you.
 
 <br/>
 <p align="center" valign="middle">
