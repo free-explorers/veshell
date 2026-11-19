@@ -1,4 +1,5 @@
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -190,7 +191,15 @@ void main() {
                   },
                 ),
               },
-              child: const Focus(autofocus: true, child: SizedBox()),
+              // In the shell every tile slot watches the grab, which keeps
+              // it alive for the manager's reads.
+              child: Consumer(
+                builder: (context, ref, child) {
+                  ref.watch(tileGrabControllerProvider);
+                  return child!;
+                },
+                child: const Focus(autofocus: true, child: SizedBox()),
+              ),
             ),
           ),
         ),
@@ -220,12 +229,19 @@ void main() {
       timeStamp: Duration.zero,
     );
 
-    testWidgets('the grabbing Super release neither opens the overview nor '
-        'reaches the client', (tester) async {
+    testWidgets('the Super release after a pointer press neither opens the '
+        'overview nor reaches the client', (tester) async {
       await pumpManager(tester);
       dispatch(superDown);
+      final gesture = await tester.startGesture(
+        const Offset(10, 10),
+        kind: PointerDeviceKind.mouse,
+      );
       grab.hold();
       await tester.pump();
+      // The tile settles after the button is released, so the grab can end
+      // before or after Super: neither order may toggle the overview.
+      await gesture.up();
       grab.release();
       await tester.pump();
       expect(dispatch(superUp), isTrue);
