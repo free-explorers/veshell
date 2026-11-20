@@ -49,7 +49,8 @@ STAGING_DIR ?= build/package-root
 
 quote = '$(subst ','"'"',$(1))'
 
-.PHONY: all build check-config service package install install-local stage deb rpm uninstall clean
+.PHONY: all build check-config service package install install-local stage deb rpm uninstall clean \
+	run-tty
 
 all: build
 
@@ -150,6 +151,24 @@ uninstall:
 	rmdir --ignore-fail-on-non-empty $(call quote,$(DESTDIR)$(LIBDIR))
 	rm -rf $(call quote,$(DESTDIR)$(SHAREDIR)/data) $(call quote,$(DESTDIR)$(SHAREDIR)/settings)
 	rmdir --ignore-fail-on-non-empty $(call quote,$(DESTDIR)$(SHAREDIR))
+
+# The build being tried on real hardware, from a text console: `make run-tty`.
+# The invocation never changes; the recipe below is edited to change what is
+# tried (engine variant, renderer, log filter). Each run writes a fresh
+# ~/veshell.log and keeps the run before it as ~/veshell.previous.log; follow
+# it with tail -F from another console. This is not an installed session:
+# no systemd units, no PAM service.
+TTY_ENGINE = $(abspath $(CURDIR)/..)/veshell-engine/flutter/engine/src/out/host_debug
+
+run-tty:
+	extra/engine/engine.sh build debug
+	env -u VESHELL_ENGINE_DIR VESHELL_LOCAL_ENGINE=$(call quote,$(TTY_ENGINE)) \
+		CARGO_TARGET_DIR=$(call quote,$(CARGO_TARGET_DIR)) cargo build
+	@if [ -f ~/veshell.log ]; then mv -f ~/veshell.log ~/veshell.previous.log; fi
+	@printf '==== %s %s\n' "$$(date -Is)" "$$(git rev-parse --short HEAD)" > ~/veshell.log
+	@echo 'Logging to ~/veshell.log (the previous run is in ~/veshell.previous.log)'
+	VESHELL_BACKEND=drm RUST_LOG=info \
+		$(call quote,$(CARGO_TARGET_DIR))/debug/veshell >> ~/veshell.log 2>&1
 
 clean:
 	cargo clean

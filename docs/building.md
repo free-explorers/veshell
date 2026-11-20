@@ -65,6 +65,12 @@ prebuilt shell: the SDK builds the shell from the same revision. The variant
 must match the Flutter mode, so a `cargo run --release` needs a `release`
 engine build.
 
+To try the current work on real hardware, run `make run-tty` from a text
+console: it rebuilds the local engine and Veshell, then starts the DRM backend
+with its output in `~/veshell.log` (the run before it is kept as
+`~/veshell.previous.log`). The command stays the same; what it tries (engine
+variant, `RUST_LOG`) is edited in its recipe.
+
 ## Offline packaging
 
 Fetch/vendor dependencies and build the shell separately before compiling Rust.
