@@ -31,7 +31,13 @@ pub fn link_flutter_engine_shared_library(
         let engine_dir =
             env::var("VESHELL_ENGINE_DIR").unwrap_or_else(|_| FLUTTER_ENGINE_LIBS_DIR.to_owned());
         if env::var_os("VESHELL_ENGINE_DIR").is_none() {
-            let flutter_engine_revision = get_flutter_engine_revision()?;
+            // The engine is upstream's at the SDK's revision with Veshell's
+            // patches: both name the artifact.
+            let flutter_engine_revision = format!(
+                "{}-{}",
+                get_flutter_engine_revision()?,
+                get_flutter_engine_patchset()?
+            );
             if should_download_flutter_engine_library(
                 &flutter_engine_revision,
                 flutter_engine_build,
@@ -97,6 +103,27 @@ fn local_engine(
         out_dir.display()
     );
     Ok(Some(out_dir))
+}
+
+/// The engine patches the application is pinned to (`Cargo.toml`
+/// `flutter_engine_patchset`).
+fn get_flutter_engine_patchset() -> Result<String, Box<dyn std::error::Error>> {
+    let manifest_path = env::var("CARGO_MANIFEST_PATH").unwrap_or_else(|_| {
+        format!("{}/Cargo.toml", env::var("CARGO_MANIFEST_DIR").unwrap())
+    });
+    let metadata = cargo_metadata::MetadataCommand::new()
+        .manifest_path(manifest_path)
+        .no_deps()
+        .other_options(vec!["--offline".to_owned()])
+        .exec()?;
+    let patchset = metadata
+        .root_package()
+        .and_then(|package| package.metadata["flutter_engine_patchset"].as_str())
+        .ok_or("Cargo.toml has no package.metadata.flutter_engine_patchset")?;
+    if patchset.is_empty() {
+        return Err("Cargo.toml's flutter_engine_patchset is empty".into());
+    }
+    Ok(patchset.to_owned())
 }
 
 fn get_flutter_engine_revision() -> Result<String, Box<dyn std::error::Error>> {

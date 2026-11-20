@@ -11,6 +11,10 @@ default-run = "veshell"
 
 [package.metadata]
 flutter_version = "3.50.1"
+# The patches applied to the engine at that version, as named by the
+# free-explorers/flutter-engine releases (its PATCHSET); see
+# docs/building.md.
+flutter_engine_patchset = "veshell.1"
 
 [[bin]]
 name = "veshell"
