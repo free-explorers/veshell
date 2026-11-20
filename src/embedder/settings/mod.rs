@@ -805,9 +805,9 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         let config_folder_path = std::env::var("VESHELL_CONFIG_DIR")
             .or_else(|_| {
                 std::env::var("XDG_CONFIG_HOME")
-                    .map(|xdg_config_home| format!("{}/veshell/", xdg_config_home))
+                    .map(|xdg_config_home| format!("{}/veshell", xdg_config_home))
                     .or_else(|_| {
-                        std::env::var("HOME").map(|home| format!("{}/.config/veshell/", home))
+                        std::env::var("HOME").map(|home| format!("{}/.config/veshell", home))
                     })
             })
             .unwrap();
@@ -820,9 +820,9 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         let cache_folder_path = std::env::var("VESHELL_CACHE_DIR")
             .or_else(|_| {
                 std::env::var("XDG_CACHE_HOME")
-                    .map(|xdg_cache_home| format!("{}/veshell/", xdg_cache_home))
+                    .map(|xdg_cache_home| format!("{}/veshell", xdg_cache_home))
                     .or_else(|_| {
-                        std::env::var("HOME").map(|home| format!("{}/.cache/veshell/", home))
+                        std::env::var("HOME").map(|home| format!("{}/.cache/veshell", home))
                     })
             })
             .unwrap();

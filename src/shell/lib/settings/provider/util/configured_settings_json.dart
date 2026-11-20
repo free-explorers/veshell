@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/settings/provider/util/config_directory.dart';
+import 'package:shell/settings/provider/util/file_creation_watch.dart';
 
 part 'configured_settings_json.g.dart';
 
@@ -27,15 +28,10 @@ class ConfiguredSettingsJson extends _$ConfiguredSettingsJson {
     _subscription?.cancel();
 
     if (!configuredSettingsFile.existsSync()) {
-      _subscription = configDirectory
-          .watch(events: FileSystemEvent.move)
-          .listen((event) {
-            if (event is FileSystemMoveEvent) {
-              if (event.destination == configuredSettingsFile.path) {
-                ref.invalidateSelf();
-              }
-            }
-          });
+      _subscription = watchFileCreation(
+        configuredSettingsFile,
+        ref.invalidateSelf,
+      );
       return {};
     }
     _subscription = configuredSettingsFile.watch().listen((event) {
