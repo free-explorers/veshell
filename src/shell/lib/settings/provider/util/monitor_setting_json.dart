@@ -6,6 +6,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/monitor/provider/monitor_by_name.dart';
 import 'package:shell/settings/model/types/monitor_setting.serializable.dart';
 import 'package:shell/settings/provider/util/config_directory.dart';
+import 'package:shell/settings/provider/util/file_creation_watch.dart';
 
 part 'monitor_setting_json.g.dart';
 
@@ -28,15 +29,7 @@ class MonitorSettingJson extends _$MonitorSettingJson {
 
     // check if a file is present in the config directory
     if (!file.existsSync()) {
-      _subscription = configDirectory
-          .watch(events: FileSystemEvent.move)
-          .listen((event) {
-            if (event is FileSystemMoveEvent) {
-              if (event.destination == file.path) {
-                ref.invalidateSelf();
-              }
-            }
-          });
+      _subscription = watchFileCreation(file, ref.invalidateSelf);
       return getInitialConfiguration();
     }
     _subscription = file.watch().listen((event) {

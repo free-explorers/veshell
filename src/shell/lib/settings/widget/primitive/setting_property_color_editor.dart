@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/widget/search/settings/setting_value_editor.dart';
 import 'package:shell/settings/model/setting_property.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
+import 'package:shell/settings/provider/state/theme_color_setting.dart';
 import 'package:shell/settings/provider/util/json_value_by_path.dart';
 
 class SettingPropertyColorEditor extends HookConsumerWidget
@@ -23,7 +24,7 @@ class SettingPropertyColorEditor extends HookConsumerWidget
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final val = ref.watch(jsonValueByPathProvider(path));
-    final initialValue = property.castValue(val ?? '');
+    final initialValue = property.tryCastValue(val) ?? themeColorFallback;
     final updatedBy = useState<String?>(null);
 
     void updateValue(Color newValue) {

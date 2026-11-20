@@ -3,6 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/settings/model/setting_definition.dart';
+import 'package:shell/settings/provider/state/theme_color_setting.dart';
 import 'package:shell/settings/widget/expandable_search_result.dart';
 import 'package:shell/settings/widget/keyboard/setting_property_hotkeys_editor.dart';
 import 'package:shell/settings/widget/primitive/setting_property_bool_editor.dart';
@@ -98,7 +99,9 @@ Widget defaultBuildSearchResult<T>(
       path: path,
       property: property,
       buildValue: (context, value, {required isExpanded}) => ColorIndicator(
-        color: (property as SettingProperty<Color>).castValue(value),
+        color:
+            (property as SettingProperty<Color>).tryCastValue(value) ??
+            themeColorFallback,
       ),
       buildEditor: (context, {required isExpanded}) =>
           SettingPropertyColorEditor(
