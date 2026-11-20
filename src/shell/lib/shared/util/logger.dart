@@ -19,6 +19,7 @@ final fileExplorerLog = logging.Logger('FileExplorer');
 final monitoringLog = logging.Logger('Monitoring');
 final flutterLog = logging.Logger('Flutter');
 final iconLog = logging.Logger('Icon');
+final settingsLog = logging.Logger('Settings');
 
 final _simpleLogger = Logger(
   printer: HybridPrinter(
