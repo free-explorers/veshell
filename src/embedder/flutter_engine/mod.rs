@@ -19,7 +19,7 @@ use std::rc::Rc;
 use std::time::Duration;
 use trackpad_scrolling_manager::TrackpadScrollingManager;
 
-use smithay::backend::renderer::gles::ffi::RGBA8;
+use smithay::backend::renderer::Texture;
 use smithay::output::Output;
 use smithay::reexports::calloop;
 use smithay::reexports::calloop::channel::Event::Msg;
@@ -142,7 +142,8 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             channel::channel::<Duration>();
         let (tx_request_external_texture_name, rx_request_external_texture_name) =
             channel::channel::<i64>();
-        let (tx_external_texture_name, rx_external_texture_name) = channel::channel::<(u32, u32)>();
+        let (tx_external_texture_name, rx_external_texture_name) =
+            channel::channel::<ExternalTexture>();
 
         let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) =
             channel::channel::<(VeshellKeyEvent, bool, bool)>();
@@ -493,14 +494,19 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     .insert_source(rx_request_external_texture_name, move |event, _, data| {
                         if let Msg(texture_id) = event {
                             let texture_swap_chain = data.texture_swapchains.get_mut(&texture_id);
-                            let texture_id = match texture_swap_chain {
+                            let external_texture = match texture_swap_chain {
                                 Some(texture) => {
                                     let texture = texture.start_read();
-                                    texture.tex_id()
+                                    let size = texture.size();
+                                    ExternalTexture {
+                                        name: texture.tex_id(),
+                                        width: size.w.max(0) as usize,
+                                        height: size.h.max(0) as usize,
+                                    }
                                 }
-                                None => 0,
+                                None => ExternalTexture::default(),
                             };
-                            let _ = tx_external_texture_name.send((texture_id, RGBA8));
+                            let _ = tx_external_texture_name.send(external_texture);
                         }
                     })
                     .unwrap();
@@ -887,8 +893,21 @@ impl RendererData {
 pub struct FlutterEngineChannels {
     tx_baton: channel::Sender<Baton>,
     tx_request_external_texture_name: channel::Sender<i64>,
-    rx_external_texture_name: channel::Channel<(u32, u32)>,
+    rx_external_texture_name: channel::Channel<ExternalTexture>,
     tx_flutter_handled_key_event: channel::Sender<(VeshellKeyEvent, bool, bool)>,
+}
+
+/// The GL texture currently holding a client surface, as handed to the engine.
+///
+/// The size has to be the texture's own: Skia falls back to the size it asks
+/// for when the embedder leaves it at zero, but Impeller wraps the texture
+/// with exactly the size given and rejects an empty one.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ExternalTexture {
+    /// The GL texture name; 0 when the surface has no texture.
+    pub name: u32,
+    pub width: usize,
+    pub height: usize,
 }
 
 pub struct EmbedderChannels {

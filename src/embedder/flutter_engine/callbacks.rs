@@ -226,29 +226,29 @@ where
     let flutter_engine = &mut *(user_data as *mut FlutterEngine<BackendData>);
     let channels: &mut super::FlutterEngineChannels = &mut flutter_engine.renderer_data.channels;
 
-    let (texture_name, _) = channels
+    let external_texture = channels
         .tx_request_external_texture_name
         .send(texture_id)
         .ok()
         .and_then(|()| channels.rx_external_texture_name.recv().ok())
-        .unwrap_or((0, ffi::RGBA8));
+        .unwrap_or_default();
 
     let texture_out = &mut *texture_out;
 
     // TODO: Don't hardcode the target.
     // If the texture is imported from a DMABUF, I think it the target should be GL_TEXTURE_EXTERNAL_OES.
     texture_out.target = ffi::TEXTURE_2D;
-    texture_out.name = texture_name;
+    texture_out.name = external_texture.name;
     // TODO: Should probably not hardcode the format in case the texture is not RGBA8.
-    // I can't just assign the format obtained from the channel because it's BGRA_EXT and for some
-    // reason it doesn't work while RGBA8 does.
+    // The textures' own format is BGRA_EXT, which Skia does not accept here
+    // while RGBA8 works; Impeller accepts nothing but RGBA8.
     texture_out.format = ffi::RGBA8;
     texture_out.user_data = null_mut();
     texture_out.destruction_callback = None;
-    texture_out.width = 0;
-    texture_out.height = 0;
+    texture_out.width = external_texture.width;
+    texture_out.height = external_texture.height;
 
-    texture_name != 0
+    external_texture.name != 0
 }
 
 // add view callback
