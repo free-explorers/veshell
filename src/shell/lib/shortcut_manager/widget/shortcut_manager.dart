@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:math';
+import 'dart:ui' show ViewFocusDirection, ViewFocusState;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
@@ -6,16 +8,24 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/lock_screen/provider/lock_screen.dart';
+import 'package:shell/monitor/provider/monitor_by_name.dart';
+import 'package:shell/monitor/provider/platform_focused_view.dart';
 import 'package:shell/notification/provider/system_notification_manager.dart';
 import 'package:shell/platform/model/request/adjust_brightness/adjust_brightness.serializable.dart';
 import 'package:shell/platform/model/request/switch_keyboard_layout/switch_keyboard_layout.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
+import 'package:shell/screen/model/screen.serializable.dart';
+import 'package:shell/screen/provider/focused_screen.dart';
+import 'package:shell/screen/provider/monitor_for_screen.dart';
+import 'package:shell/screen/provider/pointer_screen.dart';
+import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/settings/provider/settings_properties.dart';
 import 'package:shell/settings/provider/state/show_key_presses_setting.dart';
 import 'package:shell/shared/mpris/provider/mpris_manager.dart';
 import 'package:shell/shared/pulseaudio/provider/default_sink.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_audio.dart';
 import 'package:shell/shared/pulseaudio/provider/pulse_sink_by_name.dart';
+import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shortcut_manager/model/media_intents.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
 import 'package:shell/shortcut_manager/model/super_key.dart';
@@ -37,6 +47,35 @@ class VeshellShortcutManager extends HookConsumerWidget {
         // pointer, which is not the one holding keyboard focus.
         interceptIntent: (intent) =>
             ref.read(tileGrabControllerProvider.notifier).handleIntent(intent),
+        // The keyboard follows clicks, but the shell's hotkeys act on the
+        // screen under the pointer.
+        pointerScreenElsewhere: () {
+          // Nothing to follow until the pointer entered a screen.
+          if (ref.read(pointerScreenProvider) == null) {
+            return null;
+          }
+          final pointerScreen = ref.read(placementScreenProvider);
+          return pointerScreen != ref.read(focusedScreenProvider)
+              ? pointerScreen
+              : null;
+        },
+        focusScreen: (screenId) {
+          // As a click would: the compositor moves the keyboard to the
+          // screen's monitor, and the screen is the one chosen on it.
+          final monitorName = ref.read(monitorForScreenProvider(screenId));
+          final viewId = monitorName == null
+              ? null
+              : ref.read(monitorByNameProvider(monitorName))?.viewId;
+          if (viewId != null &&
+              viewId != ref.read(platformFocusedViewIdProvider)) {
+            WidgetsBinding.instance.platformDispatcher.requestViewFocusChange(
+              viewId: viewId,
+              state: ViewFocusState.focused,
+              direction: ViewFocusDirection.undefined,
+            );
+          }
+          ref.read(focusedScreenProvider.notifier).setFocusedScreen(screenId);
+        },
       ),
       [hotkeysActivator],
     );
@@ -216,7 +255,12 @@ class VeshellShortcutManager extends HookConsumerWidget {
 }
 
 class _ShortcutManager extends ShortcutManager {
-  _ShortcutManager({super.shortcuts, this.interceptIntent});
+  _ShortcutManager({
+    super.shortcuts,
+    this.interceptIntent,
+    this.pointerScreenElsewhere,
+    this.focusScreen,
+  });
   bool _isOverviewKeySolePressed = false;
   ToggleOverviewIntent overviewIntent = const ToggleOverviewIntent();
   final LogicalKeyboardKey overviewKey = LogicalKeyboardKey.superKey;
@@ -224,6 +268,73 @@ class _ShortcutManager extends ShortcutManager {
   /// Gets the first look at every bound intent; returning `true` consumes the
   /// key without dispatching the intent to the focused context.
   final bool Function(Intent intent)? interceptIntent;
+
+  /// The screen under the pointer when it is not the screen holding the
+  /// keyboard, or `null`.
+  final ScreenId? Function()? pointerScreenElsewhere;
+
+  /// Hands the keyboard to a screen, as a click on it would.
+  final void Function(ScreenId screenId)? focusScreen;
+
+  /// Intents that act on the whole system, wherever the pointer is: they
+  /// never move the keyboard to another screen.
+  static const _globalIntentTypes = <Type>{
+    IncreaseVolume,
+    DecreaseVolume,
+    ToggleMute,
+    IncreaseBrightness,
+    DecreaseBrightness,
+    ToggleKeyboardLayout,
+    LockSessionIntent,
+    ToggleKeyPressesIntent,
+    MediaPlayPauseIntent,
+    MediaNextIntent,
+    MediaPreviousIntent,
+    MediaStopIntent,
+  };
+
+  /// Sends a Super hotkey to the screen under the pointer when the keyboard
+  /// is on another screen: that screen takes the keyboard first (the hotkey
+  /// says the user is working there), then [intent] is invoked in its focused
+  /// context once the keyboard has reached it.
+  ///
+  /// Returns whether [intent] was sent there; when it was not, it acts on the
+  /// screen holding the keyboard as usual.
+  bool _sendToPointerScreen(Intent intent) {
+    if (_globalIntentTypes.contains(intent.runtimeType)) {
+      return false;
+    }
+    final screenId = pointerScreenElsewhere?.call();
+    final focusScreen = this.focusScreen;
+    if (screenId == null || focusScreen == null) {
+      return false;
+    }
+    focusScreen(screenId);
+    unawaited(_invokeOnceFocused(screenId, intent));
+    return true;
+  }
+
+  /// Invokes [intent] in the primary focus context as soon as it lies in
+  /// [screenId]: the screen's workspace gate opens and its selected tile takes
+  /// the keyboard over the next frames.
+  static Future<void> _invokeOnceFocused(
+    ScreenId screenId,
+    Intent intent,
+  ) async {
+    for (var frame = 0; frame < 5; frame++) {
+      await WidgetsBinding.instance.endOfFrame;
+      final context = primaryFocus?.context;
+      if (context != null &&
+          context.mounted &&
+          CurrentScreenId.maybeOf(context) == screenId) {
+        Actions.maybeInvoke(context, intent);
+        return;
+      }
+    }
+    focusLog.warning(
+      'Dropped $intent: the keyboard did not reach screen $screenId',
+    );
+  }
 
   /// Whether the held Super key was used by a pointer press.
   bool _isSuperClaimed = false;
@@ -282,6 +393,9 @@ class _ShortcutManager extends ShortcutManager {
       if (wasSolePressed && interceptIntent?.call(overviewIntent) == true) {
         return KeyEventResult.handled;
       }
+      if (wasSolePressed && _sendToPointerScreen(overviewIntent)) {
+        return KeyEventResult.handled;
+      }
       if (wasSolePressed) {
         final primaryContext = primaryFocus?.context;
         if (primaryContext != null) {
@@ -308,6 +422,21 @@ class _ShortcutManager extends ShortcutManager {
         if (activator.accepts(event, HardwareKeyboard.instance) &&
             intercept(intent)) {
           return KeyEventResult.handled;
+        }
+      }
+    }
+
+    // A Super chord bound to a screen action acts on the screen under the
+    // pointer. Plain-key bindings (Enter for `navigation.activate`) belong to
+    // the focused widget and never move.
+    if ((event is KeyDownEvent || event is KeyRepeatEvent) &&
+        isSuperKeyPressed()) {
+      for (final MapEntry(key: activator, value: intent) in shortcuts.entries) {
+        if (activator.accepts(event, HardwareKeyboard.instance)) {
+          if (_sendToPointerScreen(intent)) {
+            return KeyEventResult.handled;
+          }
+          break;
         }
       }
     }

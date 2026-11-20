@@ -659,6 +659,10 @@ class SettingsProperties extends _$SettingsProperties {
             name: l10n.animationSpeed,
             description: l10n.animationSpeedDescription,
           ),
+          'optimizedOverview': SettingProperty<bool>(
+            name: l10n.optimizedOverview,
+            description: l10n.optimizedOverviewDescription,
+          ),
           'statusBar': SettingProperty<String>(
             name: l10n.statusBar,
             description: l10n.statusBarDescription,

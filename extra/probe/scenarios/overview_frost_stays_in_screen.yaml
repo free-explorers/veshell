@@ -1,0 +1,24 @@
+# The overview frosts the rest of its own screen only. The blur paints past the
+# bounds of what it blurs, so on a monitor split into two screens, the second
+# screen's frost used to spill over the right edge of the first.
+name: The overview's frost stays inside its screen
+fixture: two-apps
+size: 1280x800
+steps:
+  - wait_for: {find: text=Beta, visible: true}
+  # Split the monitor into two screens from the screen menu.
+  - tap: {x: 24, y: 775}
+  - wait_for: {find: text=Create new screen, visible: true}
+  - tap: {x: 467, y: 451}
+  - wait_for: {find: text=Search apps, count: 2}
+  # A press on the first screen closes the menu.
+  - tap: {x: 620, y: 300}
+  - wait_for: {find: text=Create new screen, count: 0}
+  # The Helm button of the second screen opens its overview.
+  - tap: {x: 666, y: 24}
+  # Only the overview lists the applications with their description.
+  - wait_for: {find: text=A veshell-probe fixture application, visible: true}
+  # The first screen only: the second one shows the overview's clock.
+  - screenshot: {name: first_screen, target: type=ScreenWidget}
+expect:
+  - golden: first_screen

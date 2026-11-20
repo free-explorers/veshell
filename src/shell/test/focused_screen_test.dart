@@ -143,6 +143,35 @@ void main() {
     expect(container.read(focusedScreenProvider), 'a');
   });
 
+  test('a choice on another monitor holds until the compositor follows', () {
+    final container = _container([
+      screenManagerProvider.overrideWithValue(_manager({'a', 'b', 'c'})),
+      monitorByViewIdProvider(7).overrideWithValue('DP-1'),
+      monitorByViewIdProvider(8).overrideWithValue('DP-2'),
+      screenForViewProvider(7).overrideWithValue('b'),
+      screenForViewProvider(8).overrideWithValue('a'),
+      monitorForScreenProvider('c').overrideWithValue('DP-2'),
+    ]);
+    final sub = container.listen(focusedScreenProvider, (_, _) {});
+    addTearDown(sub.close);
+
+    container.read(platformFocusedViewIdProvider.notifier).set(7);
+    expect(container.read(focusedScreenProvider), 'b');
+
+    // A hotkey sends the keyboard to screen c, on the other monitor: the
+    // choice survives a rebuild before the compositor reports that monitor.
+    container.read(focusedScreenProvider.notifier).setFocusedScreen('c');
+    container.invalidate(focusedScreenProvider);
+    expect(container.read(focusedScreenProvider), 'c');
+
+    container.read(platformFocusedViewIdProvider.notifier).set(8);
+    expect(container.read(focusedScreenProvider), 'c');
+
+    // A click back on the first monitor overrides it.
+    container.read(platformFocusedViewIdProvider.notifier).set(7);
+    expect(container.read(focusedScreenProvider), 'b');
+  });
+
   test('a different focused monitor overrides the manual screen choice', () {
     final container = _container([
       screenManagerProvider.overrideWithValue(_manager({'a', 'b', 'c'})),

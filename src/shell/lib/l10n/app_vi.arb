@@ -407,6 +407,8 @@
   "invalidValue": "Nhập một giá trị hợp lệ",
   "animationSpeed": "Tốc độ hoạt ảnh",
   "animationSpeedDescription": "Tốc độ hoạt ảnh của shell: 1 như thiết kế, 0,5 chậm một nửa (để xem kỹ), 2 nhanh gấp đôi.",
+  "optimizedOverview": "Tổng quan tối ưu",
+  "optimizedOverviewDescription": "Không để tổng quan đang mở vẽ lại màn hình phía sau: nền mờ trở thành ảnh tĩnh và biểu đồ giám sát nhảy từng bước thay vì trượt. Tắt để có nền sống động và biểu đồ mượt, đổi lại GPU hoạt động nhiều hơn.",
   "focusIndicator": "Chỉ báo tiêu điểm",
   "focusIndicatorDescription": "Cách làm nổi bật cửa sổ đang hoạt động khi hiển thị nhiều cửa sổ",
   "focusIndicatorBorder": "Viền trượt",

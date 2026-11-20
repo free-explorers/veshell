@@ -407,6 +407,8 @@
   "invalidValue": "Saisissez une valeur valide",
   "animationSpeed": "Vitesse des animations",
   "animationSpeedDescription": "Vitesse des animations du shell : 1 telle que conçue, 0,5 à mi-vitesse (pour en inspecter une), 2 à double vitesse.",
+  "optimizedOverview": "Vue d'ensemble optimisée",
+  "optimizedOverviewDescription": "Évite que la vue d'ensemble ouverte ne redessine l'écran derrière elle : l'arrière-plan flouté devient une image fixe et les graphiques de surveillance avancent par paliers au lieu de glisser. Désactivez-la pour un arrière-plan vivant et des graphiques fluides, au prix d'une charge GPU plus élevée.",
   "focusIndicator": "Indicateur de focus",
   "focusIndicatorDescription": "Comment la fenêtre active se distingue quand plusieurs fenêtres sont affichées",
   "focusIndicatorBorder": "Bordure glissante",

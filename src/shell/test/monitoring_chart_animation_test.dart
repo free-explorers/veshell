@@ -4,7 +4,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 import 'package:shell/overview/helm/monitoring_panel/widget/monitoring_card.dart';
 
-Widget _chart(List<FlSpot> spots) {
+Widget _chart(List<FlSpot> spots, {bool stepSamples = true}) {
   return MaterialApp(
     home: Scaffold(
       body: Center(
@@ -12,6 +12,7 @@ Widget _chart(List<FlSpot> spots) {
           width: 320,
           height: 64,
           child: MonitoringChart(
+            stepSamples: stepSamples,
             series: [
               MonitoringSeries(spots: spots, color: Colors.blue, filled: true),
             ],
@@ -28,7 +29,7 @@ List<FlSpot> _window(int first, {int? count}) => [
 ];
 
 void main() {
-  testWidgets('scrolls the chart window when a sample arrives', (tester) async {
+  testWidgets('steps the chart window when a sample arrives', (tester) async {
     await tester.pumpWidget(_chart(_window(0)));
     await tester.pump();
 
@@ -37,9 +38,41 @@ void main() {
     expect(tester.takeException(), isNull);
 
     await tester.pumpWidget(_chart(_window(1)));
+    await tester.pump();
+
+    // One step per sample, no 60 fps slide in between: while the panel is
+    // visible that slide kept the whole shell rendering (and re-frosted) for
+    // the entire sample interval.
+    chart = tester.widget<LineChart>(find.byType(LineChart));
+    expect(chart.data.minX, closeTo(monitoringChartOverflowSamples + 1, 0.01));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('does not keep scheduling frames between samples', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_chart(_window(0)));
+    await tester.pump();
+
+    await tester.pumpWidget(_chart(_window(1)));
+    await tester.pump();
+
+    // The chart stepped: no animation is left ticking the shell until the next
+    // sample. A slide here would keep the whole overview rendering at 60 fps.
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('slides the chart window when stepping is off', (tester) async {
+    // theme.optimizedOverview off: the window slides by one sample over the
+    // sample interval instead of stepping.
+    await tester.pumpWidget(_chart(_window(0), stepSamples: false));
+    await tester.pump();
+
+    await tester.pumpWidget(_chart(_window(1), stepSamples: false));
     await tester.pump(const Duration(milliseconds: 250));
 
-    chart = tester.widget<LineChart>(find.byType(LineChart));
+    var chart = tester.widget<LineChart>(find.byType(LineChart));
     expect(chart.data.minX, closeTo(monitoringChartOverflowSamples + 0.5, 0.1));
 
     await tester.pump(const Duration(milliseconds: 300));
@@ -49,16 +82,16 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('slides into the overflow window when the buffer fills', (
+  testWidgets('slides into the overflow window when stepping is off', (
     tester,
   ) async {
-    await tester.pumpWidget(_chart(_window(0, count: 123)));
+    await tester.pumpWidget(_chart(_window(0, count: 123), stepSamples: false));
     await tester.pump();
 
     var chart = tester.widget<LineChart>(find.byType(LineChart));
     expect(chart.data.minX, 3);
 
-    await tester.pumpWidget(_chart(_window(0)));
+    await tester.pumpWidget(_chart(_window(0), stepSamples: false));
     await tester.pump(const Duration(milliseconds: 250));
 
     chart = tester.widget<LineChart>(find.byType(LineChart));
@@ -70,16 +103,16 @@ void main() {
     expect(chart.data.minX, closeTo(2, 0.01));
   });
 
-  testWidgets('slides new samples in while the buffer is filling', (
+  testWidgets('slides new samples in while filling when stepping is off', (
     tester,
   ) async {
-    await tester.pumpWidget(_chart(_window(0, count: 10)));
+    await tester.pumpWidget(_chart(_window(0, count: 10), stepSamples: false));
     await tester.pump();
 
     var chart = tester.widget<LineChart>(find.byType(LineChart));
     expect(chart.data.minX, 9 - (monitoringWindowSamples - 1));
 
-    await tester.pumpWidget(_chart(_window(0, count: 11)));
+    await tester.pumpWidget(_chart(_window(0, count: 11), stepSamples: false));
     await tester.pump(const Duration(milliseconds: 250));
 
     chart = tester.widget<LineChart>(find.byType(LineChart));
@@ -89,6 +122,34 @@ void main() {
 
     chart = tester.widget<LineChart>(find.byType(LineChart));
     expect(chart.data.minX, closeTo(10 - monitoringWindowSamples + 1, 0.01));
+  });
+
+  testWidgets('steps into the overflow window when the buffer fills', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_chart(_window(0, count: 123)));
+    await tester.pump();
+
+    await tester.pumpWidget(_chart(_window(0)));
+    await tester.pump();
+
+    final chart = tester.widget<LineChart>(find.byType(LineChart));
+    expect(chart.data.minX, 2);
+    expect(tester.binding.hasScheduledFrame, isFalse);
+  });
+
+  testWidgets('steps new samples in while the buffer is filling', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_chart(_window(0, count: 10)));
+    await tester.pump();
+
+    await tester.pumpWidget(_chart(_window(0, count: 11)));
+    await tester.pump();
+
+    final chart = tester.widget<LineChart>(find.byType(LineChart));
+    expect(chart.data.minX, 10 - monitoringWindowSamples + 1);
+    expect(tester.binding.hasScheduledFrame, isFalse);
   });
 
   testWidgets('anchors the growing chart to the right', (tester) async {
