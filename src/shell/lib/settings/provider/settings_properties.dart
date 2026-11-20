@@ -12,6 +12,7 @@ import 'package:shell/monitor/provider/connected_monitor_list.dart';
 import 'package:shell/monitor/util/scale_recommendation.dart';
 import 'package:shell/monitor/widget/monitor_arrangement/monitor_arrangement_editor.dart';
 import 'package:shell/screen/provider/workspace_display_mode.dart';
+import 'package:shell/settings/model/antialiasing_choices.dart';
 import 'package:shell/settings/model/keyboard_choices.dart';
 import 'package:shell/settings/model/keyboard_option.dart';
 import 'package:shell/settings/model/pointer_choices.dart';
@@ -662,6 +663,30 @@ class SettingsProperties extends _$SettingsProperties {
           'optimizedOverview': SettingProperty<bool>(
             name: l10n.optimizedOverview,
             description: l10n.optimizedOverviewDescription,
+          ),
+          'antialiasing': SettingProperty<String>(
+            name: l10n.antialiasing,
+            description: l10n.antialiasingDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<String>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      SettingPropertyChoiceValue(
+                        path: path,
+                        choices: antialiasingChoices,
+                        defaultValue: antialiasingFallback,
+                        label: antialiasingLabel,
+                      ),
+                  buildEditor: (context, {required isExpanded}) =>
+                      SettingPropertyChoiceEditor(
+                        path: path,
+                        property: property,
+                        choices: antialiasingChoices,
+                        defaultValue: antialiasingFallback,
+                        label: antialiasingLabel,
+                      ),
+                ),
           ),
           'statusBar': SettingProperty<String>(
             name: l10n.statusBar,
