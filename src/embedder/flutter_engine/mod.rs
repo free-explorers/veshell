@@ -217,11 +217,9 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         // Veshell renders with Impeller only; the embedder's framebuffers and
         // textures are set up for it (see GlesFramebufferImporter).
         let enable_impeller = CString::new("--enable-impeller")?;
-        // The framebuffers Veshell hands the engine are single-sample (Mesa
-        // has no implicit MSAA resolve), so geometry drawn straight to them is
-        // aliased. SDFs give rectangles, rounded rectangles, circles and lines
-        // analytic antialiasing there; paths get theirs from multisampled
-        // offscreen passes (vector icons are rasterized through one).
+        // SDFs give rectangles, rounded rectangles, circles and lines analytic
+        // antialiasing, whatever the multisampling of the framebuffers Veshell
+        // hands the engine (the `theme.antialiasing` setting, which may be off).
         let impeller_use_sdfs = CString::new("--impeller-use-sdfs")?;
         let command_line_argv = vec![
             executable_path.as_ptr(),
@@ -597,6 +595,12 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         self.focused_view_id
     }
 
+    /// Asks the engine for a new frame of every view, as when content changes:
+    /// for a change of how frames are rendered rather than of what they show.
+    pub fn schedule_frame(&self) {
+        unsafe { embedder::FlutterEngineScheduleFrame(self.handle) };
+    }
+
     pub fn set_focused_view(&mut self, view_id: Option<i64>) {
         if self.focused_view_id == view_id {
             return;
@@ -869,28 +873,29 @@ impl RendererData {
         unsafe { root_egl_context.make_current()? };
 
         let egl_display = root_egl_context.display();
-        let gl_attributes = GlAttributes {
-            version: (2, 0),
-            profile: Some(GlProfile::Core),
-            debug: false,
-            vsync: false,
-        };
         let pixel_format_requirements = PixelFormatRequirements::_8_bit();
+        // GLES 3 gives Impeller multisampled offscreen passes and Veshell its
+        // multisampled render targets (see GlesFramebufferImporter); GLES 2
+        // still renders, aliased.
+        let context_of_version = |version| {
+            EGLContext::new_shared_with_config(
+                egl_display,
+                root_egl_context,
+                GlAttributes {
+                    version,
+                    profile: Some(GlProfile::Core),
+                    debug: false,
+                    vsync: false,
+                },
+                pixel_format_requirements,
+            )
+        };
+        let new_context = || context_of_version((3, 0)).or_else(|_| context_of_version((2, 0)));
 
         Ok(Self {
             gl: Gles2::load_with(|s| unsafe { egl::get_proc_address(s) } as *const _),
-            main_egl_context: EGLContext::new_shared_with_config(
-                egl_display,
-                root_egl_context,
-                gl_attributes,
-                pixel_format_requirements,
-            )?,
-            resource_egl_context: EGLContext::new_shared_with_config(
-                egl_display,
-                root_egl_context,
-                gl_attributes,
-                pixel_format_requirements,
-            )?,
+            main_egl_context: new_context()?,
+            resource_egl_context: new_context()?,
             channels,
             framebuffer_importer: unsafe { GlesFramebufferImporter::new(egl_display.clone())? },
         })

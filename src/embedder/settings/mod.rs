@@ -446,6 +446,41 @@ pub struct ThemeSettings {
     /// `XCURSOR_SIZE`.
     #[serde(default, deserialize_with = "deserialize_u32_saturating")]
     pub cursor_size: u32,
+    /// Multisampling of the shell's rendering.
+    #[serde(default, deserialize_with = "deserialize_antialiasing")]
+    pub antialiasing: Antialiasing,
+}
+
+/// How much the shell's rendering is multisampled: what smooths the edges
+/// that are not analytically antialiased (clips, paths, charts). See
+/// `GlesFramebufferImporter`.
+#[derive(Serialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum Antialiasing {
+    /// 4x on a dedicated GPU, 2x on an integrated one, off when rendering
+    /// in software.
+    #[default]
+    Auto,
+    Off,
+    #[serde(rename = "2x")]
+    X2,
+    #[serde(rename = "4x")]
+    X4,
+}
+
+/// Reads an [`Antialiasing`], falling back to `auto` for an unknown value so a
+/// hand-edited `settings.json` cannot take the settings load down.
+fn deserialize_antialiasing<'de, D>(deserializer: D) -> Result<Antialiasing, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    Ok(match value.as_deref() {
+        Some("off") => Antialiasing::Off,
+        Some("2x") => Antialiasing::X2,
+        Some("4x") => Antialiasing::X4,
+        _ => Antialiasing::Auto,
+    })
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]

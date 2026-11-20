@@ -95,12 +95,11 @@ class _GridFitPainter extends CustomPainter {
 
 /// Fitted icons rasterized, by icon, pixel size and colour.
 ///
-/// Drawn as vector paths, an icon is aliased: Impeller antialiases paths
-/// through multisampling, and the framebuffers the compositor gives it are
-/// single-sample. A picture rasterized with `toImageSync` renders in a
-/// multisampled offscreen pass instead, once; every frame after that draws a
-/// plain image, which is also far cheaper than replaying the paths (Impeller
-/// has no raster cache).
+/// A picture rasterized with `toImageSync` renders in a multisampled
+/// offscreen pass, once; every frame after that draws a plain image, which is
+/// far cheaper than replaying the paths (Impeller has no raster cache). It
+/// also keeps icons antialiased when the compositor's own multisampling is
+/// off (`theme.antialiasing`): Impeller antialiases paths only by sampling.
 ///
 /// Least-recently-used, bounded by bytes: an icon animated through many sizes
 /// leaves one image per size. Evicted images are disposed; a frame that

@@ -554,6 +554,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let mut seat = seat_state.new_wl_seat(&display_handle, seat_name.clone());
 
         let settings = settings_manager.get_settings();
+        crate::gles_framebuffer_importer::set_antialiasing(settings.theme.antialiasing);
 
         // Delay before a held key starts repeating (ms), and the rate of the
         // repeat in characters per second. Both are advertised to clients via
@@ -858,6 +859,12 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     /// compositor and must not touch the host session's environment.
     pub fn apply_veshell_settings(&mut self, settings: &VeshellSettings) -> Option<Vec<String>> {
         self.swap_alt_and_win = settings.keyboard.swap_alt_and_win;
+        if crate::gles_framebuffer_importer::set_antialiasing(settings.theme.antialiasing) {
+            // The engine renders on demand: show the change now.
+            if let Some(flutter_engine) = self.flutter_engine.as_ref() {
+                flutter_engine.schedule_frame();
+            }
+        }
         self.wheel_scroll_factor = effective_wheel_scroll_factor(settings);
         crate::idle::apply_idle_settings(self, &settings.idle);
         let environment_changed = apply_environment_variables(

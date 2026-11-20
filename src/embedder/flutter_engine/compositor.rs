@@ -15,6 +15,7 @@ use crate::{
         view::{AcquiredBackingStore, BackingStoreId, FlutterFrameFence, Frame},
         FlutterEngine,
     },
+    gles_framebuffer_importer::Resolve,
     state::State,
 };
 use smithay::backend::egl::fence::EGLFence;
@@ -34,10 +35,12 @@ enum BackingStoreEvent {
 
 /// Flutter-side user data for one backing store. `texture_fbo` is set for the
 /// texture-backed fallback so the collect callback can release the framebuffer
-/// object attached to it.
+/// object attached to it. `resolve` moves a multisampled frame into the
+/// backing store when it is presented.
 struct BackingStoreMeta {
     id: BackingStoreId,
     texture_fbo: Option<u32>,
+    resolve: Option<Resolve>,
 }
 
 pub struct CompositorUserData {
@@ -190,18 +193,18 @@ where
     if let Ok(Some(backing_store)) = response.recv() {
         let context = &flutter_engine.renderer_data.main_egl_context;
         let importer = &mut flutter_engine.renderer_data.framebuffer_importer;
-        let (name, texture_fbo) = match &backing_store.frame {
+        let (target, texture_fbo) = match &backing_store.frame {
             Frame::Dmabuf(dmabuf) => (
-                importer
-                    .import_framebuffer(context, dmabuf.clone())
-                    .unwrap_or(0),
+                importer.import_framebuffer(context, dmabuf.clone()).ok(),
                 None,
             ),
-            Frame::Texture(texture) => {
-                let fbo = importer.import_texture(context, texture).unwrap_or(0);
-                (fbo, (fbo != 0).then_some(fbo))
-            }
+            Frame::Texture(texture) => match importer.import_texture(context, texture) {
+                Ok((fbo, target)) => (Some(target), Some(fbo)),
+                Err(_) => (None, None),
+            },
         };
+        let (name, resolve) =
+            target.map_or((0, None), |target| (target.render_fbo, target.resolve));
         if name == 0 {
             if let Some(texture_fbo) = texture_fbo {
                 let _ = importer.release_texture_framebuffer(context, texture_fbo);
@@ -217,6 +220,7 @@ where
             user_data: Box::into_raw(Box::new(BackingStoreMeta {
                 id: backing_store.id,
                 texture_fbo,
+                resolve,
             })) as *mut c_void,
             type_: FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL,
             did_update: true,
@@ -301,8 +305,8 @@ where
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
     let flutter_engine =
         &mut *(compositor_data.flutter_engine_ptr as *mut FlutterEngine<BackendData>);
-    let sync = frame_sync_point(&flutter_engine.renderer_data);
     let mut backing_store_id = None;
+    let mut resolve = None;
     for layer in std::slice::from_raw_parts((*info).layers, (*info).layers_count) {
         if layer.is_null() {
             return false;
@@ -322,7 +326,19 @@ where
         if backing_store_id.replace((*meta).id).is_some() {
             return false;
         }
+        resolve = (*meta).resolve;
     }
+
+    // The frame is submitted: move it out of the multisampled target before
+    // the fence that lets the compositor sample it (and before the next view
+    // renders into a target it may share).
+    if let Some(resolve) = resolve {
+        flutter_engine
+            .renderer_data
+            .framebuffer_importer
+            .resolve(resolve);
+    }
+    let sync = frame_sync_point(&flutter_engine.renderer_data);
 
     backing_store_id
         .and_then(|id| {
