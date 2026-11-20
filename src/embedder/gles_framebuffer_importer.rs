@@ -27,8 +27,9 @@
 //! * Partial repaint. The view's target also keeps its last complete frame,
 //!   so the engine paints only what changed
 //!   ([`GlesFramebufferImporter::keeps_last_frame`]) and only that is
-//!   resolved into it; the backing store then receives the whole frame, and
-//!   the compositor repaints only that part of the output.
+//!   resolved into it; the backing store then receives what changed since
+//!   it last held the frame, and the compositor repaints only that part of
+//!   the output.
 //!
 //! Drivers without GLES 3 framebuffer blits cannot copy a frame: Flutter then
 //! renders into the backing store directly, whole and single-sample.
@@ -184,6 +185,51 @@ struct ViewTarget {
     frame_color: ffi::types::GLuint,
     /// Whether `frame` holds the view's last frame (not yet, once created).
     frame_valid: bool,
+    /// For each backing store `frame` was copied into, what changed in
+    /// `frame` since (`None`: nothing). A backing store not listed is copied
+    /// whole.
+    behind: HashMap<ffi::types::GLuint, Option<GlRect>>,
+}
+
+/// A rectangle of a framebuffer in GL's coordinates: `(x0, y0, x1, y1)`, rows
+/// from the bottom.
+type GlRect = (i32, i32, i32, i32);
+
+/// What `backing_store` must receive of a frame that changed `changed`, and
+/// what the other backing stores now lag by.
+///
+/// The engine cycles through a few backing stores: each one lags the frame by
+/// what changed since it last received it, and one never seen lags by all of
+/// it (`full`).
+fn catch_up(
+    behind: &mut HashMap<ffi::types::GLuint, Option<GlRect>>,
+    backing_store: ffi::types::GLuint,
+    changed: GlRect,
+    full: GlRect,
+) -> Option<GlRect> {
+    let copied = match behind.get(&backing_store) {
+        Some(&pending) => union(pending, changed),
+        None => Some(full),
+    };
+    for (fbo, pending) in behind.iter_mut() {
+        if *fbo != backing_store {
+            *pending = union(*pending, changed);
+        }
+    }
+    behind.insert(backing_store, None);
+    copied
+}
+
+/// The bounding box of `pending` and `rect`.
+fn union(pending: Option<GlRect>, rect: GlRect) -> Option<GlRect> {
+    let (x0, y0, x1, y1) = rect;
+    if x0 >= x1 || y0 >= y1 {
+        return pending;
+    }
+    Some(match pending {
+        None => rect,
+        Some((a0, b0, a1, b1)) => (a0.min(x0), b0.min(y0), a1.max(x1), b1.max(y1)),
+    })
 }
 
 /// The framebuffer Flutter renders a backing store into.
@@ -322,6 +368,7 @@ impl GlesFramebufferImporter {
     }
 
     fn forget_texture_framebuffer(&mut self, fbo: ffi::types::GLuint) {
+        self.forget_backing_store(fbo);
         unsafe {
             self.gl.DeleteFramebuffers(1, &fbo as *const _);
             if let Some(depth_stencil) = self.texture_framebuffers.remove(&fbo) {
@@ -435,8 +482,9 @@ impl GlesFramebufferImporter {
     /// Moves a submitted frame into its backing store.
     ///
     /// Resolves what Flutter painted (`painted`, `None` for all of it) from the
-    /// view's render target into its last frame, then copies that frame into
-    /// the backing store.
+    /// view's render target into its last frame, then brings the backing store
+    /// up to that frame: whatever changed since it last received one, or all
+    /// of it the first time.
     ///
     /// Called on the raster thread once Flutter has submitted the frame, with
     /// its context current and before the fence that tells the compositor the
@@ -484,6 +532,8 @@ impl GlesFramebufferImporter {
         );
         let (render_fbo, frame_fbo) = (target.render_fbo, target.frame_fbo);
         target.frame_valid = true;
+        let backing_store = present.backing_store_fbo;
+        let copied = catch_up(&mut target.behind, backing_store, resolved, full);
 
         unsafe {
             let mut read_binding = 0;
@@ -510,7 +560,9 @@ impl GlesFramebufferImporter {
                 attachments.len() as i32,
                 attachments.as_ptr(),
             );
-            self.blit(frame_fbo, present.backing_store_fbo, full, full);
+            if let Some(copied) = copied {
+                self.blit(frame_fbo, backing_store, copied, copied);
+            }
 
             self.gl
                 .BindFramebuffer(ffi::READ_FRAMEBUFFER, read_binding as ffi::types::GLuint);
@@ -622,6 +674,7 @@ impl GlesFramebufferImporter {
                 frame_fbo: 0,
                 frame_color: 0,
                 frame_valid: false,
+                behind: HashMap::new(),
             };
             target.render_color = self.renderbuffer(ffi::RGBA8, width, height, samples);
             self.gl.GenFramebuffers(1, &mut target.render_fbo as *mut _);
@@ -781,10 +834,19 @@ impl GlesFramebufferImporter {
         while i != self.buffers.len() {
             if self.buffers[i].dmabuf.is_gone() {
                 let old = self.buffers.remove(i);
+                self.forget_backing_store(old.fbo);
                 self.drop_buffer(old);
             } else {
                 i += 1;
             }
+        }
+    }
+
+    /// A framebuffer is deleted: GL may hand its name to another backing
+    /// store, which must not inherit its history.
+    fn forget_backing_store(&mut self, fbo: ffi::types::GLuint) {
+        for target in &mut self.view_targets {
+            target.behind.remove(&fbo);
         }
     }
 
@@ -848,6 +910,42 @@ impl Drop for GlesFramebufferImporter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const FULL: GlRect = (0, 0, 100, 100);
+
+    #[test]
+    fn a_backing_store_seen_first_receives_the_whole_frame() {
+        let mut behind = HashMap::new();
+        assert_eq!(catch_up(&mut behind, 1, (10, 10, 20, 20), FULL), Some(FULL));
+    }
+
+    #[test]
+    fn each_backing_store_catches_up_on_what_it_missed() {
+        let mut behind = HashMap::new();
+        catch_up(&mut behind, 1, FULL, FULL);
+        catch_up(&mut behind, 2, FULL, FULL);
+        // Painted into 1, then 2, then 1 again.
+        assert_eq!(
+            catch_up(&mut behind, 1, (10, 10, 20, 20), FULL),
+            Some((0, 0, 100, 100)),
+            "1 missed the whole frame drawn into 2",
+        );
+        assert_eq!(
+            catch_up(&mut behind, 2, (50, 50, 60, 60), FULL),
+            Some((10, 10, 60, 60)),
+            "2 missed what 1 received, and needs its own",
+        );
+        assert_eq!(
+            catch_up(&mut behind, 1, (0, 0, 0, 0), FULL),
+            Some((50, 50, 60, 60)),
+            "1 missed only what 2 received",
+        );
+        assert_eq!(
+            catch_up(&mut behind, 2, (0, 0, 0, 0), FULL),
+            None,
+            "nothing changed since 2 was brought up to date",
+        );
+    }
 
     const DEDICATED: Gpu = Gpu {
         kind: GpuKind::Dedicated,
