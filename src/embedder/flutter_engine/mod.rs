@@ -214,16 +214,23 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let observatory_port = CString::new(format!("--vm-service-port={}", port))?;
         let disable_service_auth_codes = CString::new("--disable-service-auth-codes")?;
 
+        // Veshell renders with Impeller only; the embedder's framebuffers and
+        // textures are set up for it (see GlesFramebufferImporter).
         let enable_impeller = CString::new("--enable-impeller")?;
-        let mut command_line_argv = vec![
+        // The framebuffers Veshell hands the engine are single-sample (Mesa
+        // has no implicit MSAA resolve), so geometry drawn straight to them is
+        // aliased. SDFs give rectangles, rounded rectangles, circles and lines
+        // analytic antialiasing there; paths get theirs from multisampled
+        // offscreen passes (vector icons are rasterized through one).
+        let impeller_use_sdfs = CString::new("--impeller-use-sdfs")?;
+        let command_line_argv = vec![
             executable_path.as_ptr(),
             observatory_host.as_ptr(),
             observatory_port.as_ptr(),
             disable_service_auth_codes.as_ptr(),
+            enable_impeller.as_ptr(),
+            impeller_use_sdfs.as_ptr(),
         ];
-        if std::env::var_os("VESHELL_ENABLE_IMPELLER").is_some() {
-            command_line_argv.push(enable_impeller.as_ptr());
-        }
 
         let elf_path = CString::new(format!("{lib_path}/libapp.so"))?;
         let mut aot_data: FlutterEngineAOTData = null_mut();
