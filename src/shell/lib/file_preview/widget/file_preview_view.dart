@@ -14,6 +14,8 @@ import 'package:shell/l10n/l10n.dart';
 import 'package:shell/shared/util/format_bytes.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/theme/provider/theme.dart';
+import 'package:vector_graphics/vector_graphics_compat.dart'
+    show RenderingStrategy;
 
 /// Renders the preview of [path] in the overview's content slot.
 class FilePreviewView extends ConsumerWidget {
@@ -117,7 +119,12 @@ class _SvgPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Center(child: SvgPicture(NormalizingSvgFileLoader(File(path)))),
+      child: Center(
+        child: SvgPicture(
+          NormalizingSvgFileLoader(File(path)),
+          renderingStrategy: RenderingStrategy.raster,
+        ),
+      ),
     );
   }
 }

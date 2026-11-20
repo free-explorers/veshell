@@ -66,15 +66,22 @@ class _GridFitPainter extends CustomPainter {
   void paint(Canvas canvas, Size box) {
     final pixels = size * devicePixelRatio;
     if (pixels <= 0) return;
-    final picture = _GridFitCache.picture(instructions, pixels, color);
+    final image = _GridFitCache.image(instructions, pixels, color);
     canvas
       ..save()
       // Like an SVG viewport, keep the icon to its square: paths past the
       // view box would otherwise paint over neighbouring widgets.
       ..clipRect(Offset.zero & Size.square(size))
-      // Draw in physical pixels, where the fit happened.
+      // Draw in physical pixels, where the fit happened: on the pixel grid,
+      // the image lands one to one. Off it (a transform, an animation),
+      // bilinear sampling keeps the icon smooth instead of snapping it a
+      // whole pixel.
       ..scale(1 / devicePixelRatio)
-      ..drawPicture(picture)
+      ..drawImage(
+        image,
+        Offset.zero,
+        Paint()..filterQuality = FilterQuality.low,
+      )
       ..restore();
   }
 
@@ -86,33 +93,50 @@ class _GridFitPainter extends CustomPainter {
       oldDelegate.color != color;
 }
 
-/// Fitted pictures, by icon, pixel size and colour.
+/// Fitted icons rasterized, by icon, pixel size and colour.
 ///
-/// Fitting is cheap but not free, and every frame of a panel repaints the same
-/// few icons. Least-recently-used, bounded: pictures are only dropped, never
-/// disposed, so a picture still held by a layer stays valid.
+/// Drawn as vector paths, an icon is aliased: Impeller antialiases paths
+/// through multisampling, and the framebuffers the compositor gives it are
+/// single-sample. A picture rasterized with `toImageSync` renders in a
+/// multisampled offscreen pass instead, once; every frame after that draws a
+/// plain image, which is also far cheaper than replaying the paths (Impeller
+/// has no raster cache).
+///
+/// Least-recently-used, bounded by bytes: an icon animated through many sizes
+/// leaves one image per size. Evicted images are disposed; a frame that
+/// already drew one keeps its own reference to the pixels.
 abstract final class _GridFitCache {
-  static const _capacity = 512;
-  static final _pictures = <_Key, ui.Picture>{};
+  static const _budgetBytes = 32 << 20;
+  static final _images = <_Key, ui.Image>{};
+  static int _bytes = 0;
 
-  static ui.Picture picture(
+  static ui.Image image(
     vg.VectorInstructions instructions,
     double pixels,
     Color? color,
   ) {
     final key = _Key(instructions, (pixels * 1000).round(), color?.toARGB32());
-    final cached = _pictures.remove(key);
+    final cached = _images.remove(key);
     if (cached != null) {
-      _pictures[key] = cached;
+      _images[key] = cached;
       return cached;
     }
+    final extent = pixels.ceil();
     final picture = GridFit(instructions, pixels).record(color: color);
-    _pictures[key] = picture;
-    if (_pictures.length > _capacity) {
-      _pictures.remove(_pictures.keys.first);
+    final image = picture.toImageSync(extent, extent);
+    picture.dispose();
+    _images[key] = image;
+    _bytes += _sizeOf(image);
+    while (_bytes > _budgetBytes && _images.length > 1) {
+      final oldest = _images.keys.first;
+      final evicted = _images.remove(oldest)!;
+      _bytes -= _sizeOf(evicted);
+      evicted.dispose();
     }
-    return picture;
+    return image;
   }
+
+  static int _sizeOf(ui.Image image) => image.width * image.height * 4;
 }
 
 @immutable

@@ -118,7 +118,11 @@ void main() {
             ('right', actual.right, expected.right),
             ('bottom', actual.bottom, expected.bottom),
           ]) {
-            expect(a, closeTo(b, 1), reason: '$edge edge of $what');
+            // Fitting moves an edge to a whole pixel, and a thin stroke
+            // (the plus' 1.5-pixel bars at 28.8 pixels) can round a pixel
+            // inward at each of its two edges where the text glyph's fringe
+            // still counts: up to two pixels apart, never a layout shift.
+            expect(a, closeTo(b, 2), reason: '$edge edge of $what');
           }
         }
       }

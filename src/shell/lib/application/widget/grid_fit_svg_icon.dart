@@ -12,6 +12,8 @@ import 'package:shell/application/util/symbolic_svg.dart';
 import 'package:shell/shared/icon/grid_fit.dart';
 import 'package:shell/shared/icon/grid_fitted_vector.dart';
 import 'package:shell/shared/util/logger.dart';
+import 'package:vector_graphics/vector_graphics_compat.dart'
+    show RenderingStrategy;
 import 'package:vector_graphics_compiler/vector_graphics_compiler.dart' as vg;
 
 /// An SVG icon file drawn grid-fitted (see `grid_fit.dart`): crisp at the
@@ -47,6 +49,9 @@ class GridFitSvgIcon extends HookWidget {
     if (instructions == null || !isGridFittable(instructions)) {
       return SvgPicture(
         NormalizingSvgFileLoader(file),
+        // Rasterized (multisampled, once) rather than drawn as aliased
+        // paths: see GridFittedVector.
+        renderingStrategy: RenderingStrategy.raster,
         colorFilter: tint == null
             ? null
             : ColorFilter.mode(tint, BlendMode.srcIn),

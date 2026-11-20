@@ -20,6 +20,8 @@ import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_preview_image.dart';
 import 'package:shell/window/widget/resume_context_summary.dart';
+import 'package:vector_graphics/vector_graphics_compat.dart'
+    show RenderingStrategy;
 
 /// Fraction of the tile's width and height between each side of the tile and
 /// the placeholder's centered card.
@@ -598,6 +600,7 @@ class DisplayModeRow extends StatelessWidget {
                 'assets/float-symbolic.svg',
                 width: 24,
                 height: 24,
+                renderingStrategy: RenderingStrategy.raster,
               ),
             };
             return [

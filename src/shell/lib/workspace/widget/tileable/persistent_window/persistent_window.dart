@@ -39,6 +39,8 @@ import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/current_workspace_id.dart';
 import 'package:shell/workspace/widget/tileable/tileable.dart';
 import 'package:shell/workspace/widget/workspace_focusable.dart';
+import 'package:vector_graphics/vector_graphics_compat.dart'
+    show RenderingStrategy;
 
 /// Tileable Window that persist when closed
 class PersistentWindowTileable extends Tileable {
@@ -491,6 +493,7 @@ class PersistentWindowTileable extends Tileable {
                       'assets/float-symbolic.svg',
                       width: 24,
                       height: 24,
+                      renderingStrategy: RenderingStrategy.raster,
                     ),
                   },
                   onPressed: () {
