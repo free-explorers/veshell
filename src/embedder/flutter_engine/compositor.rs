@@ -6,16 +6,16 @@ use crate::{
         embedder::{
             FlutterBackingStore, FlutterBackingStoreConfig,
             FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL,
-            FlutterBackingStore__bindgen_ty_1, FlutterCompositor,
+            FlutterBackingStore__bindgen_ty_1, FlutterCompositor, FlutterDamage,
             FlutterLayerContentType_kFlutterLayerContentTypeBackingStore,
             FlutterOpenGLBackingStore, FlutterOpenGLBackingStore__bindgen_ty_1,
             FlutterOpenGLFramebuffer, FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer,
-            FlutterPresentViewInfo,
+            FlutterPresentViewInfo, FlutterViewId,
         },
         view::{AcquiredBackingStore, BackingStoreId, FlutterFrameFence, Frame},
         FlutterEngine,
     },
-    gles_framebuffer_importer::Resolve,
+    gles_framebuffer_importer::{PaintedRegion, Present},
     state::State,
 };
 use smithay::backend::egl::fence::EGLFence;
@@ -35,12 +35,12 @@ enum BackingStoreEvent {
 
 /// Flutter-side user data for one backing store. `texture_fbo` is set for the
 /// texture-backed fallback so the collect callback can release the framebuffer
-/// object attached to it. `resolve` moves a multisampled frame into the
-/// backing store when it is presented.
+/// object attached to it. `present` moves the view's frame into the backing
+/// store when it is presented.
 struct BackingStoreMeta {
     id: BackingStoreId,
     texture_fbo: Option<u32>,
-    resolve: Option<Resolve>,
+    present: Option<Present>,
 }
 
 pub struct CompositorUserData {
@@ -160,6 +160,9 @@ impl FlutterCompositor {
             // because we're using a triple-buffered swapchain.
             avoid_backing_store_cache: true,
             present_view_callback: Some(present_view_callback::<BackendData>),
+            populate_view_existing_damage_callback: Some(
+                populate_view_existing_damage_callback::<BackendData>,
+            ),
         }
     }
 }
@@ -193,18 +196,21 @@ where
     if let Ok(Some(backing_store)) = response.recv() {
         let context = &flutter_engine.renderer_data.main_egl_context;
         let importer = &mut flutter_engine.renderer_data.framebuffer_importer;
+        let view_id = backing_store.id.view_id;
         let (target, texture_fbo) = match &backing_store.frame {
             Frame::Dmabuf(dmabuf) => (
-                importer.import_framebuffer(context, dmabuf.clone()).ok(),
+                importer
+                    .import_framebuffer(context, view_id, dmabuf.clone())
+                    .ok(),
                 None,
             ),
-            Frame::Texture(texture) => match importer.import_texture(context, texture) {
+            Frame::Texture(texture) => match importer.import_texture(context, view_id, texture) {
                 Ok((fbo, target)) => (Some(target), Some(fbo)),
                 Err(_) => (None, None),
             },
         };
-        let (name, resolve) =
-            target.map_or((0, None), |target| (target.render_fbo, target.resolve));
+        let (name, present) =
+            target.map_or((0, None), |target| (target.render_fbo, target.present));
         if name == 0 {
             if let Some(texture_fbo) = texture_fbo {
                 let _ = importer.release_texture_framebuffer(context, texture_fbo);
@@ -220,7 +226,7 @@ where
             user_data: Box::into_raw(Box::new(BackingStoreMeta {
                 id: backing_store.id,
                 texture_fbo,
-                resolve,
+                present,
             })) as *mut c_void,
             type_: FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL,
             did_update: true,
@@ -306,7 +312,7 @@ where
     let flutter_engine =
         &mut *(compositor_data.flutter_engine_ptr as *mut FlutterEngine<BackendData>);
     let mut backing_store_id = None;
-    let mut resolve = None;
+    let mut present = None;
     for layer in std::slice::from_raw_parts((*info).layers, (*info).layers_count) {
         if layer.is_null() {
             return false;
@@ -326,17 +332,16 @@ where
         if backing_store_id.replace((*meta).id).is_some() {
             return false;
         }
-        resolve = (*meta).resolve;
+        present = (*meta).present;
     }
 
-    // The frame is submitted: move it out of the multisampled target before
-    // the fence that lets the compositor sample it (and before the next view
-    // renders into a target it may share).
-    if let Some(resolve) = resolve {
+    // The frame is submitted: move it into the backing store before the
+    // fence that lets the compositor sample it.
+    if let Some(present) = present {
         flutter_engine
             .renderer_data
             .framebuffer_importer
-            .resolve(resolve);
+            .present(present, painted_region(&*info));
     }
     let sync = frame_sync_point(&flutter_engine.renderer_data);
 
@@ -348,6 +353,54 @@ where
                 .ok()
         })
         .is_some()
+}
+
+/// What Flutter painted of the frame, when it painted only part of it.
+unsafe fn painted_region(info: &FlutterPresentViewInfo) -> Option<PaintedRegion> {
+    let has_field = info.struct_size
+        >= std::mem::offset_of!(FlutterPresentViewInfo, painted_region)
+            + std::mem::size_of::<*const crate::flutter_engine::embedder::FlutterRect>();
+    if !has_field || info.painted_region.is_null() {
+        return None;
+    }
+    let rect = &*info.painted_region;
+    Some(PaintedRegion {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+    })
+}
+
+/// Tells the engine, before it renders a frame of `view_id`, whether the
+/// view's target still holds the view's last frame: if so, only what changed
+/// is rendered (see `GlesFramebufferImporter::keeps_last_frame`).
+///
+/// Called on the raster thread.
+pub unsafe extern "C" fn populate_view_existing_damage_callback<BackendData>(
+    view_id: FlutterViewId,
+    existing_damage: *mut FlutterDamage,
+    user_data: *mut c_void,
+) -> bool
+where
+    BackendData: Backend + 'static,
+{
+    if user_data.is_null() || existing_damage.is_null() {
+        return false;
+    }
+    let compositor_data = &mut *(user_data as *mut CompositorUserData);
+    let flutter_engine =
+        &mut *(compositor_data.flutter_engine_ptr as *mut FlutterEngine<BackendData>);
+    if !flutter_engine
+        .renderer_data
+        .framebuffer_importer
+        .keeps_last_frame(view_id)
+    {
+        return false;
+    }
+    // Everything else is in the last frame.
+    (*existing_damage).num_rects = 0;
+    true
 }
 
 /// The point at which the frame Flutter just submitted is fully rendered.

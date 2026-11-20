@@ -70,7 +70,7 @@ use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
 use crate::flutter_engine::view::ViewsManagement;
 use crate::flutter_engine::wayland_messages::{EnvironmentVariables, MonitorsMessage, MyOutput};
-use crate::gles_framebuffer_importer::GlesFramebufferImporter;
+use crate::gles_framebuffer_importer::{GlesFramebufferImporter, ViewTargetReleaser};
 use crate::keyboard::{
     flutter_logical_key, flutter_physical_key, post_flutter_handle_key_event, VeshellKeyEvent,
 };
@@ -127,6 +127,8 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
     /// focus, kept in sync by both the pointer path (compositor-driven) and the
     /// engine's `view_focus_change_request_callback` (keyboard-driven).
     focused_view_id: Option<i64>,
+    /// Releases a removed view's render target, on the raster thread.
+    pub(crate) view_target_releaser: ViewTargetReleaser,
 }
 
 /// I don't want people to clone it because it's UB to call [FlutterEngine::on_vsync] multiple times
@@ -516,13 +518,14 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     })
                     .unwrap();
 
+                let renderer_data =
+                    RendererData::new(renderer.egl_context(), flutter_engine_channels)?;
+                let view_target_releaser =
+                    renderer_data.framebuffer_importer.view_target_releaser();
                 this.write(Self {
                     loop_handle: server_state.loop_handle.clone(),
                     handle: flutter_engine,
-                    renderer_data: RendererData::new(
-                        renderer.egl_context(),
-                        flutter_engine_channels,
-                    )?,
+                    renderer_data,
                     task_runner: TaskRunner::new(tx_reschedule_task_runner_timer),
                     current_thread_id: std::thread::current().id(),
                     mouse_button_tracker: MouseButtonTracker::new(),
@@ -533,6 +536,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     trackpad_scrolling_manager: TrackpadScrollingManager::new(),
                     views_management: ViewsManagement::new(),
                     focused_view_id: None,
+                    view_target_releaser,
                 });
 
                 // TODO: Delete this function once Box::assume_init gets stabilized.

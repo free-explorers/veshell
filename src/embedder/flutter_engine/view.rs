@@ -474,6 +474,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     if removed {
                         let engine = data.flutter_engine_mut();
                         let removed = engine.views_management.views.remove(&view_id).is_some();
+                        engine.view_target_releaser.release(view_id);
                         tracing::info!(
                             target: "veshell::geometry",
                             view_id,

@@ -10,33 +10,34 @@
 //! only option for now until I, or someone else, refactors the renderers into 2 parts: buffer
 //! importing and rendering.
 //!
-//! # Multisampling
+//! # View targets
 //!
-//! Impeller antialiases paths and clips through multisampling, but only
-//! multisamples a framebuffer the embedder hands it when the driver resolves
-//! implicitly (`GL_EXT_multisampled_render_to_texture`), which desktop Mesa
-//! does not. Drawn straight into a single-sample backing store, every edge
-//! that is not an SDF shape is aliased: clipped windows and images, charts,
-//! custom paths.
+//! Flutter does not render into the backing stores themselves but into a
+//! target of each view ([`ViewTarget`]), whose frame is then copied into the
+//! backing store when it is presented ([`GlesFramebufferImporter::present`]).
 //!
-//! So, as Flutter's own GTK embedder does, Flutter renders into a
-//! multisampled framebuffer of ours ([`MsaaTarget`]), which
-//! [`GlesFramebufferImporter::resolve`] blits into the backing store once
-//! the frame is submitted. Frames are rendered one view after the other on
-//! the raster thread, each resolved before the next starts, so views of one
-//! size share a target.
+//! * Multisampling. Impeller antialiases paths and clips through
+//!   multisampling, but only multisamples a framebuffer the embedder hands it
+//!   when the driver resolves implicitly
+//!   (`GL_EXT_multisampled_render_to_texture`), which desktop Mesa does not.
+//!   The view's render target is multisampled instead, and resolved on
+//!   present, as Flutter's own GTK embedder does. The sample count follows
+//!   the `theme.antialiasing` setting ([`set_antialiasing`]); `auto` weighs the
+//!   GPU (see [`GpuKind`]).
+//! * Partial repaint. The view's target also keeps its last complete frame,
+//!   so the engine paints only what changed
+//!   ([`GlesFramebufferImporter::keeps_last_frame`]) and only that is
+//!   resolved into it; the backing store then receives the whole frame.
 //!
-//! The sample count follows the `theme.antialiasing` setting
-//! ([`set_antialiasing`]); `auto` weighs the GPU (see [`GpuKind`]). A change
-//! applies from the next frame. Drivers without GLES 3 multisampling render
-//! into the backing store directly.
+//! Drivers without GLES 3 framebuffer blits cannot copy a frame: Flutter then
+//! renders into the backing store directly, whole and single-sample.
 
 use core::ffi::{c_char, CStr};
 
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU8, Ordering};
-use std::time::{Duration, Instant};
+use std::sync::{Arc, Mutex};
 
 use smithay::backend::allocator::Buffer;
 use smithay::backend::egl::{EGLDevice, EGLDisplay};
@@ -53,11 +54,6 @@ use smithay::backend::{
 use tracing::{info, trace};
 
 use crate::settings::Antialiasing;
-
-/// How long a multisampled target outlives its last frame. A screen that
-/// stays still for longer gives its memory back and allocates it again when
-/// it next changes; a resized or unplugged one does not keep it at all.
-const MSAA_TARGET_IDLE_LIFETIME: Duration = Duration::from_secs(10);
 
 /// The `theme.antialiasing` setting, written by the settings on the main
 /// thread and read by the importer on the raster thread.
@@ -97,11 +93,12 @@ enum GpuKind {
     Software,
 }
 
-/// The GPU's kind and how many samples its multisampled renderbuffers take
-/// (0 without GLES 3).
+/// The GPU's kind, whether it blits between framebuffers (GLES 3), and how
+/// many samples its multisampled renderbuffers take (0 without GLES 3).
 #[derive(Debug, Clone, Copy)]
 struct Gpu {
     kind: GpuKind,
+    blits: bool,
     max_samples: i32,
 }
 
@@ -131,15 +128,31 @@ pub struct GlesFramebufferImporter {
     egl_display: EGLDisplay,
     /// The GPU Flutter renders on; known once a context is current.
     gpu: Option<Gpu>,
-    /// The sample count the cached framebuffers are set up for.
-    samples: i32,
 
     // caches
     buffers: Vec<GlesFramebuffer>,
-    /// The framebuffers made by [`Self::import_texture`], released with
-    /// their backing store.
-    texture_framebuffers: HashMap<ffi::types::GLuint, TextureFramebuffer>,
-    msaa_targets: Vec<MsaaTarget>,
+    /// The depth/stencil renderbuffer of each framebuffer made by
+    /// [`Self::import_texture`] for direct rendering (0 otherwise), released
+    /// with it.
+    texture_framebuffers: HashMap<ffi::types::GLuint, ffi::types::GLuint>,
+    view_targets: Vec<ViewTarget>,
+    /// Views removed since the last frame, whose targets are to be released.
+    removed_views: Arc<Mutex<Vec<i64>>>,
+}
+
+/// Releases the target of a removed view.
+///
+/// A view's target is a set of GL objects of Flutter's context, released on
+/// the raster thread; views are removed on the main thread. The release waits
+/// for the next frame rendered. A view that only renders now and then keeps
+/// its target meanwhile: its next frame is still painted in part.
+#[derive(Debug, Clone)]
+pub struct ViewTargetReleaser(Arc<Mutex<Vec<i64>>>);
+
+impl ViewTargetReleaser {
+    pub fn release(&self, view_id: i64) {
+        self.0.lock().unwrap().push(view_id);
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -147,30 +160,28 @@ struct GlesFramebuffer {
     dmabuf: WeakDmabuf,
     image: EGLImage,
     rbo: ffi::types::GLuint,
-    /// 0 when Flutter renders into a multisampled target instead.
+    /// Only when Flutter renders into it directly (no blits); 0 otherwise.
     depth_stencil: ffi::types::GLuint,
     fbo: ffi::types::GLuint,
-    width: i32,
-    height: i32,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct TextureFramebuffer {
-    /// 0 when Flutter renders into a multisampled target instead.
-    depth_stencil: ffi::types::GLuint,
-    width: i32,
-    height: i32,
-}
-
-/// A multisampled framebuffer Flutter renders into, for one size.
+/// What Flutter renders a view into, and the view's last complete frame.
 #[derive(Debug)]
-struct MsaaTarget {
+struct ViewTarget {
+    view_id: i64,
     width: i32,
     height: i32,
-    fbo: ffi::types::GLuint,
-    color: ffi::types::GLuint,
-    depth_stencil: ffi::types::GLuint,
-    last_used: Instant,
+    samples: i32,
+    /// Flutter's render target: color and depth/stencil of `samples` samples.
+    /// What it holds outside the painted region is undefined.
+    render_fbo: ffi::types::GLuint,
+    render_color: ffi::types::GLuint,
+    render_depth_stencil: ffi::types::GLuint,
+    /// The view's last complete frame, single-sample.
+    frame_fbo: ffi::types::GLuint,
+    frame_color: ffi::types::GLuint,
+    /// Whether `frame` holds the view's last frame (not yet, once created).
+    frame_valid: bool,
 }
 
 /// The framebuffer Flutter renders a backing store into.
@@ -178,18 +189,29 @@ struct MsaaTarget {
 pub struct ImportedTarget {
     /// The framebuffer handed to Flutter.
     pub render_fbo: ffi::types::GLuint,
-    /// The blit that moves the rendered frame into the backing store, when
-    /// Flutter renders multisampled.
-    pub resolve: Option<Resolve>,
+    /// What moves the frame into the backing store once it is submitted;
+    /// `None` when Flutter renders into the backing store directly.
+    pub present: Option<Present>,
 }
 
-/// A multisample resolve, run once Flutter has submitted the frame.
+/// The copy of a view's frame into a backing store, run once Flutter has
+/// submitted the frame.
 #[derive(Debug, Clone, Copy)]
-pub struct Resolve {
-    from: ffi::types::GLuint,
-    to: ffi::types::GLuint,
+pub struct Present {
+    view_id: i64,
+    backing_store_fbo: ffi::types::GLuint,
     width: i32,
     height: i32,
+}
+
+/// A rectangle of a frame, in Flutter's coordinates: physical pixels from the
+/// top-left corner.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PaintedRegion {
+    pub left: f64,
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
 }
 
 impl GlesFramebufferImporter {
@@ -214,10 +236,10 @@ impl GlesFramebufferImporter {
             gl,
             egl_display,
             gpu: None,
-            samples: 1,
             buffers: vec![],
             texture_framebuffers: HashMap::new(),
-            msaa_targets: vec![],
+            view_targets: vec![],
+            removed_views: Arc::default(),
         })
     }
 
@@ -238,10 +260,11 @@ impl GlesFramebufferImporter {
     pub fn import_texture(
         &mut self,
         egl_context: &EGLContext,
+        view_id: i64,
         texture: &GlesTexture,
     ) -> Result<(ffi::types::GLuint, ImportedTarget), GlesError> {
         self.make_current(egl_context)?;
-        self.update_sampling();
+        let direct = !self.gpu().blits;
 
         unsafe {
             let mut fbo = 0;
@@ -255,10 +278,10 @@ impl GlesFramebufferImporter {
                 0,
             );
             let size = texture.size();
-            let depth_stencil = if self.samples > 1 {
-                0
-            } else {
+            let depth_stencil = if direct {
                 self.attach_depth_stencil(size.w, size.h, 1)
+            } else {
+                0
             };
             let status = self.gl.CheckFramebufferStatus(ffi::FRAMEBUFFER);
             self.gl.BindFramebuffer(ffi::FRAMEBUFFER, 0);
@@ -268,21 +291,14 @@ impl GlesFramebufferImporter {
                 self.gl.DeleteRenderbuffers(1, &depth_stencil as *const _);
                 return Err(GlesError::FramebufferBindingError);
             }
-            self.texture_framebuffers.insert(
-                fbo,
-                TextureFramebuffer {
-                    depth_stencil,
-                    width: size.w,
-                    height: size.h,
-                },
-            );
+            self.texture_framebuffers.insert(fbo, depth_stencil);
 
             trace!(
                 texture_id = texture.tex_id(),
                 fbo,
                 "Created framebuffer for Flutter texture"
             );
-            match self.render_target(fbo, size.w, size.h) {
+            match self.render_target(view_id, fbo, size.w, size.h) {
                 Ok(target) => Ok((fbo, target)),
                 Err(error) => {
                     self.forget_texture_framebuffer(fbo);
@@ -306,9 +322,8 @@ impl GlesFramebufferImporter {
     fn forget_texture_framebuffer(&mut self, fbo: ffi::types::GLuint) {
         unsafe {
             self.gl.DeleteFramebuffers(1, &fbo as *const _);
-            if let Some(framebuffer) = self.texture_framebuffers.remove(&fbo) {
-                self.gl
-                    .DeleteRenderbuffers(1, &framebuffer.depth_stencil as *const _);
+            if let Some(depth_stencil) = self.texture_framebuffers.remove(&fbo) {
+                self.gl.DeleteRenderbuffers(1, &depth_stencil as *const _);
             }
         }
     }
@@ -316,11 +331,11 @@ impl GlesFramebufferImporter {
     pub fn import_framebuffer(
         &mut self,
         egl_context: &EGLContext,
+        view_id: i64,
         dmabuf: Dmabuf,
     ) -> Result<ImportedTarget, GlesError> {
         self.make_current(egl_context)?;
-        self.update_sampling();
-        let multisampled = self.samples > 1;
+        let direct = !self.gpu().blits;
 
         let fbo = self
             .buffers
@@ -339,7 +354,6 @@ impl GlesFramebufferImporter {
                     .display()
                     .create_image_from_dmabuf(&dmabuf)
                     .map_err(GlesError::BindBufferEGLError)?;
-                let (width, height) = (dmabuf.width() as i32, dmabuf.height() as i32);
 
                 unsafe {
                     let mut rbo = 0;
@@ -358,10 +372,10 @@ impl GlesFramebufferImporter {
                         ffi::RENDERBUFFER,
                         rbo,
                     );
-                    let depth_stencil = if multisampled {
-                        0
+                    let depth_stencil = if direct {
+                        self.attach_depth_stencil(dmabuf.width() as i32, dmabuf.height() as i32, 1)
                     } else {
-                        self.attach_depth_stencil(width, height, 1)
+                        0
                     };
                     let status = self.gl.CheckFramebufferStatus(ffi::FRAMEBUFFER);
                     self.gl.BindFramebuffer(ffi::FRAMEBUFFER, 0);
@@ -378,8 +392,6 @@ impl GlesFramebufferImporter {
                         rbo,
                         depth_stencil,
                         fbo,
-                        width,
-                        height,
                     };
 
                     self.buffers.push(buf);
@@ -388,18 +400,80 @@ impl GlesFramebufferImporter {
                 }
             })?;
 
-        let target = self.render_target(fbo, dmabuf.width() as i32, dmabuf.height() as i32)?;
+        let target =
+            self.render_target(view_id, fbo, dmabuf.width() as i32, dmabuf.height() as i32)?;
         self.make_current(egl_context)?;
         Ok(target)
     }
 
-    /// Moves a multisampled frame into its backing store.
+    /// Whether the view's target still holds its last complete frame for the
+    /// frame about to be rendered, which then only needs what changed.
+    ///
+    /// Called on the raster thread before Flutter renders a frame of the
+    /// view. A view without a target, one whose target is about to be
+    /// remade with another sample count (the setting changed), or one whose
+    /// last frame was never completed repaints whole. A view about to change
+    /// size is repainted whole by the engine itself.
+    pub fn keeps_last_frame(&mut self, view_id: i64) -> bool {
+        let Some(gpu) = self.gpu else {
+            return false;
+        };
+        let samples = gpu.samples(antialiasing());
+        self.view_targets
+            .iter()
+            .find(|target| target.view_id == view_id)
+            .is_some_and(|target| target.frame_valid && target.samples == samples)
+    }
+
+    /// What lets the main thread release a removed view's target.
+    pub fn view_target_releaser(&self) -> ViewTargetReleaser {
+        ViewTargetReleaser(self.removed_views.clone())
+    }
+
+    /// Moves a submitted frame into its backing store.
+    ///
+    /// Resolves what Flutter painted (`painted`, `None` for all of it) from the
+    /// view's render target into its last frame, then copies that frame into
+    /// the backing store.
     ///
     /// Called on the raster thread once Flutter has submitted the frame, with
     /// its context current and before the fence that tells the compositor the
-    /// frame is ready. The GL state the blit depends on is restored after it:
-    /// Impeller tracks some of its own.
-    pub fn resolve(&self, resolve: Resolve) {
+    /// frame is ready. The GL state the blits depend on is restored after
+    /// them: Impeller tracks some of its own.
+    pub fn present(&mut self, present: Present, painted: Option<PaintedRegion>) {
+        let Some(target) = self
+            .view_targets
+            .iter_mut()
+            .find(|target| target.view_id == present.view_id)
+        else {
+            return;
+        };
+        let (width, height) = (target.width, target.height);
+        if (width, height) != (present.width, present.height) {
+            return;
+        }
+        // Flutter's coordinates run down from the top; GL's up from the
+        // bottom, where Flutter's frames are drawn upside up.
+        let full = (0, 0, width, height);
+        let resolved = match painted {
+            Some(region) if target.frame_valid => {
+                let left = (region.left.floor() as i32).clamp(0, width);
+                let right = (region.right.ceil() as i32).clamp(0, width);
+                let top = (region.top.floor() as i32).clamp(0, height);
+                let bottom = (region.bottom.ceil() as i32).clamp(0, height);
+                (left, height - bottom, right, height - top)
+            }
+            _ => full,
+        };
+        trace!(
+            view = present.view_id,
+            ?painted,
+            ?resolved,
+            "Presenting a frame"
+        );
+        let (render_fbo, frame_fbo) = (target.render_fbo, target.frame_fbo);
+        target.frame_valid = true;
+
         unsafe {
             let mut read_binding = 0;
             let mut draw_binding = 0;
@@ -413,27 +487,19 @@ impl GlesFramebufferImporter {
                 self.gl.Disable(ffi::SCISSOR_TEST);
             }
 
-            self.gl.BindFramebuffer(ffi::READ_FRAMEBUFFER, resolve.from);
-            self.gl.BindFramebuffer(ffi::DRAW_FRAMEBUFFER, resolve.to);
-            self.gl.BlitFramebuffer(
-                0,
-                0,
-                resolve.width,
-                resolve.height,
-                0,
-                0,
-                resolve.width,
-                resolve.height,
-                ffi::COLOR_BUFFER_BIT,
-                ffi::NEAREST,
-            );
-            // Nothing reads the samples again: the next frame clears them.
+            let (x0, y0, x1, y1) = resolved;
+            if x0 < x1 && y0 < y1 {
+                // A multisample resolve needs the same rectangle on both sides.
+                self.blit(render_fbo, frame_fbo, resolved, resolved);
+            }
+            // Nothing reads the render target again: the next frame clears it.
             let attachments = [ffi::COLOR_ATTACHMENT0, ffi::DEPTH_STENCIL_ATTACHMENT];
             self.gl.InvalidateFramebuffer(
                 ffi::READ_FRAMEBUFFER,
                 attachments.len() as i32,
                 attachments.as_ptr(),
             );
+            self.blit(frame_fbo, present.backing_store_fbo, full, full);
 
             self.gl
                 .BindFramebuffer(ffi::READ_FRAMEBUFFER, read_binding as ffi::types::GLuint);
@@ -445,187 +511,181 @@ impl GlesFramebufferImporter {
         }
     }
 
-    /// The framebuffer Flutter renders a backing store whose framebuffer is
-    /// `fbo` into.
+    /// Blits the color of `from`'s rectangle into `to`'s, leaving `from`
+    /// bound for reading.
+    unsafe fn blit(
+        &self,
+        from: ffi::types::GLuint,
+        to: ffi::types::GLuint,
+        (sx0, sy0, sx1, sy1): (i32, i32, i32, i32),
+        (dx0, dy0, dx1, dy1): (i32, i32, i32, i32),
+    ) {
+        self.gl.BindFramebuffer(ffi::READ_FRAMEBUFFER, from);
+        self.gl.BindFramebuffer(ffi::DRAW_FRAMEBUFFER, to);
+        self.gl.BlitFramebuffer(
+            sx0,
+            sy0,
+            sx1,
+            sy1,
+            dx0,
+            dy0,
+            dx1,
+            dy1,
+            ffi::COLOR_BUFFER_BIT,
+            ffi::NEAREST,
+        );
+    }
+
+    /// The framebuffer Flutter renders a frame of `view_id`, presented in the
+    /// backing store whose framebuffer is `fbo`, into.
     fn render_target(
         &mut self,
+        view_id: i64,
         fbo: ffi::types::GLuint,
         width: i32,
         height: i32,
     ) -> Result<ImportedTarget, GlesError> {
-        if self.samples <= 1 {
+        let gpu = self.gpu();
+        if !gpu.blits {
             return Ok(ImportedTarget {
                 render_fbo: fbo,
-                resolve: None,
+                present: None,
             });
         }
-        let msaa_fbo = self.msaa_target(width, height)?;
+        let render_fbo = self.view_target(view_id, width, height, gpu.samples(antialiasing()))?;
         Ok(ImportedTarget {
-            render_fbo: msaa_fbo,
-            resolve: Some(Resolve {
-                from: msaa_fbo,
-                to: fbo,
+            render_fbo,
+            present: Some(Present {
+                view_id,
+                backing_store_fbo: fbo,
                 width,
                 height,
             }),
         })
     }
 
-    /// Brings the cached framebuffers to the sample count the setting and the
-    /// GPU call for, between two frames.
-    ///
-    /// Multisampled, Flutter's depth and stencil live in the multisampled
-    /// target; single-sample, every backing store framebuffer needs its own.
-    fn update_sampling(&mut self) {
-        let samples = self.gpu().samples(antialiasing());
-        if samples == self.samples {
-            return;
-        }
-        info!(
-            from = self.samples,
-            to = samples,
-            "Changing Flutter's multisampling"
-        );
-        self.samples = samples;
-        for target in std::mem::take(&mut self.msaa_targets) {
-            self.drop_msaa_target(&target);
-        }
-
-        let wants_depth_stencil = samples <= 1;
-        let mut buffers = std::mem::take(&mut self.buffers);
-        for buffer in &mut buffers {
-            buffer.depth_stencil = unsafe {
-                self.swap_depth_stencil(
-                    buffer.fbo,
-                    buffer.depth_stencil,
-                    wants_depth_stencil,
-                    buffer.width,
-                    buffer.height,
-                )
-            };
-        }
-        self.buffers = buffers;
-        let mut framebuffers = std::mem::take(&mut self.texture_framebuffers);
-        for (fbo, framebuffer) in &mut framebuffers {
-            framebuffer.depth_stencil = unsafe {
-                self.swap_depth_stencil(
-                    *fbo,
-                    framebuffer.depth_stencil,
-                    wants_depth_stencil,
-                    framebuffer.width,
-                    framebuffer.height,
-                )
-            };
-        }
-        self.texture_framebuffers = framebuffers;
-    }
-
-    /// Gives framebuffer `fbo` a single-sample depth/stencil renderbuffer, or
-    /// takes its `current` one away. Returns the renderbuffer it is left with
-    /// (0 for none).
-    unsafe fn swap_depth_stencil(
-        &self,
-        fbo: ffi::types::GLuint,
-        current: ffi::types::GLuint,
-        wanted: bool,
+    /// The render framebuffer of `view_id`'s target, made (or remade, at
+    /// another size or sample count) on demand; targets of removed views are
+    /// released.
+    fn view_target(
+        &mut self,
+        view_id: i64,
         width: i32,
         height: i32,
-    ) -> ffi::types::GLuint {
-        if wanted == (current != 0) {
-            return current;
-        }
-        self.gl.BindFramebuffer(ffi::FRAMEBUFFER, fbo);
-        let depth_stencil = if wanted {
-            self.attach_depth_stencil(width, height, 1)
-        } else {
-            self.gl.FramebufferRenderbuffer(
-                ffi::FRAMEBUFFER,
-                ffi::DEPTH_STENCIL_ATTACHMENT,
-                ffi::RENDERBUFFER,
-                0,
-            );
-            self.gl.DeleteRenderbuffers(1, &current as *const _);
-            0
-        };
-        self.gl.BindFramebuffer(ffi::FRAMEBUFFER, 0);
-        depth_stencil
-    }
-
-    /// The multisampled framebuffer for frames of `width`x`height`, made on
-    /// first use; targets left unused are released.
-    fn msaa_target(&mut self, width: i32, height: i32) -> Result<ffi::types::GLuint, GlesError> {
-        let now = Instant::now();
+        samples: i32,
+    ) -> Result<ffi::types::GLuint, GlesError> {
+        let removed = std::mem::take(&mut *self.removed_views.lock().unwrap());
         let mut i = 0;
-        while i != self.msaa_targets.len() {
-            let target = &self.msaa_targets[i];
-            let fits = target.width == width && target.height == height;
-            if !fits && now.duration_since(target.last_used) > MSAA_TARGET_IDLE_LIFETIME {
-                let target = self.msaa_targets.remove(i);
-                self.drop_msaa_target(&target);
+        while i != self.view_targets.len() {
+            let target = &self.view_targets[i];
+            let stale = if target.view_id == view_id {
+                (target.width, target.height, target.samples) != (width, height, samples)
+            } else {
+                removed.contains(&target.view_id)
+            };
+            if stale {
+                let target = self.view_targets.remove(i);
+                self.drop_view_target(&target);
             } else {
                 i += 1;
             }
         }
         if let Some(target) = self
-            .msaa_targets
+            .view_targets
             .iter_mut()
-            .find(|target| target.width == width && target.height == height)
+            .find(|target| target.view_id == view_id)
         {
-            target.last_used = now;
-            return Ok(target.fbo);
+            return Ok(target.render_fbo);
         }
 
-        let samples = self.samples;
         unsafe {
-            let mut color = 0;
-            self.gl.GenRenderbuffers(1, &mut color as *mut _);
-            self.gl.BindRenderbuffer(ffi::RENDERBUFFER, color);
-            self.gl.RenderbufferStorageMultisample(
-                ffi::RENDERBUFFER,
-                samples,
-                ffi::RGBA8,
+            let mut target = ViewTarget {
+                view_id,
                 width,
                 height,
-            );
-            self.gl.BindRenderbuffer(ffi::RENDERBUFFER, 0);
-
-            let mut fbo = 0;
-            self.gl.GenFramebuffers(1, &mut fbo as *mut _);
-            self.gl.BindFramebuffer(ffi::FRAMEBUFFER, fbo);
+                samples,
+                render_fbo: 0,
+                render_color: 0,
+                render_depth_stencil: 0,
+                frame_fbo: 0,
+                frame_color: 0,
+                frame_valid: false,
+            };
+            target.render_color = self.renderbuffer(ffi::RGBA8, width, height, samples);
+            self.gl.GenFramebuffers(1, &mut target.render_fbo as *mut _);
+            self.gl.BindFramebuffer(ffi::FRAMEBUFFER, target.render_fbo);
             self.gl.FramebufferRenderbuffer(
                 ffi::FRAMEBUFFER,
                 ffi::COLOR_ATTACHMENT0,
                 ffi::RENDERBUFFER,
-                color,
+                target.render_color,
             );
-            let depth_stencil = self.attach_depth_stencil(width, height, samples);
-            let status = self.gl.CheckFramebufferStatus(ffi::FRAMEBUFFER);
+            target.render_depth_stencil = self.attach_depth_stencil(width, height, samples);
+            let render_status = self.gl.CheckFramebufferStatus(ffi::FRAMEBUFFER);
+
+            target.frame_color = self.renderbuffer(ffi::RGBA8, width, height, 1);
+            self.gl.GenFramebuffers(1, &mut target.frame_fbo as *mut _);
+            self.gl.BindFramebuffer(ffi::FRAMEBUFFER, target.frame_fbo);
+            self.gl.FramebufferRenderbuffer(
+                ffi::FRAMEBUFFER,
+                ffi::COLOR_ATTACHMENT0,
+                ffi::RENDERBUFFER,
+                target.frame_color,
+            );
+            let frame_status = self.gl.CheckFramebufferStatus(ffi::FRAMEBUFFER);
             self.gl.BindFramebuffer(ffi::FRAMEBUFFER, 0);
 
-            let target = MsaaTarget {
-                width,
-                height,
-                fbo,
-                color,
-                depth_stencil,
-                last_used: now,
-            };
-            if status != ffi::FRAMEBUFFER_COMPLETE {
-                self.drop_msaa_target(&target);
+            if render_status != ffi::FRAMEBUFFER_COMPLETE
+                || frame_status != ffi::FRAMEBUFFER_COMPLETE
+            {
+                self.drop_view_target(&target);
                 return Err(GlesError::FramebufferBindingError);
             }
-            info!(width, height, samples, "Created a multisampled target");
-            self.msaa_targets.push(target);
-            Ok(fbo)
+            info!(view_id, width, height, samples, "Created a view target");
+            let render_fbo = target.render_fbo;
+            self.view_targets.push(target);
+            Ok(render_fbo)
         }
     }
 
-    fn drop_msaa_target(&self, target: &MsaaTarget) {
-        unsafe {
-            self.gl.DeleteFramebuffers(1, &target.fbo as *const _);
-            self.gl.DeleteRenderbuffers(1, &target.color as *const _);
+    unsafe fn renderbuffer(
+        &self,
+        format: ffi::types::GLenum,
+        width: i32,
+        height: i32,
+        samples: i32,
+    ) -> ffi::types::GLuint {
+        let mut renderbuffer = 0;
+        self.gl.GenRenderbuffers(1, &mut renderbuffer as *mut _);
+        self.gl.BindRenderbuffer(ffi::RENDERBUFFER, renderbuffer);
+        if samples > 1 {
+            self.gl.RenderbufferStorageMultisample(
+                ffi::RENDERBUFFER,
+                samples,
+                format,
+                width,
+                height,
+            );
+        } else {
             self.gl
-                .DeleteRenderbuffers(1, &target.depth_stencil as *const _);
+                .RenderbufferStorage(ffi::RENDERBUFFER, format, width, height);
+        }
+        self.gl.BindRenderbuffer(ffi::RENDERBUFFER, 0);
+        renderbuffer
+    }
+
+    fn drop_view_target(&self, target: &ViewTarget) {
+        unsafe {
+            for fbo in [target.render_fbo, target.frame_fbo] {
+                self.gl.DeleteFramebuffers(1, &fbo as *const _);
+            }
+            for renderbuffer in [
+                target.render_color,
+                target.render_depth_stencil,
+                target.frame_color,
+            ] {
+                self.gl.DeleteRenderbuffers(1, &renderbuffer as *const _);
+            }
         }
     }
 
@@ -634,7 +694,7 @@ impl GlesFramebufferImporter {
         if let Some(gpu) = self.gpu {
             return gpu;
         }
-        let (renderer, max_samples) = unsafe {
+        let (renderer, major, max_samples) = unsafe {
             let renderer = CStr::from_ptr(self.gl.GetString(ffi::RENDERER) as *const c_char)
                 .to_string_lossy()
                 .to_ascii_lowercase();
@@ -644,7 +704,7 @@ impl GlesFramebufferImporter {
             if major >= 3 {
                 self.gl.GetIntegerv(ffi::MAX_SAMPLES, &mut max_samples);
             }
-            (renderer, max_samples)
+            (renderer, major, max_samples)
         };
         let kind = if ["llvmpipe", "softpipe", "swrast"]
             .iter()
@@ -659,7 +719,11 @@ impl GlesFramebufferImporter {
                 .map(|name| sysfs_gpu_kind(&Path::new("/sys/class/drm").join(name).join("device")))
                 .unwrap_or(GpuKind::Integrated)
         };
-        let gpu = Gpu { kind, max_samples };
+        let gpu = Gpu {
+            kind,
+            blits: major >= 3,
+            max_samples,
+        };
         info!(
             ?kind,
             max_samples, renderer, "Flutter's GPU, for antialiasing"
@@ -681,22 +745,7 @@ impl GlesFramebufferImporter {
         height: i32,
         samples: i32,
     ) -> ffi::types::GLuint {
-        let mut depth_stencil = 0;
-        self.gl.GenRenderbuffers(1, &mut depth_stencil as *mut _);
-        self.gl.BindRenderbuffer(ffi::RENDERBUFFER, depth_stencil);
-        if samples > 1 {
-            self.gl.RenderbufferStorageMultisample(
-                ffi::RENDERBUFFER,
-                samples,
-                ffi::DEPTH24_STENCIL8,
-                width,
-                height,
-            );
-        } else {
-            self.gl
-                .RenderbufferStorage(ffi::RENDERBUFFER, ffi::DEPTH24_STENCIL8, width, height);
-        }
-        self.gl.BindRenderbuffer(ffi::RENDERBUFFER, 0);
+        let depth_stencil = self.renderbuffer(ffi::DEPTH24_STENCIL8, width, height, samples);
         self.gl.FramebufferRenderbuffer(
             ffi::FRAMEBUFFER,
             ffi::DEPTH_STENCIL_ATTACHMENT,
@@ -772,15 +821,14 @@ impl Drop for GlesFramebufferImporter {
         while let Some(buffer) = self.buffers.pop() {
             self.drop_buffer(buffer);
         }
-        for (fbo, framebuffer) in self.texture_framebuffers.drain() {
+        for (fbo, depth_stencil) in self.texture_framebuffers.drain() {
             unsafe {
                 self.gl.DeleteFramebuffers(1, &fbo as *const _);
-                self.gl
-                    .DeleteRenderbuffers(1, &framebuffer.depth_stencil as *const _);
+                self.gl.DeleteRenderbuffers(1, &depth_stencil as *const _);
             }
         }
-        while let Some(target) = self.msaa_targets.pop() {
-            self.drop_msaa_target(&target);
+        while let Some(target) = self.view_targets.pop() {
+            self.drop_view_target(&target);
         }
     }
 }
@@ -791,14 +839,17 @@ mod tests {
 
     const DEDICATED: Gpu = Gpu {
         kind: GpuKind::Dedicated,
+        blits: true,
         max_samples: 8,
     };
     const INTEGRATED: Gpu = Gpu {
         kind: GpuKind::Integrated,
+        blits: true,
         max_samples: 8,
     };
     const SOFTWARE: Gpu = Gpu {
         kind: GpuKind::Software,
+        blits: true,
         max_samples: 4,
     };
 
@@ -822,12 +873,14 @@ mod tests {
     fn antialiasing_never_exceeds_what_the_gpu_takes() {
         let two = Gpu {
             kind: GpuKind::Dedicated,
+            blits: true,
             max_samples: 2,
         };
         assert_eq!(two.samples(Antialiasing::X4), 2);
         assert_eq!(two.samples(Antialiasing::Auto), 2);
         let gles2 = Gpu {
             kind: GpuKind::Dedicated,
+            blits: false,
             max_samples: 0,
         };
         assert_eq!(gles2.samples(Antialiasing::X4), 1);
