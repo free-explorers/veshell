@@ -48,12 +48,18 @@ class Helm extends StatelessWidget {
   }
 }
 
-/// One Helm column as its own focus-traversal region.
+/// One Helm column as its own focus-traversal region, painted on its own.
 ///
 /// `Tab` walks the column's controls and the directional keys cross to the
 /// neighbouring column by geometry, so the dashboard is navigable as three
 /// predictable regions instead of one flat focus soup.
-Widget _column(Widget child) => FocusTraversalGroup(child: child);
+///
+/// Each monitoring sample lays the columns' row out again, and what is laid
+/// out is repainted: without a boundary of its own, every column was
+/// re-recorded with it, and the screen repainted across all of them where
+/// only a sparkline had moved.
+Widget _column(Widget child) =>
+    RepaintBoundary(child: FocusTraversalGroup(child: child));
 
 class _ThreeColumnLayout extends StatelessWidget {
   const _ThreeColumnLayout();

@@ -65,6 +65,12 @@ class MonitoringCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Its badge changes with every sample: repaint this card alone, not the
+    // whole column of cards with it.
+    return RepaintBoundary(child: _build(context));
+  }
+
+  Widget _build(BuildContext context) {
     return ExpandableCard(
       builder: (context, isExpanded) {
         return ConstrainedBox(
