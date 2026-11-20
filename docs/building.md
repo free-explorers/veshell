@@ -40,6 +40,31 @@ the custom `profile` directory. Inference finds the profile above Cargo's
 `build/` directory and supports both `build/<package>-<hash>/out` and
 `build/<package>/<hash>/out` layouts, rather than assuming a fixed depth.
 
+## Working on the engine
+
+By default Cargo links a prebuilt engine for the pinned revision. To change the
+engine itself, build it from source with `extra/engine/engine.sh`:
+
+```sh
+extra/engine/engine.sh sync           # once: sources and dependencies
+extra/engine/engine.sh build          # incremental; prints the export below
+export VESHELL_LOCAL_ENGINE=../veshell-engine/flutter/engine/src/out/host_debug_unopt
+cargo run
+```
+
+`sync` clones the Flutter monorepo into `../veshell-engine` (or
+`VESHELL_ENGINE_WORKDIR`), creates the `veshell/<flutter_version>` branch at
+the engine revision of the pinned SDK, and runs `gclient sync` (tens of GB).
+Engine changes are commits on that branch. An existing branch is never moved:
+after a Flutter bump, rebase it onto the new revision and sync again.
+
+`build [debug_unopt|debug|profile|release]` builds only the embedder library;
+`debug_unopt` keeps the engine debuggable. `VESHELL_LOCAL_ENGINE` links that
+output directory in place, with its own `flutter_embedder.h`, and needs no
+prebuilt shell: the SDK builds the shell from the same revision. The variant
+must match the Flutter mode, so a `cargo run --release` needs a `release`
+engine build.
+
 ## Offline packaging
 
 Fetch/vendor dependencies and build the shell separately before compiling Rust.
