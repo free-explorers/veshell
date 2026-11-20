@@ -22,14 +22,16 @@ use smithay::backend::egl::fence::EGLFence;
 use smithay::backend::renderer::sync::SyncPoint;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::{channel, LoopHandle};
+use smithay::utils::{Buffer, Rectangle};
 struct BackingStoreRequest {
     config: FlutterBackingStoreConfig,
     reply: channel::Sender<Option<AcquiredBackingStore>>,
 }
 
 enum BackingStoreEvent {
-    /// A frame Flutter submitted, and the point its rendering completes.
-    Presented(BackingStoreId, SyncPoint),
+    /// A frame Flutter submitted, the point its rendering completes, and
+    /// what differs from the view's previous frame (`None`: all of it).
+    Presented(BackingStoreId, SyncPoint, Option<Rectangle<i32, Buffer>>),
     Collected(BackingStoreId),
 }
 
@@ -105,7 +107,7 @@ impl FlutterCompositor {
                     let freeze = data.capture_state.session.is_some();
                     let flutter_engine = data.flutter_engine_mut();
                     match event {
-                        BackingStoreEvent::Presented(id, sync) => {
+                        BackingStoreEvent::Presented(id, sync, damage) => {
                             // While a screenshot session freezes the
                             // desktop, late Flutter frames must not
                             // replace the frame captured at hotkey time.
@@ -113,12 +115,12 @@ impl FlutterCompositor {
                                 if let Some(view) =
                                     flutter_engine.views_management.views.get_mut(&id.view_id)
                                 {
-                                    view.hold_backing_store(id);
+                                    view.hold_backing_store(id, damage);
                                 }
                             } else if let Some(view) =
                                 flutter_engine.views_management.views.get_mut(&id.view_id)
                             {
-                                view.present_backing_store(id, sync);
+                                view.present_backing_store(id, sync, damage);
                             }
                             // The presented frame is fresh output damage:
                             // every screen-cast session on this output
@@ -337,19 +339,19 @@ where
 
     // The frame is submitted: move it into the backing store before the
     // fence that lets the compositor sample it.
-    if let Some(present) = present {
+    let damage = present.and_then(|present| {
         flutter_engine
             .renderer_data
             .framebuffer_importer
-            .present(present, painted_region(&*info));
-    }
+            .present(present, painted_region(&*info))
+    });
     let sync = frame_sync_point(&flutter_engine.renderer_data);
 
     backing_store_id
         .and_then(|id| {
             compositor_data
                 .tx_backing_store_event
-                .send(BackingStoreEvent::Presented(id, sync))
+                .send(BackingStoreEvent::Presented(id, sync, damage))
                 .ok()
         })
         .is_some()

@@ -27,7 +27,8 @@
 //! * Partial repaint. The view's target also keeps its last complete frame,
 //!   so the engine paints only what changed
 //!   ([`GlesFramebufferImporter::keeps_last_frame`]) and only that is
-//!   resolved into it; the backing store then receives the whole frame.
+//!   resolved into it; the backing store then receives the whole frame, and
+//!   the compositor repaints only that part of the output.
 //!
 //! Drivers without GLES 3 framebuffer blits cannot copy a frame: Flutter then
 //! renders into the backing store directly, whole and single-sample.
@@ -51,6 +52,7 @@ use smithay::backend::{
     },
     renderer::gles::{ffi, GlesError, GlesTexture},
 };
+use smithay::utils::{Buffer as BufferCoords, Rectangle};
 use tracing::{info, trace};
 
 use crate::settings::Antialiasing;
@@ -440,17 +442,22 @@ impl GlesFramebufferImporter {
     /// its context current and before the fence that tells the compositor the
     /// frame is ready. The GL state the blits depend on is restored after
     /// them: Impeller tracks some of its own.
-    pub fn present(&mut self, present: Present, painted: Option<PaintedRegion>) {
-        let Some(target) = self
+    ///
+    /// Returns what differs from the view's previous frame, in the texture's
+    /// own coordinates (rows from the bottom, as GL stores Flutter's frames),
+    /// or `None` when the whole frame may have changed.
+    pub fn present(
+        &mut self,
+        present: Present,
+        painted: Option<PaintedRegion>,
+    ) -> Option<Rectangle<i32, BufferCoords>> {
+        let target = self
             .view_targets
             .iter_mut()
-            .find(|target| target.view_id == present.view_id)
-        else {
-            return;
-        };
+            .find(|target| target.view_id == present.view_id)?;
         let (width, height) = (target.width, target.height);
         if (width, height) != (present.width, present.height) {
-            return;
+            return None;
         }
         // Flutter's coordinates run down from the top; GL's up from the
         // bottom, where Flutter's frames are drawn upside up.
@@ -465,6 +472,10 @@ impl GlesFramebufferImporter {
             }
             _ => full,
         };
+        let changed = (resolved != full).then(|| {
+            let (x0, y0, x1, y1) = resolved;
+            Rectangle::new((x0, y0).into(), ((x1 - x0).max(0), (y1 - y0).max(0)).into())
+        });
         trace!(
             view = present.view_id,
             ?painted,
@@ -509,6 +520,7 @@ impl GlesFramebufferImporter {
                 self.gl.Enable(ffi::SCISSOR_TEST);
             }
         }
+        changed
     }
 
     /// Blits the color of `from`'s rectangle into `to`'s, leaving `from`
