@@ -68,6 +68,16 @@ extension WorkspaceCategoryLocalization on WorkspaceCategory {
 @JsonPersist()
 class WorkspaceState extends _$WorkspaceState {
   KeepAliveLink? _keepAliveLink;
+
+  /// The window selected before the current one, selected again when the
+  /// current one leaves the workspace; `null` when there is none to go back
+  /// to. In memory only.
+  PersistentWindowId? _previousSelectedWindow;
+
+  /// The selected window, `null` when the application launcher is selected.
+  PersistentWindowId? get _selectedWindow =>
+      state.tileableWindowList.elementAtOrNull(state.selectedIndex);
+
   String get persistKey => 'workspace_$workspaceId';
   @override
   Workspace build(WorkspaceId workspaceId) {
@@ -170,6 +180,16 @@ class WorkspaceState extends _$WorkspaceState {
     );
   }
 
+  /// Inserts [windowId] right after the selected tile (at the end when the
+  /// application launcher is selected) and selects it.
+  Future<void> insertWindowAfterSelected(PersistentWindowId windowId) {
+    final length = state.tileableWindowList.length;
+    final index = state.selectedIndex < length
+        ? state.selectedIndex + 1
+        : length;
+    return insertWindow(windowId, index, selectWindow: true);
+  }
+
   Future<void> insertWindow(
     PersistentWindowId windowId,
     int index, {
@@ -189,6 +209,7 @@ class WorkspaceState extends _$WorkspaceState {
           .removeWindow(windowId);
     }
     final newWindowList = state.tileableWindowList.insert(index, windowId);
+    if (selectWindow) _previousSelectedWindow = _selectedWindow;
     state = state.copyWith(
       tileableWindowList: newWindowList,
       category: state.forcedCategory ?? await _determineCategory(newWindowList),
@@ -214,7 +235,15 @@ class WorkspaceState extends _$WorkspaceState {
         : state.firstVisibleIndex;
 
     var selectedIndex = state.selectedIndex;
-    if (!removedIsCurrentlyFocused) {
+    final previous = _previousSelectedWindow;
+    if (removedIsCurrentlyFocused) {
+      // Back to the window selected before, if it is still here.
+      if (previous != null && newWindowList.contains(previous)) {
+        selectedIndex = newWindowList.indexOf(previous);
+      }
+      _previousSelectedWindow = null;
+    } else {
+      if (previous == windowId) _previousSelectedWindow = null;
       if (selectedIndex < state.tileableWindowList.length) {
         selectedIndex = newWindowList.indexOf(
           state.tileableWindowList[state.selectedIndex],
@@ -252,10 +281,14 @@ class WorkspaceState extends _$WorkspaceState {
     final index = state.tileableWindowList.indexOf(windowId);
     if (index == -1) return;
     if (index == state.selectedIndex) return;
+    _previousSelectedWindow = _selectedWindow;
     state = state.copyWith(selectedIndex: index);
   }
 
   void setSelectedIndex(int index) {
+    if (index != state.selectedIndex) {
+      _previousSelectedWindow = _selectedWindow;
+    }
     state = state.copyWith(selectedIndex: index);
   }
 

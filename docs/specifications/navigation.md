@@ -56,12 +56,18 @@ handlers run, because a resolved intent is dispatched from
 
 | Context | `NavigateIntent` | `MoveIntent` | `ActivateIntent` | `DismissIntent` | `CloseIntent` | `CycleIntent` |
 | --- | --- | --- | --- | --- | --- | --- |
-| **Screen** | up/down select the workspace | up/down send the selected tile to the workspace above/below and follow it | — | — | — | — |
+| **Screen** | up/down select the workspace | up/down send the selected tile to the workspace above/below (right after its selected tile) and follow it | — | — | — | — |
 | **Workspace** | left/right select the tileable; up/down forwarded to the screen | left/right reorder the tileable; up/down forwarded | — | — | close the focused tileable | — |
 | **Search field** (`SearchEngine`) | down hands the keyboard to the result list; left/right move across the panes | — | activate the current result | — | — | — |
 | **Result list** (applications / files) | up/down move the roving selection cursor; up on the first row returns to the field; left/right move across the panes | — | activate the selected row | — | — | — |
 | **Content pane / Helm** | framework traversal (`focusInDirection`) | — | activate the focused control | — | — | — |
 | **Overview fallback** | up/down move the selection; left/right move focus | — | — | hide the overview | — | cycle the search mode |
+
+A tile sent to another workspace lands right after that workspace's selected
+tile, or at its end when its application launcher is selected, and is selected
+there. When the selected tile leaves a workspace (sent on, or closed), the tile
+selected before it is selected again, so carrying a tile over several
+workspaces leaves each one on the tile it had.
 
 The overview is a sibling of the workspace panes and takes focus when open, so
 its handlers win over the screen's while it is displayed. The workspace nests

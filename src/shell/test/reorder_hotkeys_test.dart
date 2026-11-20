@@ -7,6 +7,7 @@ import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/workspace/model/workspace.serializable.dart';
+import 'package:shell/workspace/provider/window_workspace_map.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
 
 const _screen = 'screen-1';
@@ -47,6 +48,14 @@ class _RecordingWorkspaceState extends WorkspaceState {
   }) async {
     calls.add((windowId, index, selectWindow));
   }
+}
+
+class _FakeWindowWorkspaceMap extends WindowWorkspaceMap {
+  _FakeWindowWorkspaceMap(this._map);
+  final Map<WindowId, WorkspaceId> _map;
+
+  @override
+  IMap<WindowId, WorkspaceId> build() => _map.lock;
 }
 
 Screen _screenWith(List<String> workspaces, {int selectedIndex = 0}) => Screen(
@@ -307,19 +316,19 @@ void main() {
 
       notifier(container).moveSelectedTileableToWorkspace(1);
 
-      // Appended after ws-b's existing tile and selected there.
+      // Placed right after ws-b's selected tile and selected there.
       expect(calls, [(const PersistentWindowId('t2'), 1, true)]);
       // The screen navigates to the destination so the tile is followed.
       expect(selectedWorkspace(container), 1);
     });
 
     test('sends the selected window to the workspace above and follows it', () {
-      // ws-b's first tile, appended after ws-a's two tiles.
+      // ws-b's first tile, placed right after ws-a's selected first tile.
       final container = setUpScreen(selectedWorkspace: 1, selectedWindow: 0);
 
       notifier(container).moveSelectedTileableToWorkspace(-1);
 
-      expect(calls, [(const PersistentWindowId('b1'), 2, true)]);
+      expect(calls, [(const PersistentWindowId('b1'), 1, true)]);
       expect(selectedWorkspace(container), 0);
     });
 
@@ -340,6 +349,142 @@ void main() {
 
       expect(calls, isEmpty);
       expect(selectedWorkspace(container), 0);
+    });
+  });
+
+  group('carrying a tileable across workspaces', () {
+    late ProviderContainer container;
+
+    // A forced category keeps the real transfer off the desktop entries.
+    Workspace workspace(
+      String id,
+      List<String> windows, {
+      int selectedIndex = 0,
+    }) => Workspace(
+      workspaceId: id,
+      tileableWindowList: windows.map(PersistentWindowId.new).toList().lock,
+      selectedIndex: selectedIndex,
+      visibleLength: 1,
+      forcedCategory: WorkspaceCategory.Utility,
+    );
+
+    void setUpScreen(List<Workspace> workspaces) {
+      container = ProviderContainer(
+        overrides: [
+          screenStateProvider(_screen).overrideWith(
+            () => _FakeScreenState(
+              _screenWith([for (final w in workspaces) w.workspaceId]),
+            ),
+          ),
+          for (final w in workspaces)
+            workspaceStateProvider(
+              w.workspaceId,
+            ).overrideWith(() => _FakeWorkspaceState(w)),
+          windowWorkspaceMapProvider.overrideWith(
+            () => _FakeWindowWorkspaceMap({
+              for (final w in workspaces)
+                for (final windowId in w.tileableWindowList)
+                  windowId: w.workspaceId,
+            }),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      // Keep the auto-dispose screen and workspaces alive between reads.
+      container.listen(screenStateProvider(_screen), (_, _) {});
+      for (final w in workspaces) {
+        container.listen(workspaceStateProvider(w.workspaceId), (_, _) {});
+      }
+    }
+
+    Workspace current(String id) => container.read(workspaceStateProvider(id));
+
+    List<String> windows(String id) =>
+        current(id).tileableWindowList.map((w) => w.uuid).toList();
+
+    Future<void> moveDown() async {
+      container
+          .read(screenStateProvider(_screen).notifier)
+          .moveSelectedTileableToWorkspace(1);
+      await pumpEventQueue();
+    }
+
+    test('lands right after the selected tile and is selected', () async {
+      setUpScreen([
+        workspace('ws-a', ['t1']),
+        workspace('ws-b', ['b1', 'b2', 'b3'], selectedIndex: 1),
+      ]);
+
+      await moveDown();
+
+      expect(windows('ws-b'), ['b1', 'b2', 't1', 'b3']);
+      expect(current('ws-b').selectedIndex, 2);
+    });
+
+    test('lands before the application launcher when it is selected', () async {
+      setUpScreen([
+        workspace('ws-a', ['t1']),
+        // Two windows, so index 2 is the launcher slot.
+        workspace('ws-b', ['b1', 'b2'], selectedIndex: 2),
+      ]);
+
+      await moveDown();
+
+      expect(windows('ws-b'), ['b1', 'b2', 't1']);
+      expect(current('ws-b').selectedIndex, 2);
+    });
+
+    test('gives a crossed workspace its selected tile back', () async {
+      setUpScreen([
+        workspace('ws-a', ['t1']),
+        workspace('ws-b', ['b1', 'b2', 'b3'], selectedIndex: 1),
+        workspace('ws-c', ['c1']),
+      ]);
+
+      await moveDown();
+      await moveDown();
+
+      expect(windows('ws-b'), ['b1', 'b2', 'b3']);
+      expect(current('ws-b').selectedIndex, 1);
+      expect(windows('ws-c'), ['c1', 't1']);
+      expect(current('ws-c').selectedIndex, 1);
+    });
+
+    test('goes back to the tile selected last before it', () async {
+      setUpScreen([
+        workspace('ws-a', ['t1']),
+        workspace('ws-b', ['b1', 'b2', 'b3'], selectedIndex: 1),
+        workspace('ws-c', ['c1']),
+      ]);
+
+      await moveDown();
+      // Visit b3 and come back before moving the tile on.
+      container.read(workspaceStateProvider('ws-b').notifier)
+        ..selectAdjacentTileable(1)
+        ..selectAdjacentTileable(-1);
+      await moveDown();
+
+      expect(windows('ws-b'), ['b1', 'b2', 'b3']);
+      // b3, not b2 which was selected when the tile came in.
+      expect(current('ws-b').selectedIndex, 2);
+    });
+
+    test('goes back to the previous tile after others closed', () async {
+      setUpScreen([
+        workspace('ws-a', ['t1']),
+        workspace('ws-b', ['b1', 'b2']),
+        workspace('ws-c', ['c1']),
+      ]);
+
+      await moveDown();
+      // Another tile of ws-b closes before the carried one moves on.
+      await container
+          .read(workspaceStateProvider('ws-b').notifier)
+          .removeWindow(const PersistentWindowId('b2'));
+      await moveDown();
+
+      expect(windows('ws-b'), ['b1']);
+      expect(current('ws-b').selectedIndex, 0);
     });
   });
 }
