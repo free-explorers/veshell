@@ -10,7 +10,7 @@ build = "extra/build/mod.rs"
 default-run = "veshell"
 
 [package.metadata]
-flutter_version = "3.47.7"
+flutter_version = "3.50.1"
 
 [[bin]]
 name = "veshell"
