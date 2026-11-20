@@ -407,6 +407,8 @@
   "invalidValue": "Inserisci un valore valido",
   "animationSpeed": "Velocità delle animazioni",
   "animationSpeedDescription": "Velocità delle animazioni della shell: 1 come progettate, 0,5 a metà velocità (per esaminarne una), 2 al doppio.",
+  "optimizedOverview": "Panoramica ottimizzata",
+  "optimizedOverviewDescription": "Evita che la panoramica aperta ridisegni lo schermo dietro di sé: lo sfondo sfocato diventa un'immagine fissa e i grafici di monitoraggio avanzano a scatti invece di scorrere. Disattivala per uno sfondo dal vivo e grafici fluidi, con un maggiore carico sulla GPU.",
   "focusIndicator": "Indicatore di focus",
   "focusIndicatorDescription": "Come si distingue la finestra attiva quando sono visibili più finestre",
   "focusIndicatorBorder": "Bordo scorrevole",
