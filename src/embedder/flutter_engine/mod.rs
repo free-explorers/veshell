@@ -566,6 +566,27 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     }
 
     /// mhz == millihertz
+    /// Answers a vsync request for the vblank at `vblank`, the next one being
+    /// `interval` later, both on the engine's clock (`CLOCK_MONOTONIC`).
+    ///
+    /// The engine computes the frame's animations for `vblank`: it must be the
+    /// panel's, not the moment the request is answered, or motion is computed
+    /// for an instant other than the one it is shown at.
+    pub fn on_vsync_at(
+        &self,
+        baton: Baton,
+        vblank: Duration,
+        interval: Duration,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let start = u64::try_from(vblank.as_nanos()).unwrap_or(u64::MAX);
+        let target = start.saturating_add(u64::try_from(interval.as_nanos()).unwrap_or(0));
+        let result = unsafe { FlutterEngineOnVsync(self.handle, baton.0, start, target) };
+        if result != 0 {
+            return Err(format!("Could not send vsync baton, error {result}").into());
+        }
+        Ok(())
+    }
+
     pub fn on_vsync(&self, baton: Baton, mhz: u32) -> Result<(), Box<dyn std::error::Error>> {
         let now = unsafe { FlutterEngineGetCurrentTime() };
         let next_frame = now + ((1_000_000.0 / mhz as f64) * 1_000_000.0) as u64;

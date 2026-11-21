@@ -55,6 +55,7 @@ pub struct CaptureDmabufSetup {
 
 pub mod drm_backend;
 pub mod render;
+pub mod vsync_clock;
 pub mod winit;
 pub trait Backend {
     const HAS_RELATIVE_MOTION: bool = false;
