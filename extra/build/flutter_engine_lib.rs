@@ -108,9 +108,8 @@ fn local_engine(
 /// The engine patches the application is pinned to (`Cargo.toml`
 /// `flutter_engine_patchset`).
 fn get_flutter_engine_patchset() -> Result<String, Box<dyn std::error::Error>> {
-    let manifest_path = env::var("CARGO_MANIFEST_PATH").unwrap_or_else(|_| {
-        format!("{}/Cargo.toml", env::var("CARGO_MANIFEST_DIR").unwrap())
-    });
+    let manifest_path = env::var("CARGO_MANIFEST_PATH")
+        .unwrap_or_else(|_| format!("{}/Cargo.toml", env::var("CARGO_MANIFEST_DIR").unwrap()));
     let metadata = cargo_metadata::MetadataCommand::new()
         .manifest_path(manifest_path)
         .no_deps()
