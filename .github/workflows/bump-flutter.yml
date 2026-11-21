@@ -56,8 +56,12 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "error: version must be x.y.z" >&2; exit 1; }
-          current=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml","rb"))["package"]["metadata"]["flutter_version"])')
-          [[ "$current" != "$VERSION" ]] || { echo "error: already on Flutter $VERSION" >&2; exit 1; }
+          # What a bump provides is the version's Nix and CDN pins. A branch that
+          # already moved Cargo.toml to it (engine work done against the new
+          # SDK) still needs them, so only those pins mean it is done.
+          if python3 -c 'import json,sys; sys.exit(0 if sys.argv[1] in json.load(open("nix/flutter-sdk.json")) else 1)' "$VERSION"; then
+            echo "error: nix/flutter-sdk.json already pins Flutter $VERSION" >&2; exit 1
+          fi
           if git ls-remote --exit-code --heads origin "bump/flutter-v$VERSION" >/dev/null 2>&1; then
             echo "error: branch bump/flutter-v$VERSION already exists" >&2; exit 1
           fi
