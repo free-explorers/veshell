@@ -88,7 +88,10 @@ jobs:
             fi
 
             pinned=$(python3 -c 'import json;print(json.load(open("nix/engine-repository.json"))["revision"])')
-            engine_rev=$(gh api "repos/$ENGINE_NIX_REPO/commits?path=engine-source.json&per_page=1" --jq '.[0].sha' 2>/dev/null || true)
+            # The head of main, not the commit that added the version's pin: the
+            # engine derivation also depends on engine.nix, so the cached build
+            # is the one of the commits after it (its fixes included).
+            engine_rev=$(gh api "repos/$ENGINE_NIX_REPO/commits/main" --jq '.sha' 2>/dev/null || true)
             if [[ -n "$engine_rev" && "$engine_rev" != "$pinned" ]]; then
               has=$(gh api "repos/$ENGINE_NIX_REPO/contents/engine-source.json?ref=$engine_rev" \
                 -H "Accept: application/vnd.github.raw" \
