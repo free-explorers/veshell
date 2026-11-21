@@ -66,16 +66,18 @@ pub fn install_flutter_sdk() -> Result<(), Box<dyn std::error::Error>> {
             "Flutter SDK tag {} missing locally, fetching it...",
             flutter_version
         );
-        let fetched = std::process::Command::new("git")
-            .args([
-                "-C",
-                FLUTTER_REPO_DIR,
-                "fetch",
-                "origin",
-                "tag",
-                flutter_version,
-            ])
-            .status()?;
+        // A shallow clone must stay shallow: a plain fetch of a tag that is
+        // not a descendant of the shallow boundary fails with "did not send
+        // all necessary objects".
+        let mut fetch = std::process::Command::new("git");
+        fetch.args(["-C", FLUTTER_REPO_DIR, "fetch"]);
+        if std::path::Path::new(FLUTTER_REPO_DIR)
+            .join(".git/shallow")
+            .exists()
+        {
+            fetch.args(["--depth", "1"]);
+        }
+        let fetched = fetch.args(["origin", "tag", flutter_version]).status()?;
         if !fetched.success() {
             return Err(format!(
                 "Failed to fetch Flutter SDK tag {} from {}",

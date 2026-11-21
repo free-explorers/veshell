@@ -42,6 +42,9 @@ dependencies:
   # Parses SVG icons into flat drawing commands for grid fitting
   # (lib/shared/icon/grid_fit.dart). Already used by flutter_svg.
   vector_graphics_compiler: ^1.2.3
+  # RenderingStrategy.raster for SVGs drawn through flutter_svg, which does
+  # not re-export it. Already used by flutter_svg.
+  vector_graphics: ^1.2.2
 
   arena_listener: ^0.0.2
   fast_immutable_collections: ^9.2.0

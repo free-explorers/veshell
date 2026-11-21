@@ -20,18 +20,109 @@ pub fn link_flutter_engine_shared_library(
     println!("cargo:rerun-if-env-changed=VESHELL_LIB_DIR");
     println!("cargo:rerun-if-env-changed=VESHELL_ENGINE_REPO");
     println!("cargo:rerun-if-env-changed=SKIP_FLUTTER_ENGINE_DOWNLOAD");
-    if env::var_os("VESHELL_ENGINE_DIR").is_none() {
-        let flutter_engine_revision = get_flutter_engine_revision()?;
-        if should_download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build) {
-            download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build)?;
+    println!("cargo:rerun-if-env-changed=VESHELL_LOCAL_ENGINE");
+
+    let (header_path, lib_dir) = if let Some(out_dir) = local_engine(flutter_engine_build)? {
+        (
+            out_dir.join(FLUTTER_ENGINE_HEADER_NAME),
+            out_dir.display().to_string(),
+        )
+    } else {
+        let engine_dir =
+            env::var("VESHELL_ENGINE_DIR").unwrap_or_else(|_| FLUTTER_ENGINE_LIBS_DIR.to_owned());
+        if env::var_os("VESHELL_ENGINE_DIR").is_none() {
+            // The engine is upstream's at the SDK's revision with Veshell's
+            // patches: both name the artifact.
+            let flutter_engine_revision = format!(
+                "{}-{}",
+                get_flutter_engine_revision()?,
+                get_flutter_engine_patchset()?
+            );
+            if should_download_flutter_engine_library(
+                &flutter_engine_revision,
+                flutter_engine_build,
+            ) {
+                download_flutter_engine_library(&flutter_engine_revision, flutter_engine_build)?;
+            }
+        }
+        (
+            PathBuf::from(format!("{engine_dir}/{FLUTTER_ENGINE_HEADER_NAME}")),
+            format!("{engine_dir}/{flutter_engine_build}"),
+        )
+    };
+
+    generate_embedder_bindings(&header_path);
+    link_libflutter_engine(&lib_dir);
+    Ok(())
+}
+
+/// The output directory of a locally built engine, when one is selected.
+///
+/// `VESHELL_LOCAL_ENGINE` names a gn output directory produced by
+/// `extra/engine/engine.sh build`, such as `.../engine/src/out/host_debug_unopt`.
+/// The engine is built from the pinned SDK's revision, so the shell the SDK
+/// builds still matches it: unlike `VESHELL_ENGINE_DIR`, it needs no prebuilt
+/// shell. It is linked in place and never downloaded over.
+fn local_engine(
+    flutter_engine_build: FlutterEngineBuild,
+) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    let Some(out_dir) = env::var_os("VESHELL_LOCAL_ENGINE") else {
+        return Ok(None);
+    };
+    if env::var_os("VESHELL_ENGINE_DIR").is_some() {
+        return Err("Set VESHELL_LOCAL_ENGINE or VESHELL_ENGINE_DIR, not both.".into());
+    }
+    let out_dir = PathBuf::from(out_dir).canonicalize().map_err(|error| {
+        format!("VESHELL_LOCAL_ENGINE does not name an engine build directory: {error}")
+    })?;
+    // A debug shell's kernel cannot run on a profile or release engine, nor an
+    // AOT shell on a debug one: the gn variant must match the Flutter mode.
+    let name = out_dir
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    let expected = format!("host_{flutter_engine_build}");
+    if name != expected && !name.starts_with(&format!("{expected}_")) {
+        return Err(format!(
+            "VESHELL_LOCAL_ENGINE is {name}, but this is a {flutter_engine_build} build: \
+             use an engine built as {expected} (extra/engine/engine.sh build)"
+        )
+        .into());
+    }
+    for file in [FLUTTER_ENGINE_LIB_NAME, FLUTTER_ENGINE_HEADER_NAME] {
+        if !out_dir.join(file).is_file() {
+            return Err(format!(
+                "{} is missing: build the engine first (extra/engine/engine.sh build)",
+                out_dir.join(file).display()
+            )
+            .into());
         }
     }
+    println!(
+        "cargo:warning=Linking the local engine in {}",
+        out_dir.display()
+    );
+    Ok(Some(out_dir))
+}
 
-    // Generate the embedder bindings
-    generate_embedder_bindings();
-
-    link_libflutter_engine(flutter_engine_build);
-    Ok(())
+/// The engine patches the application is pinned to (`Cargo.toml`
+/// `flutter_engine_patchset`).
+fn get_flutter_engine_patchset() -> Result<String, Box<dyn std::error::Error>> {
+    let manifest_path = env::var("CARGO_MANIFEST_PATH")
+        .unwrap_or_else(|_| format!("{}/Cargo.toml", env::var("CARGO_MANIFEST_DIR").unwrap()));
+    let metadata = cargo_metadata::MetadataCommand::new()
+        .manifest_path(manifest_path)
+        .no_deps()
+        .other_options(vec!["--offline".to_owned()])
+        .exec()?;
+    let patchset = metadata
+        .root_package()
+        .and_then(|package| package.metadata["flutter_engine_patchset"].as_str())
+        .ok_or("Cargo.toml has no package.metadata.flutter_engine_patchset")?;
+    if patchset.is_empty() {
+        return Err("Cargo.toml's flutter_engine_patchset is empty".into());
+    }
+    Ok(patchset.to_owned())
 }
 
 fn get_flutter_engine_revision() -> Result<String, Box<dyn std::error::Error>> {
@@ -191,10 +282,8 @@ fn download_from_url(url: &str) -> Result<bytes::Bytes, reqwest::Error> {
     reqwest::blocking::get(url)?.error_for_status()?.bytes()
 }
 
-fn generate_embedder_bindings() {
-    let engine_dir =
-        env::var("VESHELL_ENGINE_DIR").unwrap_or_else(|_| FLUTTER_ENGINE_LIBS_DIR.to_owned());
-    let embedder_header_path = format!("{engine_dir}/{FLUTTER_ENGINE_HEADER_NAME}");
+fn generate_embedder_bindings(embedder_header_path: &Path) {
+    let embedder_header_path = embedder_header_path.display().to_string();
     println!("cargo:rerun-if-changed={embedder_header_path}");
     println!("Generating embedder bindings...");
 
@@ -210,12 +299,9 @@ fn generate_embedder_bindings() {
         .expect("Couldn't write bindings!");
 }
 
-fn link_libflutter_engine(flutter_engine_build: FlutterEngineBuild) {
+fn link_libflutter_engine(libflutter_engine_dir: &str) {
     link_libgl();
 
-    let engine_dir =
-        env::var("VESHELL_ENGINE_DIR").unwrap_or_else(|_| FLUTTER_ENGINE_LIBS_DIR.to_owned());
-    let libflutter_engine_dir = format!("{engine_dir}/{flutter_engine_build}");
     println!("cargo:rerun-if-changed={libflutter_engine_dir}/{FLUTTER_ENGINE_LIB_NAME}");
     println!("cargo:rustc-link-search={libflutter_engine_dir}");
     println!("cargo:rustc-link-lib={FLUTTER_ENGINE_LINK_NAME}");

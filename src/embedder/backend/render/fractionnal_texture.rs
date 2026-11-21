@@ -1,7 +1,7 @@
 use crate::flutter_engine::view::FlutterFrameFence;
 use smithay::backend::renderer::element::{Element, Id, Kind, RenderElement, UnderlyingStorage};
 use smithay::backend::renderer::sync::SyncPoint;
-use smithay::backend::renderer::utils::{CommitCounter, OpaqueRegions};
+use smithay::backend::renderer::utils::{CommitCounter, DamageSet, DamageSnapshot, OpaqueRegions};
 use smithay::backend::renderer::{ContextId, Frame as _, Renderer, Texture};
 use smithay::utils::user_data::UserDataMap;
 use smithay::utils::{Buffer, Logical, Physical, Point, Rectangle, Scale, Size, Transform};
@@ -11,7 +11,8 @@ use tracing::warn;
 #[derive(Debug, Clone)]
 pub struct FractionnalTextureBuffer<T: Texture> {
     id: Id,
-    commit_counter: CommitCounter,
+    /// What changed in the texture, commit after commit.
+    damage: DamageSnapshot<i32, Buffer>,
     renderer_context_id: ContextId<T>,
     texture: T,
     scale: Scale<f64>,
@@ -42,7 +43,7 @@ impl<T: Texture> FractionnalTextureBuffer<T> {
     ) -> Self {
         FractionnalTextureBuffer {
             id: Id::new(),
-            commit_counter: CommitCounter::default(),
+            damage: DamageSnapshot::empty(),
             renderer_context_id: renderer.context_id(),
             texture,
             scale: scale.into(),
@@ -55,11 +56,11 @@ impl<T: Texture> FractionnalTextureBuffer<T> {
 
 impl<T: Texture> FractionnalTextureBuffer<T> {
     /// Reuses an identity across composites: the same `id` with an unchanged
-    /// `commit` reads as an undamaged element to the damage tracker, so only a
-    /// new commit repaints it.
-    pub fn with_identity(mut self, id: Id, commit: CommitCounter) -> Self {
+    /// `damage` reads as an undamaged element to the damage tracker, and a new
+    /// commit repaints only the part of it that commit changed.
+    pub fn with_identity(mut self, id: Id, damage: DamageSnapshot<i32, Buffer>) -> Self {
         self.id = id;
-        self.commit_counter = commit;
+        self.damage = damage;
         self
     }
 
@@ -99,6 +100,25 @@ impl<T: Texture> FractionnalTextureRenderElement<T> {
 }
 
 impl<T: Texture> FractionnalTextureRenderElement<T> {
+    /// A rectangle of the texture, where it is drawn relative to the
+    /// element; `None` outside the part drawn.
+    fn buffer_to_local(&self, rect: Rectangle<f64, Buffer>) -> Option<Rectangle<f64, Logical>> {
+        let src = self.src();
+        // The source rectangle is drawn at `logical_size()`, which differs
+        // from its own logical size when a viewport stretches it.
+        let src_logical_size = src
+            .size
+            .to_logical(self.buffer.scale, self.buffer.transform);
+        let stretch = self.logical_size() / src_logical_size;
+
+        let mut rect = rect.intersection(src)?;
+        rect.loc -= src.loc;
+        Some(
+            rect.to_logical(self.buffer.scale, self.buffer.transform, &src.size)
+                .upscale(stretch),
+        )
+    }
+
     pub fn logical_size(&self) -> Size<f64, Logical> {
         self.size
             .or_else(|| self.src.map(|src| src.size))
@@ -112,7 +132,7 @@ impl<T: Texture> Element for FractionnalTextureRenderElement<T> {
     }
 
     fn current_commit(&self) -> CommitCounter {
-        self.buffer.commit_counter
+        self.buffer.damage.current_commit()
     }
 
     fn geometry(&self, scale: Scale<f64>) -> Rectangle<i32, Physical> {
@@ -136,27 +156,42 @@ impl<T: Texture> Element for FractionnalTextureRenderElement<T> {
             .unwrap_or_else(|| Rectangle::from_size(self.buffer.texture.size()).to_f64())
     }
 
-    fn opaque_regions(&self, scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
-        let src = self.src();
-        // The source rectangle is drawn at `logical_size()`, which differs
-        // from its own logical size when a viewport stretches it.
-        let src_logical_size = src
-            .size
-            .to_logical(self.buffer.scale, self.buffer.transform);
-        let stretch = self.logical_size() / src_logical_size;
+    fn damage_since(
+        &self,
+        scale: Scale<f64>,
+        commit: Option<CommitCounter>,
+    ) -> DamageSet<i32, Physical> {
+        let size = self.geometry(scale).size;
+        let Some(damage) = self.buffer.damage.damage_since(commit) else {
+            return DamageSet::from_slice(&[Rectangle::from_size(size)]);
+        };
+        damage
+            .iter()
+            .filter_map(|rect| {
+                let rect = self
+                    .buffer_to_local(rect.to_f64())?
+                    .to_physical_precise_up(scale);
+                // A pixel more on every side: the element's own position is
+                // rounded, and a stretched texture's filtering reaches the
+                // pixels next to those that changed.
+                Rectangle::new(
+                    rect.loc - Point::from((1, 1)),
+                    rect.size + Size::from((2, 2)),
+                )
+                .intersection(Rectangle::from_size(size))
+            })
+            .collect()
+    }
 
+    fn opaque_regions(&self, scale: Scale<f64>) -> OpaqueRegions<i32, Physical> {
         self.buffer
             .opaque_regions
             .iter()
             .filter_map(|region| {
-                let mut region = region.to_f64().intersection(src)?;
-
-                region.loc -= src.loc;
-
-                let logical = region
-                    .to_logical(self.buffer.scale, self.buffer.transform, &src.size)
-                    .upscale(stretch);
-                Some(logical.to_physical_precise_down(scale))
+                Some(
+                    self.buffer_to_local(region.to_f64())?
+                        .to_physical_precise_down(scale),
+                )
             })
             .collect()
     }
@@ -213,5 +248,111 @@ where
 
     fn underlying_storage(&self, _renderer: &mut R) -> Option<UnderlyingStorage<'_>> {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use smithay::backend::allocator::Fourcc;
+    use smithay::backend::renderer::utils::DamageBag;
+
+    #[derive(Debug, Clone)]
+    struct FakeTexture(Size<i32, Buffer>);
+
+    impl Texture for FakeTexture {
+        fn width(&self) -> u32 {
+            self.0.w as u32
+        }
+        fn height(&self) -> u32 {
+            self.0.h as u32
+        }
+        fn format(&self) -> Option<Fourcc> {
+            None
+        }
+    }
+
+    /// A 1280×800 view at scale 1.2, flipped as GL stores Flutter's frames.
+    fn element(
+        damage: DamageSnapshot<i32, Buffer>,
+    ) -> FractionnalTextureRenderElement<FakeTexture> {
+        let buffer = FractionnalTextureBuffer {
+            id: Id::new(),
+            damage,
+            renderer_context_id: ContextId::new(),
+            texture: FakeTexture((1536, 960).into()),
+            scale: 1.2.into(),
+            transform: Transform::Flipped180,
+            opaque_regions: Vec::new(),
+            sync: SyncPoint::signaled(),
+        };
+        FractionnalTextureRenderElement::from_texture_buffer(
+            buffer,
+            (0.0, 0.0),
+            1.0,
+            None,
+            Some((1280.0, 800.0).into()),
+            Kind::Unspecified,
+        )
+    }
+
+    #[test]
+    fn a_frame_damages_only_what_it_changed_upside_up() {
+        let mut bag = DamageBag::default();
+        bag.add([Rectangle::<i32, Buffer>::new(
+            (100, 0).into(),
+            (10, 10).into(),
+        )]);
+        let before = bag.current_commit();
+        bag.add([Rectangle::<i32, Buffer>::new(
+            (200, 950).into(),
+            (4, 10).into(),
+        )]);
+        let element = element(bag.snapshot());
+
+        let damage = element.damage_since(1.2.into(), Some(before));
+        let [damage] = damage.iter().copied().collect::<Vec<_>>()[..] else {
+            panic!("one rectangle expected, got {damage:?}");
+        };
+        // GL's rows run up: the texture's top rows are the screen's top
+        // ones once flipped. The 4×10 texels are 3.33×8.33 logical pixels,
+        // 4×10 physical ones from (200, 0), and a pixel of margin around.
+        let changed = Rectangle::<i32, Physical>::new((200, 0).into(), (4, 10).into());
+        assert!(damage.contains_rect(changed), "{damage:?}");
+        assert!(
+            damage.size.w <= 4 + 3 && damage.size.h <= 10 + 2,
+            "{damage:?}"
+        );
+    }
+
+    #[test]
+    fn a_commit_out_of_history_damages_the_whole_element() {
+        let mut bag = DamageBag::default();
+        bag.add([Rectangle::<i32, Buffer>::new(
+            (100, 0).into(),
+            (10, 10).into(),
+        )]);
+        bag.reset();
+        let element = element(bag.snapshot());
+
+        let damage = element.damage_since(1.2.into(), None);
+        assert_eq!(
+            damage.iter().copied().collect::<Vec<_>>(),
+            vec![Rectangle::<i32, Physical>::from_size((1536, 960).into())],
+        );
+    }
+
+    #[test]
+    fn the_same_commit_damages_nothing() {
+        let mut bag = DamageBag::default();
+        bag.add([Rectangle::<i32, Buffer>::new(
+            (100, 0).into(),
+            (10, 10).into(),
+        )]);
+        let element = element(bag.snapshot());
+
+        assert!(element
+            .damage_since(1.2.into(), Some(bag.current_commit()))
+            .is_empty());
     }
 }

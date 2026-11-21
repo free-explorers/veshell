@@ -19,7 +19,7 @@ use std::rc::Rc;
 use std::time::Duration;
 use trackpad_scrolling_manager::TrackpadScrollingManager;
 
-use smithay::backend::renderer::gles::ffi::RGBA8;
+use smithay::backend::renderer::Texture;
 use smithay::output::Output;
 use smithay::reexports::calloop;
 use smithay::reexports::calloop::channel::Event::Msg;
@@ -39,9 +39,9 @@ use smithay::{
 
 use crate::backend::Backend;
 use crate::flutter_engine::callbacks::{
-    gl_external_texture_frame_callback, platform_message_callback, populate_existing_damage,
-    post_task_callback, runs_task_on_current_thread_callback, view_focus_change_request_callback,
-    vsync_callback,
+    gl_external_texture_frame_callback, gl_proc_resolver, platform_message_callback,
+    populate_existing_damage, post_task_callback, runs_task_on_current_thread_callback,
+    view_focus_change_request_callback, vsync_callback,
 };
 use crate::flutter_engine::embedder::{
     FlutterCompositor, FlutterCustomTaskRunners, FlutterEngineAOTData, FlutterEngineAOTDataSource,
@@ -70,7 +70,7 @@ use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
 use crate::flutter_engine::view::ViewsManagement;
 use crate::flutter_engine::wayland_messages::{EnvironmentVariables, MonitorsMessage, MyOutput};
-use crate::gles_framebuffer_importer::GlesFramebufferImporter;
+use crate::gles_framebuffer_importer::{GlesFramebufferImporter, ViewTargetReleaser};
 use crate::keyboard::{
     flutter_logical_key, flutter_physical_key, post_flutter_handle_key_event, VeshellKeyEvent,
 };
@@ -127,6 +127,8 @@ pub struct FlutterEngine<BackendData: Backend + 'static> {
     /// focus, kept in sync by both the pointer path (compositor-driven) and the
     /// engine's `view_focus_change_request_callback` (keyboard-driven).
     focused_view_id: Option<i64>,
+    /// Releases a removed view's render target, on the raster thread.
+    pub(crate) view_target_releaser: ViewTargetReleaser,
 }
 
 /// I don't want people to clone it because it's UB to call [FlutterEngine::on_vsync] multiple times
@@ -142,7 +144,8 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
             channel::channel::<Duration>();
         let (tx_request_external_texture_name, rx_request_external_texture_name) =
             channel::channel::<i64>();
-        let (tx_external_texture_name, rx_external_texture_name) = channel::channel::<(u32, u32)>();
+        let (tx_external_texture_name, rx_external_texture_name) =
+            channel::channel::<ExternalTexture>();
 
         let (tx_flutter_handled_key_event, rx_flutter_handled_key_event) =
             channel::channel::<(VeshellKeyEvent, bool, bool)>();
@@ -213,11 +216,20 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let observatory_port = CString::new(format!("--vm-service-port={}", port))?;
         let disable_service_auth_codes = CString::new("--disable-service-auth-codes")?;
 
-        let command_line_argv = [
+        // Veshell renders with Impeller only; the embedder's framebuffers and
+        // textures are set up for it (see GlesFramebufferImporter).
+        let enable_impeller = CString::new("--enable-impeller")?;
+        // SDFs give rectangles, rounded rectangles, circles and lines analytic
+        // antialiasing, whatever the multisampling of the framebuffers Veshell
+        // hands the engine (the `theme.antialiasing` setting, which may be off).
+        let impeller_use_sdfs = CString::new("--impeller-use-sdfs")?;
+        let command_line_argv = vec![
             executable_path.as_ptr(),
             observatory_host.as_ptr(),
             observatory_port.as_ptr(),
             disable_service_auth_codes.as_ptr(),
+            enable_impeller.as_ptr(),
+            impeller_use_sdfs.as_ptr(),
         ];
 
         let elf_path = CString::new(format!("{lib_path}/libapp.so"))?;
@@ -320,7 +332,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                             clear_current: Some(clear_current::<BackendData>),
                             make_resource_current: Some(make_resource_current::<BackendData>),
                             surface_transformation: Some(surface_transformation::<BackendData>),
-                            gl_proc_resolver: None,
+                            gl_proc_resolver: Some(gl_proc_resolver),
                             gl_external_texture_frame_callback: Some(
                                 gl_external_texture_frame_callback::<BackendData>,
                             ),
@@ -489,25 +501,31 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     .insert_source(rx_request_external_texture_name, move |event, _, data| {
                         if let Msg(texture_id) = event {
                             let texture_swap_chain = data.texture_swapchains.get_mut(&texture_id);
-                            let texture_id = match texture_swap_chain {
+                            let external_texture = match texture_swap_chain {
                                 Some(texture) => {
                                     let texture = texture.start_read();
-                                    texture.tex_id()
+                                    let size = texture.size();
+                                    ExternalTexture {
+                                        name: texture.tex_id(),
+                                        width: size.w.max(0) as usize,
+                                        height: size.h.max(0) as usize,
+                                    }
                                 }
-                                None => 0,
+                                None => ExternalTexture::default(),
                             };
-                            let _ = tx_external_texture_name.send((texture_id, RGBA8));
+                            let _ = tx_external_texture_name.send(external_texture);
                         }
                     })
                     .unwrap();
 
+                let renderer_data =
+                    RendererData::new(renderer.egl_context(), flutter_engine_channels)?;
+                let view_target_releaser =
+                    renderer_data.framebuffer_importer.view_target_releaser();
                 this.write(Self {
                     loop_handle: server_state.loop_handle.clone(),
                     handle: flutter_engine,
-                    renderer_data: RendererData::new(
-                        renderer.egl_context(),
-                        flutter_engine_channels,
-                    )?,
+                    renderer_data,
                     task_runner: TaskRunner::new(tx_reschedule_task_runner_timer),
                     current_thread_id: std::thread::current().id(),
                     mouse_button_tracker: MouseButtonTracker::new(),
@@ -518,6 +536,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     trackpad_scrolling_manager: TrackpadScrollingManager::new(),
                     views_management: ViewsManagement::new(),
                     focused_view_id: None,
+                    view_target_releaser,
                 });
 
                 // TODO: Delete this function once Box::assume_init gets stabilized.
@@ -547,6 +566,27 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     }
 
     /// mhz == millihertz
+    /// Answers a vsync request for the vblank at `vblank`, the next one being
+    /// `interval` later, both on the engine's clock (`CLOCK_MONOTONIC`).
+    ///
+    /// The engine computes the frame's animations for `vblank`: it must be the
+    /// panel's, not the moment the request is answered, or motion is computed
+    /// for an instant other than the one it is shown at.
+    pub fn on_vsync_at(
+        &self,
+        baton: Baton,
+        vblank: Duration,
+        interval: Duration,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let start = u64::try_from(vblank.as_nanos()).unwrap_or(u64::MAX);
+        let target = start.saturating_add(u64::try_from(interval.as_nanos()).unwrap_or(0));
+        let result = unsafe { FlutterEngineOnVsync(self.handle, baton.0, start, target) };
+        if result != 0 {
+            return Err(format!("Could not send vsync baton, error {result}").into());
+        }
+        Ok(())
+    }
+
     pub fn on_vsync(&self, baton: Baton, mhz: u32) -> Result<(), Box<dyn std::error::Error>> {
         let now = unsafe { FlutterEngineGetCurrentTime() };
         let next_frame = now + ((1_000_000.0 / mhz as f64) * 1_000_000.0) as u64;
@@ -578,6 +618,12 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     /// engine.
     pub fn focused_view_id(&self) -> Option<i64> {
         self.focused_view_id
+    }
+
+    /// Asks the engine for a new frame of every view, as when content changes:
+    /// for a change of how frames are rendered rather than of what they show.
+    pub fn schedule_frame(&self) {
+        unsafe { embedder::FlutterEngineScheduleFrame(self.handle) };
     }
 
     pub fn set_focused_view(&mut self, view_id: Option<i64>) {
@@ -852,28 +898,29 @@ impl RendererData {
         unsafe { root_egl_context.make_current()? };
 
         let egl_display = root_egl_context.display();
-        let gl_attributes = GlAttributes {
-            version: (2, 0),
-            profile: Some(GlProfile::Core),
-            debug: false,
-            vsync: false,
-        };
         let pixel_format_requirements = PixelFormatRequirements::_8_bit();
+        // GLES 3 gives Impeller multisampled offscreen passes and Veshell its
+        // multisampled render targets (see GlesFramebufferImporter); GLES 2
+        // still renders, aliased.
+        let context_of_version = |version| {
+            EGLContext::new_shared_with_config(
+                egl_display,
+                root_egl_context,
+                GlAttributes {
+                    version,
+                    profile: Some(GlProfile::Core),
+                    debug: false,
+                    vsync: false,
+                },
+                pixel_format_requirements,
+            )
+        };
+        let new_context = || context_of_version((3, 0)).or_else(|_| context_of_version((2, 0)));
 
         Ok(Self {
             gl: Gles2::load_with(|s| unsafe { egl::get_proc_address(s) } as *const _),
-            main_egl_context: EGLContext::new_shared_with_config(
-                egl_display,
-                root_egl_context,
-                gl_attributes,
-                pixel_format_requirements,
-            )?,
-            resource_egl_context: EGLContext::new_shared_with_config(
-                egl_display,
-                root_egl_context,
-                gl_attributes,
-                pixel_format_requirements,
-            )?,
+            main_egl_context: new_context()?,
+            resource_egl_context: new_context()?,
             channels,
             framebuffer_importer: unsafe { GlesFramebufferImporter::new(egl_display.clone())? },
         })
@@ -883,8 +930,21 @@ impl RendererData {
 pub struct FlutterEngineChannels {
     tx_baton: channel::Sender<Baton>,
     tx_request_external_texture_name: channel::Sender<i64>,
-    rx_external_texture_name: channel::Channel<(u32, u32)>,
+    rx_external_texture_name: channel::Channel<ExternalTexture>,
     tx_flutter_handled_key_event: channel::Sender<(VeshellKeyEvent, bool, bool)>,
+}
+
+/// The GL texture currently holding a client surface, as handed to the engine.
+///
+/// The size has to be the texture's own: Skia falls back to the size it asks
+/// for when the embedder leaves it at zero, but Impeller wraps the texture
+/// with exactly the size given and rejects an empty one.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ExternalTexture {
+    /// The GL texture name; 0 when the surface has no texture.
+    pub name: u32,
+    pub width: usize,
+    pub height: usize,
 }
 
 pub struct EmbedderChannels {

@@ -40,6 +40,47 @@ the custom `profile` directory. Inference finds the profile above Cargo's
 `build/` directory and supports both `build/<package>-<hash>/out` and
 `build/<package>/<hash>/out` layouts, rather than assuming a fixed depth.
 
+## Working on the engine
+
+By default Cargo links a prebuilt engine for the pinned revision. To change the
+engine itself, build it from source with `extra/engine/engine.sh`:
+
+```sh
+extra/engine/engine.sh sync           # once: sources and dependencies
+extra/engine/engine.sh build          # incremental; prints the export below
+export VESHELL_LOCAL_ENGINE=../veshell-engine/flutter/engine/src/out/host_debug_unopt
+cargo run
+```
+
+`sync` clones the Flutter monorepo into `../veshell-engine` (or
+`VESHELL_ENGINE_WORKDIR`), creates the `veshell/<flutter_version>` branch at
+the engine revision of the pinned SDK, and runs `gclient sync` (tens of GB).
+Engine changes are commits on that branch. An existing branch is never moved:
+after a Flutter bump, rebase it onto the new revision and sync again.
+
+The prebuilt engine is upstream's at that revision with Veshell's patches
+applied. The patches live in
+[`free-explorers/flutter-engine`](https://github.com/free-explorers/flutter-engine)
+(`patches/`, exported from the branch with `git format-patch`), and its
+`PATCHSET` names them. Cargo downloads
+`linux-engine-sdk-<mode>-<arch>-<revision>-<patchset>`, with `<patchset>` from
+`flutter_engine_patchset` in `Cargo.toml`. When the patches change: export
+them, bump `PATCHSET` there and `flutter_engine_patchset` here to the same
+value, and run its Engine Release workflow.
+
+`build [debug_unopt|debug|profile|release]` builds only the embedder library;
+`debug_unopt` keeps the engine debuggable. `VESHELL_LOCAL_ENGINE` links that
+output directory in place, with its own `flutter_embedder.h`, and needs no
+prebuilt shell: the SDK builds the shell from the same revision. The variant
+must match the Flutter mode, so a `cargo run --release` needs a `release`
+engine build.
+
+To try the current work on real hardware, run `make run-tty` from a text
+console: it rebuilds the local engine and Veshell, then starts the DRM backend
+with its output in `~/veshell.log` (the run before it is kept as
+`~/veshell.previous.log`). The command stays the same; what it tries (engine
+variant, `RUST_LOG`) is edited in its recipe.
+
 ## Offline packaging
 
 Fetch/vendor dependencies and build the shell separately before compiling Rust.
@@ -181,9 +222,10 @@ pinned, checksummed upstream Flutter inputs; the Rust build and `pub get` run
 offline against vendored trees. The same recipes explain why Flutter keeps these
 packages out of the Debian and Fedora main repositories today.
 
-The embedding engine is currently a pinned upstream artifact. It is built from
-source in the dedicated `free-explorers/flutter-engine` repository; its releases
-are not held in this repository.
+The embedding engine is Flutter's at the pinned revision with Veshell's patches
+(see [Working on the engine](#working-on-the-engine)). It is built from source,
+for x86_64 and arm64, in the dedicated `free-explorers/flutter-engine`
+repository; its releases are not held in this repository.
 
 ## Checks
 

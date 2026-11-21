@@ -403,6 +403,11 @@ class _NoisePainter extends CustomPainter {
     canvas.drawRect(
       Offset.zero & size,
       Paint()
+        // A box has nothing to smooth, and an antialiased shape filled from an
+        // image is first rendered whole by Impeller (`--impeller-use-sdfs`),
+        // whatever part of it a partial repaint needs: the full-screen grain
+        // cost more than everything else on an animated overview.
+        ..isAntiAlias = false
         ..shader = ui.ImageShader(
           grain,
           ui.TileMode.repeated,

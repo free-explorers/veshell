@@ -335,12 +335,16 @@ class LaunchMorph extends HookConsumerWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        // The item's icon, at the size it is decoded at…
+                        // The item's icon… Laid out (and so rasterized) at
+                        // the size it lands at, then scaled: an icon drawn
+                        // at the launcher's size would blur as it grows, and
+                        // one sized with the flight would be rasterized
+                        // again on every frame.
                         Opacity(
                           opacity: 1 - iconSwap,
                           child: FittedBox(
                             child: SizedBox.fromSize(
-                              size: origin.icon.size,
+                              size: target?.icon.size ?? origin.icon.size,
                               child: AppIconByPath(path: iconPath, title: name),
                             ),
                           ),

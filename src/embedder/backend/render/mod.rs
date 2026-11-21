@@ -182,7 +182,7 @@ where
             Vec::new(),
         )
         // Stable per view: only a new Flutter frame damages the output.
-        .with_identity(frame.element_id.clone(), frame.commit)
+        .with_identity(frame.element_id.clone(), frame.damage.clone())
         .with_sync(frame.sync.clone());
         let flutter_texture_element = FractionnalTextureRenderElement::from_texture_buffer(
             flutter_texture_buffer,

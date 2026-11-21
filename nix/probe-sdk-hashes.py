@@ -7,7 +7,7 @@ nixpkgs produces by running the Flutter tool), and the Flutter tools pubspec.loc
 Each is a fixed-output hash, so none of them can be computed by a plain fetch --
 the hash *is* the input. This seeds the pin with `lib.fakeHash`, builds the
 corresponding derivation, reads the real value back from the mismatch, and
-repeats, then regenerates nix/flutter-tools-lock.json.
+repeats, regenerating nix/flutter-tools-lock.json before the SDK is built.
 
 Run inside `nix shell nixpkgs#yq nixpkgs#jq` (it shells out to nix and yq).
 
@@ -128,6 +128,17 @@ def main() -> int:
     # p.lib.fakeHash would make every attempt mismatch forever.
     resolve(f"(import ./nix/flutter-sdk-update.nix {{ pkgs = p; }}).toolsLock",
             set_tools_lock, "toolsLockHash")
+    # The artifact probes build the SDK, whose flutter_tools resolve their
+    # dependencies from this lock: the version's own, not the previous one.
+    print("regenerating nix/flutter-tools-lock.json")
+    result = build(f"(import ./nix/flutter-sdk-update.nix {{ pkgs = p; }}).toolsLock")
+    if result.returncode != 0:
+        fail(f"could not build the tools lock\n{result.stderr[-2000:]}")
+    lock = Path(result.stdout.strip())
+    slurped = subprocess.run(["yq", "-s", ".", str(lock)], capture_output=True, text=True, check=True)
+    rendered = subprocess.run(["jq", "-S", ".[0]"], input=slurped.stdout, capture_output=True, text=True, check=True)
+    TOOLS_LOCK.write_text(rendered.stdout if rendered.stdout.endswith("\n") else rendered.stdout + "\n")
+
     print("resolving the artifact hashes")
     # Every platform the SDK declares: nix/flutter.nix sets
     # supportedTargetFlutterPlatforms = [ "universal" "linux" ], and the wrapper
@@ -139,15 +150,6 @@ def main() -> int:
             f"(import ./nix/flutter-sdk-update.nix {{ pkgs = p; flutterPlatform = \"{platform}\"; }}).artifacts",
             set_artifact, f"artifactHashes.{platform}",
         )
-
-    print("regenerating nix/flutter-tools-lock.json")
-    result = build(f"(import ./nix/flutter-sdk-update.nix {{ pkgs = p; }}).toolsLock")
-    if result.returncode != 0:
-        fail(f"could not build the tools lock\n{result.stderr[-2000:]}")
-    lock = Path(result.stdout.strip())
-    slurped = subprocess.run(["yq", "-s", ".", str(lock)], capture_output=True, text=True, check=True)
-    rendered = subprocess.run(["jq", "-S", ".[0]"], input=slurped.stdout, capture_output=True, text=True, check=True)
-    TOOLS_LOCK.write_text(rendered.stdout if rendered.stdout.endswith("\n") else rendered.stdout + "\n")
 
     entry = load()[args.version]
     # A probe that returns success without the value it was supposed to write is

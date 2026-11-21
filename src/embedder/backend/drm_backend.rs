@@ -89,6 +89,7 @@ use crate::state;
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 
 use super::render::{get_render_elements, CLEAR_COLOR};
+use super::vsync_clock::{self, VsyncClock};
 use super::Backend;
 /*
 type DrmRenderer<'a> = MultiRenderer<
@@ -182,11 +183,20 @@ pub struct DrmBackend {
     /// shared by all outputs, this single CRTC paces `on_vsync` baton delivery
     /// so Flutter sees exactly one frame callback per frame.
     pacing_crtc: Option<(i32, DrmNode, crtc::Handle)>,
-    /// When the last vsync tick was delivered, by a page-flip vblank or by the
-    /// fallback timer. The timer uses it to stay silent while a running scene's
-    /// vblanks are delivering, and to step in only once a whole refresh has
-    /// passed with no vblank.
-    last_vsync_tick: Option<Instant>,
+    /// The pacing output's vblanks, from its flips' timestamps: where the
+    /// vblanks without a flip fall (see [`VsyncClock`]).
+    vsync_clock: VsyncClock,
+    /// The vblank the last vsync tick was delivered for, by a page flip or by
+    /// the timer, on `CLOCK_MONOTONIC`. A vblank is delivered once.
+    last_vsync_tick: Option<Duration>,
+    /// The timer that delivers the vblanks no flip reports. Unregistered while
+    /// nothing waits for a vsync, so an idle desktop does not wake every
+    /// refresh (see [`State::on_vsync_timer`]).
+    vsync_timer: Option<RegistrationToken>,
+    /// Something asked for a frame since the timer's last tick: a render
+    /// request (client commit, input, Flutter frame) or a Flutter vsync
+    /// request. Without one, the timer stops after its tick.
+    vsync_wanted: bool,
     /// Frame interval applied when the GPU uses software EGL (llvmpipe in a
     /// VM without 3D acceleration). A full software composite is expensive,
     /// and a virtual display can complete page flips faster than the panel,
@@ -218,6 +228,9 @@ pub struct DrmBackend {
 /// Also the on-demand render request ([`State::request_render`]): requests for
 /// a node that already has a composite queued are folded into it.
 fn idle_request_render(state: &mut State<DrmBackend>) {
+    // A commit or a Flutter frame waits for its frame callback or its next
+    // vsync even when it damages nothing: keep the vblanks coming.
+    state.ensure_vsync_timer();
     let nodes: Vec<DrmNode> = state.backend_data.gpus.keys().copied().collect();
     for node in nodes {
         if !state.backend_data.render_scheduled.insert(node) {
@@ -616,7 +629,10 @@ pub fn run_drm_backend(real_session: bool) {
             primary_gpu,
             highest_hz_crtc: HashMap::new(),
             pacing_crtc: None,
+            vsync_clock: VsyncClock::new(Duration::from_millis(16)),
             last_vsync_tick: None,
+            vsync_timer: None,
+            vsync_wanted: false,
             software_frame_interval: None,
             software_throttled_nodes: HashSet::new(),
             render_scheduled: HashSet::new(),
@@ -820,19 +836,9 @@ pub fn run_drm_backend(real_session: bool) {
     state.determine_highest_hz_crtc();
     state.on_outputs_changed();
 
-    // Fallback vsync source, armed at the pacing refresh: it only ticks when a
-    // page flip's vblank did not, so a missed flip cannot stall Flutter at two
-    // refreshes, while a presenting scene stays paced by the panel.
-    let initial_interval = state.pacing_interval().unwrap_or(Duration::from_millis(16));
-    event_loop
-        .handle()
-        .insert_source(
-            Timer::from_duration(initial_interval),
-            move |_, _, data: &mut State<DrmBackend>| {
-                TimeoutAction::ToDuration(data.on_vsync_timer())
-            },
-        )
-        .unwrap();
+    // Delivers the vblanks no flip reports (see `State::on_vsync_timer`); it
+    // runs while something waits for a frame.
+    state.ensure_vsync_timer();
 
     // Software EGL caps full-output composites to a sane frame rate (see
     // `State::render_surface`). This timer releases a composite that the cap
@@ -1054,6 +1060,8 @@ pub fn run_drm_backend(real_session: bool) {
         .insert_source(rx_baton, move |baton, _, data| {
             if let CalloopEvent::Msg(baton) = baton {
                 data.batons.push(baton);
+                // Flutter waits for its next vsync.
+                data.ensure_vsync_timer();
             }
         })
         .unwrap();
@@ -1131,7 +1139,33 @@ impl State<DrmBackend> {
 
         let (per_node, pacing) = select_pacing_crtcs(&outputs);
         self.backend_data.highest_hz_crtc = per_node;
+        let changed = self
+            .backend_data
+            .pacing_crtc
+            .map(|(_, node, crtc)| (node, crtc))
+            != pacing.map(|(_, node, crtc)| (node, crtc));
         self.backend_data.pacing_crtc = pacing;
+
+        // The pacing output's exact period, from its mode's timings; its
+        // advertised refresh is rounded.
+        let interval = pacing.and_then(|(mhz, node, crtc)| {
+            let mode_interval = self
+                .backend_data
+                .gpus
+                .get(&node)
+                .and_then(|gpu| gpu.surfaces.get(&crtc))
+                .and_then(|surface| vsync_clock::mode_interval(&surface.compositor.current_mode()));
+            mode_interval.or_else(|| {
+                Some(Duration::from_nanos(
+                    (1_000_000_000_000u64 / (mhz.max(1) as u64)).max(1),
+                ))
+            })
+        });
+        if let Some(interval) = interval {
+            if changed || interval != self.backend_data.vsync_clock.interval() {
+                self.backend_data.vsync_clock = VsyncClock::new(interval);
+            }
+        }
     }
 }
 
@@ -1857,7 +1891,12 @@ impl State<DrmBackend> {
             .pacing_crtc
             .is_some_and(|(_, pace_node, pace_crtc)| pace_node == node && pace_crtc == crtc)
         {
-            self.deliver_vsync_tick(Instant::now());
+            let vblank = match meta.time {
+                DrmEventTime::Monotonic(time) if !time.is_zero() => time,
+                _ => Duration::from(self.clock.now()),
+            };
+            self.backend_data.vsync_clock.presented(vblank);
+            self.deliver_vsync_tick(vblank);
         }
 
         // A game on this output is paced by this output's own flips: its frame
@@ -1893,14 +1932,6 @@ impl State<DrmBackend> {
         // of flips driving baton delivery.
     }
 
-    /// Interval of the pacing CRTC's refresh, if an output is connected.
-    fn pacing_interval(&self) -> Option<Duration> {
-        let (mhz, _node, _crtc) = self.backend_data.pacing_crtc?;
-        Some(Duration::from_nanos(
-            (1_000_000_000_000u64 / (mhz.max(1) as u64)).max(1),
-        ))
-    }
-
     /// Whether the DRM device that owns the pacing output is usable: the seat
     /// session is active and the device was not paused.
     fn pacing_device_active(&self) -> bool {
@@ -1917,15 +1948,17 @@ impl State<DrmBackend> {
     /// Delivers one vsync to Flutter and to Wayland clients: drains the pending
     /// Flutter batons, then sends the surface frame callbacks and the cursor's.
     ///
-    /// Records the delivery so the fallback timer can tell whether a page-flip
-    /// vblank already drove this frame. It does not render: presenting is the
-    /// on-demand [`State::request_render`] path.
-    fn deliver_vsync_tick(&mut self, now: Instant) {
-        self.backend_data.last_vsync_tick = Some(now);
+    /// `vblank` is the pacing output's vblank this tick stands for, on
+    /// `CLOCK_MONOTONIC`. Records the delivery so the timer never delivers the
+    /// same vblank again. It does not render: presenting is the on-demand
+    /// [`State::request_render`] path.
+    fn deliver_vsync_tick(&mut self, vblank: Duration) {
+        self.backend_data.last_vsync_tick = Some(vblank);
 
-        let Some((mhz, _node, _crtc)) = self.backend_data.pacing_crtc else {
+        if self.backend_data.pacing_crtc.is_none() {
             return;
-        };
+        }
+        let interval = self.backend_data.vsync_clock.interval();
 
         // While active games cover every output, nothing the shell draws can
         // be seen: hold its vsync batons so Flutter produces no frames (no
@@ -1945,7 +1978,7 @@ impl State<DrmBackend> {
         if !shell_hidden {
             let drained: Vec<_> = std::mem::take(&mut self.batons);
             for baton in drained {
-                let _ = self.flutter_engine().on_vsync(baton, mhz as u32);
+                let _ = self.flutter_engine().on_vsync_at(baton, vblank, interval);
             }
         }
         let frame_timestamp = self.frame_timestamp_millis();
@@ -1983,7 +2016,7 @@ impl State<DrmBackend> {
                     .into_iter()
                     .map(|callback| (callback, wp_presentation_feedback::Kind::Vsync)),
                 output.as_ref(),
-                Duration::from(self.clock.now()),
+                vblank,
                 refresh,
                 0,
             );
@@ -2173,49 +2206,93 @@ impl State<DrmBackend> {
         }
     }
 
-    /// Vsync fallback for a refresh that produced no page flip.
-    ///
-    /// A page flip's vblank ([`Self::on_vblank`]) always ticks, so a presenting
-    /// scene is paced by the panel. This timer only steps in when a whole
-    /// refresh plus a small slack passed without one: a missed flip, or a
-    /// static scene that flips nothing. It re-arms against the last tick rather
-    /// than a fixed period, so it stays phased to the panel instead of drifting
-    /// against it and eventually missing flips itself.
-    ///
-    /// It backs off while the output is blanked or the seat inactive, where no
-    /// vblank can arrive and there is nothing to present.
-    fn on_vsync_timer(&mut self) -> Duration {
-        let Some(interval) = self.pacing_interval() else {
-            // No output to pace against (a hotplug is in progress): retry
-            // slowly instead of spinning.
-            return Duration::from_millis(100);
-        };
+    /// Registers the vsync timer if it is not running: something waits for a
+    /// frame. It first fires on the next vblank of the pacing output's
+    /// timeline, so a wake after an idle spell keeps the panel's phase.
+    pub fn ensure_vsync_timer(&mut self) {
+        self.backend_data.vsync_wanted = true;
+        if self.backend_data.vsync_timer.is_some() {
+            return;
+        }
+        let delay = self.until_next_vblank();
+        let token = self
+            .loop_handle
+            .insert_source(
+                Timer::from_duration(delay),
+                |_, _, data: &mut State<DrmBackend>| match data.on_vsync_timer() {
+                    Some(delay) => TimeoutAction::ToDuration(delay),
+                    None => TimeoutAction::Drop,
+                },
+            )
+            .ok();
+        self.backend_data.vsync_timer = token;
+    }
 
-        if self.idle.is_blank() || !self.pacing_device_active() {
-            return Duration::from_millis(100);
+    /// How long until the pacing output's next predicted vblank.
+    fn until_next_vblank(&mut self) -> Duration {
+        let now = Duration::from(self.clock.now());
+        self.backend_data
+            .vsync_clock
+            .next_vblank(now)
+            .saturating_sub(now)
+            .max(Duration::from_micros(100))
+    }
+
+    /// The vsync timer: delivers the pacing output's vblanks that no page
+    /// flip reports (a frame with no damage flips nothing, so no vblank event
+    /// follows), on the vblanks the flips' timestamps predict
+    /// ([`VsyncClock`]). Returns when to fire next, or `None` to stop: while
+    /// nothing waits for a frame, the desktop is not woken every refresh.
+    fn on_vsync_timer(&mut self) -> Option<Duration> {
+        let wanted = std::mem::take(&mut self.backend_data.vsync_wanted);
+        let stop = |state: &mut Self| {
+            state.backend_data.vsync_timer = None;
+            None
+        };
+        // No output to pace against (a hotplug is in progress), or nothing can
+        // be shown: the next render request or vsync request restarts it.
+        if self.backend_data.pacing_crtc.is_none()
+            || self.idle.is_blank()
+            || !self.pacing_device_active()
+        {
+            return stop(self);
         }
 
-        let slack = Duration::from_millis(2);
-        let now = Instant::now();
-
-        self.send_stale_game_frame_callbacks(now, slack);
+        self.send_stale_game_frame_callbacks(Instant::now(), Duration::from_millis(2));
 
         // An animated theme cursor changes with time alone; with on-demand
         // rendering nothing else would composite its next frame.
-        if self.cursor_state.lock().unwrap().is_animated() {
+        let animated_cursor = self.cursor_state.lock().unwrap().is_animated();
+        if animated_cursor {
             self.request_render();
         }
 
-        if let Some(last) = self.backend_data.last_vsync_tick {
-            let due = last + interval + slack;
-            if now < due {
-                // No vblank has arrived since the last tick: wait for it, and
-                // stay phased to when it is due rather than to this callback.
-                return (due - now).max(Duration::from_millis(1));
-            }
+        let now = Duration::from(self.clock.now());
+        let vblank = self.backend_data.vsync_clock.latest_vblank(now);
+        let interval = self.backend_data.vsync_clock.interval();
+        let delivered = self
+            .backend_data
+            .last_vsync_tick
+            .is_some_and(|last| last + interval / 2 > vblank);
+        // A flip in flight reports this vblank itself, with its timestamp.
+        let flip_pending = self
+            .backend_data
+            .pacing_crtc
+            .and_then(|(_, node, crtc)| self.backend_data.gpus.get(&node)?.surfaces.get(&crtc))
+            .is_some_and(|surface| surface.frame_pending);
+        if !delivered && !flip_pending {
+            self.deliver_vsync_tick(vblank);
         }
-        self.deliver_vsync_tick(now);
-        interval + slack
+
+        let waiting = wanted
+            || flip_pending
+            || !self.batons.is_empty()
+            || animated_cursor
+            || !self.all_game_mode_surfaces().is_empty();
+        if !waiting {
+            return stop(self);
+        }
+        Some(self.until_next_vblank())
     }
 
     // If crtc is `Some()`, render it, else render all crtcs

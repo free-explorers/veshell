@@ -22,12 +22,14 @@ let
     useNixpkgsEngine = false;
   };
   patchDir = flutterPath + "/patches";
-  # In this SDK, Linux host detection moved from _PosixUtils to the base class.
+  # Flutter 3.50 checks hostPlatformOverride and FLUTTER_HOST_ARCH first in
+  # the base class's getter; the Nix host is decided before both.
   hostPlatformPatch = builtins.toFile "flutter-nix-host-platform.patch" ''
     --- a/packages/flutter_tools/lib/src/base/os.dart
     +++ b/packages/flutter_tools/lib/src/base/os.dart
-    @@ -146,6 +146,13 @@
-       /// Represents the platform of the host machine running the Flutter tool.
+    @@ -152,6 +152,13 @@
+       /// determined by [defaultHostPlatform], which subclasses may override to
+       /// probe the hardware directly.
        HostPlatform get hostPlatform {
     +    const nixHost = String.fromEnvironment('NIX_FLUTTER_HOST_PLATFORM');
     +    if (nixHost == 'x86_64-linux') {
@@ -36,10 +38,9 @@ let
     +    if (nixHost == 'aarch64-linux') {
     +      return HostPlatform.linux_arm64;
     +    }
-         return switch (_currentAbi) {
-           Abi.macosX64 => HostPlatform.darwin_x64,
-           Abi.macosArm64 => HostPlatform.darwin_arm64,
-           Abi.linuxX64 => HostPlatform.linux_x64,
+         if (hostPlatformOverride case final HostPlatform override) {
+           return override;
+         }
   '';
   defaultSdkData = {
     inherit version engineVersion;

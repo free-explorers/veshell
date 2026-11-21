@@ -35,5 +35,22 @@
       }
     },
     "toolsLockHash": "sha256-ReTx+L9ulmPZDH6xEtszfrv0lXN8U+Y8HOnDE429+Z4="
+  },
+  "3.50.1": {
+    "engineVersion": "4d35714800b9266b6693a58e1225ecd7e9e45ed7",
+    "flutterHash": "sha256-kz5dbZ2qghWzx7cyppY4lqwk/U1fxjTtE0CDC+cSO64=",
+    "dartVersion": "3.14.0",
+    "dartHash": {
+      "x86_64-linux": "sha256-kPf9df4h4WQ3d434gvKAkQ2bvUgJyQAk8h3oJDXd7R0="
+    },
+    "artifactHashes": {
+      "universal": {
+        "x86_64-linux": "sha256-pXfL/Fa0clluWg/pLxAOdK2lyfh6LvBVki+B8CLLaBs="
+      },
+      "linux": {
+        "x86_64-linux": "sha256-uSomwJbmGYW2elXZ7TI6tW7X5dkful2nWB40BOSn680="
+      }
+    },
+    "toolsLockHash": "sha256-k9oSwiFKPgEVWNb/gme/r8BatsiMC12xrVZAP1y6hfI="
   }
 }

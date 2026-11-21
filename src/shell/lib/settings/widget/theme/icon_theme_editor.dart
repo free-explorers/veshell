@@ -13,6 +13,8 @@ import 'package:shell/settings/provider/util/json_value_by_path.dart';
 import 'package:shell/settings/provider/util/theme_detection.dart';
 import 'package:shell/settings/widget/primitive/dropdown_setting_editor.dart';
 import 'package:shell/shared/widget/expandable_container.dart';
+import 'package:vector_graphics/vector_graphics_compat.dart'
+    show RenderingStrategy;
 
 /// Icon-theme picker: the installed XDG icon themes plus the built-in letter
 /// placeholders.
@@ -158,7 +160,10 @@ class IconThemePreview extends ConsumerWidget {
     final file = ref.watch(iconThemePreviewProvider(theme)).value;
     if (file == null) return const SizedBox.shrink();
     if (file.path.endsWith('.svg')) {
-      return SvgPicture(NormalizingSvgFileLoader(file));
+      return SvgPicture(
+        NormalizingSvgFileLoader(file),
+        renderingStrategy: RenderingStrategy.raster,
+      );
     }
     final pixels = (20 * MediaQuery.devicePixelRatioOf(context)).ceil();
     return Image.file(file, cacheWidth: pixels);

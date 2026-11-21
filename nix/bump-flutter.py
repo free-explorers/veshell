@@ -88,7 +88,14 @@ def main() -> int:
     for name, url in urls.items():
         artifacts[name] = {"url": url, "sha256": sha256_url(url)}
 
-    engine_asset = f"linux-engine-sdk-release-x86_64-{engine_revision}"
+    # The prebuilt engine carries Veshell's patches (Cargo.toml's
+    # flutter_engine_patchset); a bump rebases them onto the new revision.
+    patchset = re.search(
+        r'^flutter_engine_patchset\s*=\s*"([^"]+)"', (ROOT / "Cargo.toml").read_text(), re.M
+    )
+    if patchset is None:
+        fail("Cargo.toml has no package.metadata.flutter_engine_patchset")
+    engine_asset = f"linux-engine-sdk-release-x86_64-{engine_revision}-{patchset.group(1)}"
     engine = {
         "url": f"https://github.com/{ENGINE_REPO}/releases/download/{engine_asset}/{engine_asset}.tar.gz",
     }

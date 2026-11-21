@@ -14,11 +14,11 @@ use smithay::backend::egl::{fence::EGLFence, ffi, EGLDisplay};
 use smithay::backend::renderer::element::Id;
 use smithay::backend::renderer::gles::GlesTexture;
 use smithay::backend::renderer::sync::{Fence, Interrupted, SyncPoint};
-use smithay::backend::renderer::utils::CommitCounter;
+use smithay::backend::renderer::utils::{DamageBag, DamageSnapshot};
 use smithay::backend::renderer::Texture;
 use smithay::output::Output;
 use smithay::reexports::calloop::channel;
-use smithay::utils::{SerialCounter, Size};
+use smithay::utils::{Buffer, Rectangle, SerialCounter, Size};
 use std::os::fd::OwnedFd;
 use tracing::debug;
 pub struct OutputViewIdWrapper {
@@ -104,8 +104,8 @@ impl Fence for FlutterFrameFence {
 /// The frame a view currently shows, with the identity the damage tracker
 /// needs to tell a new Flutter frame from the same one composited again.
 ///
-/// The element id is stable for the view's lifetime and the commit only moves
-/// when Flutter presents a new frame. A fresh id on every composite would make
+/// The element id is stable for the view's lifetime and the damage only moves
+/// when Flutter presents a frame that differs. A fresh id on every composite would make
 /// the whole output look new each time: every render would repaint and flip,
 /// on-demand rendering would never go idle, and a game frame would wait behind
 /// the shell's own flips.
@@ -116,7 +116,9 @@ pub struct PresentedFrame {
     /// it waits for this first.
     pub sync: SyncPoint,
     pub element_id: Id,
-    pub commit: CommitCounter,
+    /// What changed in the view's frames, frame after frame: the compositor
+    /// repaints only that part of the output.
+    pub damage: DamageSnapshot<i32, Buffer>,
 }
 
 pub struct AcquiredBackingStore {
@@ -239,8 +241,12 @@ pub struct VeshellView {
     pub last_rendered_generation: Option<u64>,
     /// Render-element identity of this view's frame (see [`PresentedFrame`]).
     element_id: Id,
-    /// Bumped each time a new frame replaces `last_rendered`.
-    presented_commit: CommitCounter,
+    /// What each frame that replaced `last_rendered` changed, in the
+    /// texture's coordinates.
+    damage: DamageBag<i32, Buffer>,
+    /// What the frames held back from the screen changed (`None`: anything):
+    /// the next frame shown differs from the one on screen by that too.
+    unshown_damage: Option<Vec<Rectangle<i32, Buffer>>>,
 }
 
 impl VeshellView {
@@ -250,7 +256,7 @@ impl VeshellView {
             frame: self.last_rendered.clone()?,
             sync: self.last_rendered_sync.clone(),
             element_id: self.element_id.clone(),
-            commit: self.presented_commit,
+            damage: self.damage.snapshot(),
         })
     }
 
@@ -289,7 +295,14 @@ impl VeshellView {
         })
     }
 
-    pub fn present_backing_store(&mut self, id: BackingStoreId, sync: SyncPoint) -> bool {
+    /// Shows a submitted frame; `damage` is what it changed from the frame
+    /// before it (`None`: anything).
+    pub fn present_backing_store(
+        &mut self,
+        id: BackingStoreId,
+        sync: SyncPoint,
+        damage: Option<Rectangle<i32, Buffer>>,
+    ) -> bool {
         if id.view_id != self.view_id {
             return false;
         }
@@ -306,7 +319,10 @@ impl VeshellView {
         }
         self.last_rendered_generation = Some(id.generation);
         self.last_rendered_sync = sync;
-        self.presented_commit.increment();
+        match self.take_unshown_damage(damage) {
+            Some(rects) => self.damage.add(rects),
+            None => self.damage.reset(),
+        }
         if let Some(previous) = self.last_rendered.replace(frame.frame) {
             self.recycle(previous);
         }
@@ -324,12 +340,27 @@ impl VeshellView {
     /// Drops a just-presented backing store without showing it: while a
     /// screenshot session freezes the desktop, nothing may replace the
     /// frame the user is looking at.
-    pub fn hold_backing_store(&mut self, id: BackingStoreId) {
+    pub fn hold_backing_store(
+        &mut self,
+        id: BackingStoreId,
+        damage: Option<Rectangle<i32, Buffer>>,
+    ) {
         if id.view_id == self.view_id {
             if let Some(frame) = self.in_flight.remove(&id.generation) {
+                self.unshown_damage = self.take_unshown_damage(damage);
                 self.recycle(frame.frame);
             }
         }
+    }
+
+    /// The frames held back's damage, with `damage` added.
+    fn take_unshown_damage(
+        &mut self,
+        damage: Option<Rectangle<i32, Buffer>>,
+    ) -> Option<Vec<Rectangle<i32, Buffer>>> {
+        let mut unshown = self.unshown_damage.replace(Vec::new())?;
+        unshown.push(damage?);
+        Some(unshown)
     }
 
     fn recycle(&mut self, frame: Frame) {
@@ -392,7 +423,8 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                             last_rendered_sync: SyncPoint::signaled(),
                             last_rendered_generation: None,
                             element_id: Id::new(),
-                            presented_commit: CommitCounter::default(),
+                            damage: DamageBag::default(),
+                            unshown_damage: Some(Vec::new()),
                         };
                         data.flutter_engine_mut()
                             .views_management
@@ -474,6 +506,7 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     if removed {
                         let engine = data.flutter_engine_mut();
                         let removed = engine.views_management.views.remove(&view_id).is_some();
+                        engine.view_target_releaser.release(view_id);
                         tracing::info!(
                             target: "veshell::geometry",
                             view_id,

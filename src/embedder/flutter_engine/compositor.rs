@@ -6,38 +6,43 @@ use crate::{
         embedder::{
             FlutterBackingStore, FlutterBackingStoreConfig,
             FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL,
-            FlutterBackingStore__bindgen_ty_1, FlutterCompositor,
+            FlutterBackingStore__bindgen_ty_1, FlutterCompositor, FlutterDamage,
             FlutterLayerContentType_kFlutterLayerContentTypeBackingStore,
             FlutterOpenGLBackingStore, FlutterOpenGLBackingStore__bindgen_ty_1,
             FlutterOpenGLFramebuffer, FlutterOpenGLTargetType_kFlutterOpenGLTargetTypeFramebuffer,
-            FlutterPresentViewInfo,
+            FlutterPresentViewInfo, FlutterViewId,
         },
         view::{AcquiredBackingStore, BackingStoreId, FlutterFrameFence, Frame},
         FlutterEngine,
     },
+    gles_framebuffer_importer::{PaintedRegion, Present},
     state::State,
 };
 use smithay::backend::egl::fence::EGLFence;
 use smithay::backend::renderer::sync::SyncPoint;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::{channel, LoopHandle};
+use smithay::utils::{Buffer, Rectangle};
 struct BackingStoreRequest {
     config: FlutterBackingStoreConfig,
     reply: channel::Sender<Option<AcquiredBackingStore>>,
 }
 
 enum BackingStoreEvent {
-    /// A frame Flutter submitted, and the point its rendering completes.
-    Presented(BackingStoreId, SyncPoint),
+    /// A frame Flutter submitted, the point its rendering completes, and
+    /// what differs from the view's previous frame (`None`: all of it).
+    Presented(BackingStoreId, SyncPoint, Option<Rectangle<i32, Buffer>>),
     Collected(BackingStoreId),
 }
 
 /// Flutter-side user data for one backing store. `texture_fbo` is set for the
 /// texture-backed fallback so the collect callback can release the framebuffer
-/// object attached to it.
+/// object attached to it. `present` moves the view's frame into the backing
+/// store when it is presented.
 struct BackingStoreMeta {
     id: BackingStoreId,
     texture_fbo: Option<u32>,
+    present: Option<Present>,
 }
 
 pub struct CompositorUserData {
@@ -102,7 +107,7 @@ impl FlutterCompositor {
                     let freeze = data.capture_state.session.is_some();
                     let flutter_engine = data.flutter_engine_mut();
                     match event {
-                        BackingStoreEvent::Presented(id, sync) => {
+                        BackingStoreEvent::Presented(id, sync, damage) => {
                             // While a screenshot session freezes the
                             // desktop, late Flutter frames must not
                             // replace the frame captured at hotkey time.
@@ -110,12 +115,12 @@ impl FlutterCompositor {
                                 if let Some(view) =
                                     flutter_engine.views_management.views.get_mut(&id.view_id)
                                 {
-                                    view.hold_backing_store(id);
+                                    view.hold_backing_store(id, damage);
                                 }
                             } else if let Some(view) =
                                 flutter_engine.views_management.views.get_mut(&id.view_id)
                             {
-                                view.present_backing_store(id, sync);
+                                view.present_backing_store(id, sync, damage);
                             }
                             // The presented frame is fresh output damage:
                             // every screen-cast session on this output
@@ -157,6 +162,9 @@ impl FlutterCompositor {
             // because we're using a triple-buffered swapchain.
             avoid_backing_store_cache: true,
             present_view_callback: Some(present_view_callback::<BackendData>),
+            populate_view_existing_damage_callback: Some(
+                populate_view_existing_damage_callback::<BackendData>,
+            ),
         }
     }
 }
@@ -190,18 +198,21 @@ where
     if let Ok(Some(backing_store)) = response.recv() {
         let context = &flutter_engine.renderer_data.main_egl_context;
         let importer = &mut flutter_engine.renderer_data.framebuffer_importer;
-        let (name, texture_fbo) = match &backing_store.frame {
+        let view_id = backing_store.id.view_id;
+        let (target, texture_fbo) = match &backing_store.frame {
             Frame::Dmabuf(dmabuf) => (
                 importer
-                    .import_framebuffer(context, dmabuf.clone())
-                    .unwrap_or(0),
+                    .import_framebuffer(context, view_id, dmabuf.clone())
+                    .ok(),
                 None,
             ),
-            Frame::Texture(texture) => {
-                let fbo = importer.import_texture(context, texture).unwrap_or(0);
-                (fbo, (fbo != 0).then_some(fbo))
-            }
+            Frame::Texture(texture) => match importer.import_texture(context, view_id, texture) {
+                Ok((fbo, target)) => (Some(target), Some(fbo)),
+                Err(_) => (None, None),
+            },
         };
+        let (name, present) =
+            target.map_or((0, None), |target| (target.render_fbo, target.present));
         if name == 0 {
             if let Some(texture_fbo) = texture_fbo {
                 let _ = importer.release_texture_framebuffer(context, texture_fbo);
@@ -217,6 +228,7 @@ where
             user_data: Box::into_raw(Box::new(BackingStoreMeta {
                 id: backing_store.id,
                 texture_fbo,
+                present,
             })) as *mut c_void,
             type_: FlutterBackingStoreType_kFlutterBackingStoreTypeOpenGL,
             did_update: true,
@@ -229,7 +241,7 @@ where
                             target: 0x8058,
                             name,
                             user_data: std::ptr::null_mut(),
-                            destruction_callback: None,
+                            destruction_callback: Some(framebuffer_destruction_callback),
                         },
                     },
                 },
@@ -240,6 +252,13 @@ where
     }
     true
 }
+
+/// Called when the engine drops its wrapper of a backing store's framebuffer.
+///
+/// The framebuffer itself is released in [collect_backing_store_callback].
+/// The callback still has to exist: the Impeller render target calls it
+/// without checking for null, where Skia's path checks.
+unsafe extern "C" fn framebuffer_destruction_callback(_user_data: *mut c_void) {}
 
 pub unsafe extern "C" fn collect_backing_store_callback<BackendData>(
     renderer: *const FlutterBackingStore,
@@ -294,8 +313,8 @@ where
     let compositor_data = &mut *(user_data as *mut CompositorUserData);
     let flutter_engine =
         &mut *(compositor_data.flutter_engine_ptr as *mut FlutterEngine<BackendData>);
-    let sync = frame_sync_point(&flutter_engine.renderer_data);
     let mut backing_store_id = None;
+    let mut present = None;
     for layer in std::slice::from_raw_parts((*info).layers, (*info).layers_count) {
         if layer.is_null() {
             return false;
@@ -315,16 +334,75 @@ where
         if backing_store_id.replace((*meta).id).is_some() {
             return false;
         }
+        present = (*meta).present;
     }
+
+    // The frame is submitted: move it into the backing store before the
+    // fence that lets the compositor sample it.
+    let damage = present.and_then(|present| {
+        flutter_engine
+            .renderer_data
+            .framebuffer_importer
+            .present(present, painted_region(&*info))
+    });
+    let sync = frame_sync_point(&flutter_engine.renderer_data);
 
     backing_store_id
         .and_then(|id| {
             compositor_data
                 .tx_backing_store_event
-                .send(BackingStoreEvent::Presented(id, sync))
+                .send(BackingStoreEvent::Presented(id, sync, damage))
                 .ok()
         })
         .is_some()
+}
+
+/// What Flutter painted of the frame, when it painted only part of it.
+unsafe fn painted_region(info: &FlutterPresentViewInfo) -> Option<PaintedRegion> {
+    let has_field = info.struct_size
+        >= std::mem::offset_of!(FlutterPresentViewInfo, painted_region)
+            + std::mem::size_of::<*const crate::flutter_engine::embedder::FlutterRect>();
+    if !has_field || info.painted_region.is_null() {
+        return None;
+    }
+    let rect = &*info.painted_region;
+    Some(PaintedRegion {
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+    })
+}
+
+/// Tells the engine, before it renders a frame of `view_id`, whether the
+/// view's target still holds the view's last frame: if so, only what changed
+/// is rendered (see `GlesFramebufferImporter::keeps_last_frame`).
+///
+/// Called on the raster thread.
+pub unsafe extern "C" fn populate_view_existing_damage_callback<BackendData>(
+    view_id: FlutterViewId,
+    existing_damage: *mut FlutterDamage,
+    user_data: *mut c_void,
+) -> bool
+where
+    BackendData: Backend + 'static,
+{
+    if user_data.is_null() || existing_damage.is_null() {
+        return false;
+    }
+    let compositor_data = &mut *(user_data as *mut CompositorUserData);
+    let flutter_engine =
+        &mut *(compositor_data.flutter_engine_ptr as *mut FlutterEngine<BackendData>);
+    if !flutter_engine
+        .renderer_data
+        .framebuffer_importer
+        .keeps_last_frame(view_id)
+    {
+        return false;
+    }
+    // Everything else is in the last frame.
+    (*existing_damage).num_rects = 0;
+    true
 }
 
 /// The point at which the frame Flutter just submitted is fully rendered.
