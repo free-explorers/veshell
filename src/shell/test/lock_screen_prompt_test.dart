@@ -21,6 +21,16 @@ class _Locked extends LockScreen {
   );
 }
 
+/// A lock the test toggles, as the compositor's lock state events would.
+class _Toggled extends LockScreen {
+  @override
+  LockScreenState build() => const LockScreenState();
+
+  void setLocked({required bool locked}) => state = locked
+      ? const LockScreenState(locked: true, userName: 'ada')
+      : const LockScreenState();
+}
+
 final _monitor = Monitor(
   name: 'm',
   description: '',
@@ -105,5 +115,63 @@ void main() {
     await tester.tap(findIcon(MdiIcons.eyeOffOutline));
     await tester.pump();
     expect(field().obscureText, isTrue);
+  });
+
+  testWidgets('unlocking hands the keyboard back to the desktop', (
+    tester,
+  ) async {
+    final desktopNode = FocusNode(debugLabel: 'desktop');
+    addTearDown(desktopNode.dispose);
+    final container = ProviderContainer(
+      overrides: [
+        lockScreenProvider.overrideWith(_Toggled.new),
+        focusedMonitorProvider.overrideWithValue(_monitor),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: shellLocalizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          builder: (context, child) => Stack(
+            fit: StackFit.expand,
+            children: [
+              LockScreenBlur(child: child ?? const SizedBox.shrink()),
+              const LockScreenOverlay(monitorName: 'm'),
+            ],
+          ),
+          home: Material(
+            child: FocusScope(
+              child: Focus(
+                focusNode: desktopNode,
+                autofocus: true,
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(desktopNode.hasPrimaryFocus, isTrue);
+
+    final lock = container.read(lockScreenProvider.notifier) as _Toggled
+      ..setLocked(locked: true);
+    await tester.pumpAndSettle();
+    expect(desktopNode.hasFocus, isFalse);
+    expect(
+      tester
+          .state<EditableTextState>(_passwordField)
+          .widget
+          .focusNode
+          .hasPrimaryFocus,
+      isTrue,
+    );
+
+    lock.setLocked(locked: false);
+    await tester.pumpAndSettle();
+    expect(desktopNode.hasPrimaryFocus, isTrue);
   });
 }

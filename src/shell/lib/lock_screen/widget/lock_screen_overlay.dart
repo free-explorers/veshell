@@ -48,6 +48,11 @@ double _useLockProgress(bool locked) {
 /// Blurs and darkens a monitor's content while the session is locked, and
 /// takes the keyboard away from it so no shell shortcut fires behind the
 /// lock screen.
+///
+/// The keyboard is handed back on unlock to the desktop node that held it
+/// when the session locked: the password field leaves focus on the app's
+/// root scope as it goes, where no screen shortcut fires, and no workspace
+/// asks for focus again by itself.
 class LockScreenBlur extends HookConsumerWidget {
   /// Const constructor
   const LockScreenBlur({required this.child, super.key});
@@ -57,10 +62,45 @@ class LockScreenBlur extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final locked = ref.watch(lockScreenProvider.select((s) => s.locked));
     final progress = _useLockProgress(locked);
+    final desktopNode = useFocusNode(
+      debugLabel: 'LockScreenBlur',
+      canRequestFocus: false,
+      skipTraversal: true,
+    );
+    final focusBeforeLock = useRef<FocusNode?>(null);
+    // Read as the lock state changes, before this rebuild excludes the
+    // desktop and the password field takes the keyboard.
+    ref.listen(lockScreenProvider.select((s) => s.locked), (
+      wasLocked,
+      isLocked,
+    ) {
+      if (isLocked && wasLocked != true) {
+        final focused = FocusManager.instance.primaryFocus;
+        // Every monitor has its own blur; only the one holding the keyboard
+        // restores it.
+        focusBeforeLock.value =
+            focused != null && focused.ancestors.contains(desktopNode)
+            ? focused
+            : null;
+      } else if (!isLocked && wasLocked == true) {
+        final node = focusBeforeLock.value;
+        focusBeforeLock.value = null;
+        if (node == null) return;
+        // Once the desktop is focusable again and the field is gone.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (node.context != null && node.canRequestFocus) {
+            node.requestFocus();
+          }
+        });
+      }
+    });
     // The filters stay in the tree whatever the state: inserting a wrapper
     // would remount the whole desktop below it (see `FrostedSurface`).
-    return ExcludeFocus(
-      excluding: locked,
+    return Focus(
+      focusNode: desktopNode,
+      includeSemantics: false,
+      descendantsAreFocusable: !locked,
+      descendantsAreTraversable: !locked,
       child: FrostedSurface(
         blurSigma: _lockBlurSigma * progress,
         tint: progress > 0
