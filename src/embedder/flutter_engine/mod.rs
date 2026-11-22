@@ -65,6 +65,7 @@ use crate::flutter_engine::platform_channels::message_codec::MessageCodec;
 use crate::flutter_engine::platform_channels::method_call::MethodCall;
 use crate::flutter_engine::platform_channels::method_channel::MethodChannel;
 use crate::flutter_engine::platform_channels::method_result::MethodResult;
+use crate::flutter_engine::renderer::Renderer;
 use crate::flutter_engine::system_platform::system_platform_channel_method_handler;
 use crate::flutter_engine::task_runner::TaskRunner;
 use crate::flutter_engine::text_input::{text_input_channel_method_call_handler, TextInput};
@@ -100,6 +101,7 @@ mod locales;
 mod mouse_cursor;
 pub mod platform_channel_callbacks;
 pub mod platform_channels;
+mod renderer;
 mod system_platform;
 pub mod task_runner;
 mod text_input;
@@ -216,21 +218,19 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
         let observatory_port = CString::new(format!("--vm-service-port={}", port))?;
         let disable_service_auth_codes = CString::new("--disable-service-auth-codes")?;
 
-        // Veshell renders with Impeller only; the embedder's framebuffers and
-        // textures are set up for it (see GlesFramebufferImporter).
-        let enable_impeller = CString::new("--enable-impeller")?;
-        // SDFs give rectangles, rounded rectangles, circles and lines analytic
-        // antialiasing, whatever the multisampling of the framebuffers Veshell
-        // hands the engine (the `theme.antialiasing` setting, which may be off).
-        let impeller_use_sdfs = CString::new("--impeller-use-sdfs")?;
-        let command_line_argv = vec![
+        let renderer_choice = Renderer::from_env();
+        let renderer_switches = renderer_choice
+            .engine_switches()
+            .iter()
+            .map(|switch| CString::new(*switch))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut command_line_argv = vec![
             executable_path.as_ptr(),
             observatory_host.as_ptr(),
             observatory_port.as_ptr(),
             disable_service_auth_codes.as_ptr(),
-            enable_impeller.as_ptr(),
-            impeller_use_sdfs.as_ptr(),
         ];
+        command_line_argv.extend(renderer_switches.iter().map(|switch| switch.as_ptr()));
 
         let elf_path = CString::new(format!("{lib_path}/libapp.so"))?;
         let mut aot_data: FlutterEngineAOTData = null_mut();
@@ -518,8 +518,11 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
                     })
                     .unwrap();
 
-                let renderer_data =
-                    RendererData::new(renderer.egl_context(), flutter_engine_channels)?;
+                let renderer_data = RendererData::new(
+                    renderer.egl_context(),
+                    flutter_engine_channels,
+                    renderer_choice,
+                )?;
                 let view_target_releaser =
                     renderer_data.framebuffer_importer.view_target_releaser();
                 this.write(Self {
@@ -894,6 +897,7 @@ impl RendererData {
     fn new(
         root_egl_context: &EGLContext,
         channels: FlutterEngineChannels,
+        renderer: Renderer,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         unsafe { root_egl_context.make_current()? };
 
@@ -922,7 +926,9 @@ impl RendererData {
             main_egl_context: new_context()?,
             resource_egl_context: new_context()?,
             channels,
-            framebuffer_importer: unsafe { GlesFramebufferImporter::new(egl_display.clone())? },
+            framebuffer_importer: unsafe {
+                GlesFramebufferImporter::new(egl_display.clone(), renderer.multisamples())?
+            },
         })
     }
 }
