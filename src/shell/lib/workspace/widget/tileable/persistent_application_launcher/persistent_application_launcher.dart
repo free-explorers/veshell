@@ -66,6 +66,20 @@ class PersistentApplicationLauncher extends Tileable {
       return Future.value();
     }
 
+    // Selecting the tile or the workspace rebuilds this widget, for the focus
+    // gates below. The drawer depends on none of it, and rebuilding it
+    // rebuilt its whole grid of entries (hundreds of icons) on every
+    // workspace switch. It is built once, with a callback that always runs
+    // the latest `launch`, so the rebuild stops here.
+    final latestLaunch = useRef(launch)..value = launch;
+    final drawer = useMemoized(
+      () => AppDrawer(
+        onSelect: (entry, origin) => latestLaunch.value(entry, origin),
+        searchFocusNode: searchFocusNode,
+      ),
+      [searchFocusNode],
+    );
+
     // The focus gates live on the scope widget below, not on the node: a
     // `FocusScopeNode` reports its `descendantsAreFocusable` as
     // `canRequestFocus && ...`, so writing that value back onto the node
@@ -110,7 +124,7 @@ class PersistentApplicationLauncher extends Tileable {
       child: ColoredBox(
         key: tileKey,
         color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        child: AppDrawer(onSelect: launch, searchFocusNode: searchFocusNode),
+        child: drawer,
       ),
     );
   }
