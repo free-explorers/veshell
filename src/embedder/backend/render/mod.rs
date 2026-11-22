@@ -25,7 +25,7 @@ use smithay::{
                 Id, Kind, RenderElement,
             },
             gles::GlesTexture,
-            Color32F, ImportAll, ImportDma, ImportMem, Renderer, RendererSuper,
+            Color32F, ImportDma, RendererSuper,
         },
     },
     input::pointer::CursorImageStatus,
@@ -34,14 +34,17 @@ use smithay::{
     utils::{Buffer, Logical, Monotonic, Physical, Point, Rectangle, Size, Time, Transform},
 };
 
+pub use renderer::VeshellRenderer;
+
 pub static CLEAR_COLOR: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 mod fractionnal_texture;
+mod renderer;
 smithay::backend::renderer::element::render_elements! {
     pub VeshellRenderElements<R> where
-        R: ImportAll + ImportMem;
+        R: VeshellRenderer;
     Memory=MemoryRenderBufferRenderElement<R>,
     Cursor=RelocateRenderElement<CursorRenderElement<R>>,
-    Flutter=FractionnalTextureRenderElement<R::TextureId>,
+    Flutter=FractionnalTextureRenderElement<GlesTexture>,
     Surface=WaylandSurfaceRenderElement<R>,
     Solid=solid::SolidColorRenderElement
 }
@@ -97,7 +100,7 @@ pub fn get_render_elements<R>(
     recording_chip: Option<crate::capture::RecordingChipData>,
 ) -> Vec<VeshellRenderElements<R>>
 where
-    R: Renderer<TextureId = GlesTexture> + ImportAll + ImportMem + ImportDma,
+    R: VeshellRenderer,
     <R as RendererSuper>::TextureId: Send + Clone + 'static,
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
@@ -133,7 +136,7 @@ pub fn get_frame_elements<R>(
     surfaces_in_gaming_mode: Vec<&WlSurface>,
 ) -> Vec<VeshellRenderElements<R>>
 where
-    R: Renderer<TextureId = GlesTexture> + ImportAll + ImportMem + ImportDma,
+    R: VeshellRenderer,
     <R as RendererSuper>::TextureId: Send + Clone + 'static,
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
@@ -150,7 +153,9 @@ where
     }
 
     let flutter_texture = match &frame.frame {
-        Frame::Dmabuf(dmabuf) => renderer.import_dmabuf(dmabuf, None).ok(),
+        // The Flutter frame lives on the render GPU: it is imported and drawn
+        // there, whatever GPU the output is on (see [`VeshellRenderer`]).
+        Frame::Dmabuf(dmabuf) => renderer.as_gles_renderer().import_dmabuf(dmabuf, None).ok(),
         Frame::Texture(texture) => Some(texture.clone()),
     };
     let transform = if flip_flutter_texture {
@@ -175,7 +180,7 @@ where
             })
             .unwrap_or(output_geometry.size);
         let flutter_texture_buffer = FractionnalTextureBuffer::from_texture(
-            renderer,
+            renderer.as_gles_renderer(),
             flutter_texture,
             scale.fractional_scale(),
             transform,
@@ -237,7 +242,7 @@ pub fn get_cursor_elements<R>(
     gaming_mode: bool,
 ) -> Vec<VeshellRenderElements<R>>
 where
-    R: Renderer + ImportAll + ImportMem + ImportDma,
+    R: VeshellRenderer,
     <R as RendererSuper>::TextureId: Send + Clone + 'static,
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
@@ -277,7 +282,7 @@ pub fn get_capture_overlay_elements<R>(
     session: &CaptureSession,
 ) -> Vec<VeshellRenderElements<R>>
 where
-    R: Renderer + ImportAll + ImportMem,
+    R: VeshellRenderer,
     <R as RendererSuper>::TextureId: Send + Clone + 'static,
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
@@ -462,7 +467,7 @@ pub fn get_recording_overlay_elements<R>(
     chip: crate::capture::RecordingChipData,
 ) -> Vec<VeshellRenderElements<R>>
 where
-    R: Renderer + ImportAll + ImportMem,
+    R: VeshellRenderer,
     <R as RendererSuper>::TextureId: Send + Clone + 'static,
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
@@ -833,7 +838,7 @@ fn get_render_elements_for_frame<R>(
     recording_chip: Option<crate::capture::RecordingChipData>,
 ) -> Vec<VeshellRenderElements<R>>
 where
-    R: Renderer<TextureId = GlesTexture> + ImportAll + ImportMem + ImportDma,
+    R: VeshellRenderer,
     <R as RendererSuper>::TextureId: Send + Clone + 'static,
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,
@@ -936,7 +941,7 @@ pub fn get_surface_elements<R>(
     output_scale: f64,
 ) -> Vec<VeshellRenderElements<R>>
 where
-    R: Renderer + ImportAll + ImportMem + ImportDma,
+    R: VeshellRenderer,
     <R as RendererSuper>::TextureId: Send + Clone + 'static,
     <R as RendererSuper>::Error:,
     VeshellRenderElements<R>: RenderElement<R>,

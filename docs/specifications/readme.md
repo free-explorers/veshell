@@ -15,6 +15,7 @@ answer. Each service specification records its exact split.
 ## Components
 
 - [Display](/specifications/display.md)
+  - [Multi-GPU](/specifications/multi_gpu.md)
   - [Monitor](/specifications/monitor.md)
     - [Screen](/specifications/screen.md)
       - [ScreenPanel](/specifications/screen_panel.md)
