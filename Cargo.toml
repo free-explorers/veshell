@@ -33,7 +33,7 @@ inherits = "release"
 
 [dependencies.smithay]
 git = "https://github.com/Smithay/smithay.git"
-rev = "4cf0b62028039661477d482ec4758b687d8f4392"
+rev = "a38bb709a0400759b6a4fab6129e0f1dd72808c3"
 default-features = false
 
 features = [
@@ -56,7 +56,7 @@ features = [
 
 [dependencies]
 
-smithay-drm-extras = { git = "https://github.com/Smithay/smithay.git", rev = "4cf0b62028039661477d482ec4758b687d8f4392" }
+smithay-drm-extras = { git = "https://github.com/Smithay/smithay.git", rev = "a38bb709a0400759b6a4fab6129e0f1dd72808c3" }
 rustix = "0.38.30"
 input-linux = "0.7.1"
 # Gamepad discovery and hotplug (libinput ignores joysticks).

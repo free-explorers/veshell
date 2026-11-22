@@ -2,9 +2,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use smithay::backend::input::KeyState;
+use smithay::backend::input::{InputTime, KeyState};
 use smithay::backend::session::Session;
-use smithay::input::keyboard::ModifiersState;
+use smithay::input::keyboard::{KeyboardSource, ModifiersState};
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::RegistrationToken;
 use smithay::utils::SERIAL_COUNTER;
@@ -25,7 +25,7 @@ pub struct VeshellKeyEvent {
     pub raw_keysym: Option<Keysym>,
     pub keysym: Keysym,
     pub state: KeyState,
-    pub time: u32,
+    pub time: InputTime,
     pub mods: ModifiersState,
     pub mods_changed: bool,
     pub synthesized: bool,
@@ -141,7 +141,7 @@ impl SuperKeyForwarding {
                     .copied()
                     .filter(|down| Self::is_modifier(down.keysym) && held.contains(&down.key_code))
                     .collect();
-                modifiers.sort_by_key(|down| down.time);
+                modifiers.sort_by_key(|down| down.time.micros());
                 if !modifiers.is_empty() {
                     for down in &modifiers {
                         self.consumed.remove(&down.key_code);
@@ -229,7 +229,7 @@ fn num_lock_sync_events(mods: ModifiersState) -> [VeshellKeyEvent; 2] {
         raw_keysym: Some(Keysym::Num_Lock),
         keysym: Keysym::Num_Lock,
         state: KeyState::Pressed,
-        time: 0,
+        time: InputTime::from_micros(0),
         mods,
         mods_changed: false,
         synthesized: true,
@@ -301,7 +301,7 @@ const FLUTTER_ANSWER_TIMEOUT: Duration = Duration::from_millis(300);
 struct QueuedKey {
     key_code: Keycode,
     state: KeyState,
-    time: u32,
+    time: InputTime,
     synthesized: bool,
 }
 
@@ -338,7 +338,7 @@ pub fn handle_keyboard_event<BackendData: Backend + 'static>(
     data: &mut State<BackendData>,
     key_code: Keycode,
     state: KeyState,
-    time: u32,
+    time: InputTime,
     synthesized: bool,
 ) {
     data.key_queue.waiting.push_back(QueuedKey {
@@ -434,15 +434,24 @@ fn process_key_event<BackendData: Backend + 'static>(
     key_code = swap_left_alt_and_meta(data, key_code);
 
     // 1. Update the Smithay keyboard state but intercept the event so it's not forwarded to the focused client just yet
-    let ((mods, raw_keysym, keysym), mods_changed) =
-        keyboard.input_intercept::<_, _>(data, key_code, state, |_, mods, keysym_handle| {
+    let Some(((mods, raw_keysym, keysym), mods_changed)) = keyboard.input_intercept::<_, _>(
+        KeyboardSource::MAIN,
+        data,
+        key_code,
+        state,
+        |_, mods, keysym_handle| {
             // 2. Retrieve the keysym and modifiers with the xkb layout applied
             (
                 *mods,
                 keysym_handle.raw_latin_sym_or_raw_current_sym(),
                 keysym_handle.modified_sym(),
             )
-        });
+        },
+    ) else {
+        // Another source already holds (or released) this key: Smithay
+        // absorbed the event, and it must go nowhere.
+        return None;
+    };
 
     info!(
         ?state,
@@ -571,14 +580,21 @@ pub(crate) fn release_game_mode_forwarded_keys<BackendData: Backend + 'static>(
 ) {
     let keyboard = data.keyboard.clone();
     for key_code in std::mem::take(&mut data.game_mode_forwarded_keys) {
-        let (_, mods_changed) =
-            keyboard.input_intercept(data, key_code, KeyState::Released, |_, _, _| ());
+        let Some((_, mods_changed)) = keyboard.input_intercept(
+            KeyboardSource::MAIN,
+            data,
+            key_code,
+            KeyState::Released,
+            |_, _, _| (),
+        ) else {
+            continue;
+        };
         keyboard.input_forward(
             data,
             key_code,
             KeyState::Released,
             SERIAL_COUNTER.next_serial(),
-            0,
+            InputTime::now(),
             mods_changed,
         );
     }
@@ -842,7 +858,7 @@ mod tests {
             raw_keysym: Some(keysym),
             keysym,
             state,
-            time: 0,
+            time: InputTime::from_micros(0),
             mods: ModifiersState::default(),
             mods_changed: false,
             synthesized: false,

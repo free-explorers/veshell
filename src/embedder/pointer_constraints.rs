@@ -9,6 +9,7 @@
 //! the pointer, and anything that takes the keyboard focus away (a shell
 //! shortcut, the launcher, the lock screen) releases it.
 
+use smithay::backend::input::InputTime;
 use smithay::backend::renderer::utils::with_renderer_surface_state;
 use smithay::input::pointer::{MotionEvent, PointerHandle, RelativeMotionEvent};
 use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
@@ -16,7 +17,7 @@ use smithay::reexports::wayland_server::Resource;
 use smithay::utils::{Logical, Point, Size, SERIAL_COUNTER};
 use smithay::wayland::compositor::RegionAttributes;
 use smithay::wayland::pointer_constraints::{
-    with_pointer_constraint, PointerConstraint, PointerConstraintsHandler,
+    with_pointer_constraint, ConstraintRemove, PointerConstraint, PointerConstraintsHandler,
 };
 use smithay::wayland::seat::WaylandFocus;
 
@@ -151,15 +152,16 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         };
         let keyboard_client = keyboard_focus.and_then(|surface| surface.client());
         let allowed = keyboard_client.is_some() && keyboard_client == surface.client();
-        with_pointer_constraint(&surface, &pointer, |constraint| {
+        let deactivated = with_pointer_constraint(&surface, &pointer, |constraint| {
             let Some(constraint) = constraint else {
-                return;
+                return false;
             };
             if !allowed {
                 if constraint.is_active() {
-                    constraint.deactivate(self, &surface, &pointer);
+                    constraint.deactivate();
+                    return true;
                 }
-                return;
+                return false;
             }
             if !constraint.is_active() {
                 let point = (location - origin).to_i32_round();
@@ -170,7 +172,24 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                     constraint.activate();
                 }
             }
+            false
         });
+        // Smithay no longer reports a deactivation to the handler: the lock
+        // is released here, so its cursor hint applies here too.
+        if deactivated {
+            self.apply_cursor_position_hint(&surface);
+        }
+    }
+
+    /// Moves the pointer to the hint the client gave for `surface`'s released
+    /// lock, if it gave one.
+    fn apply_cursor_position_hint(&mut self, surface: &WlSurface) {
+        let Some((hint_surface, hint)) = self.cursor_position_hint.take() else {
+            return;
+        };
+        if &hint_surface == surface {
+            self.warp_to_cursor_position_hint(hint_surface, hint);
+        }
     }
 
     /// The surface holding the keyboard focus.
@@ -201,7 +220,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
                 &MotionEvent {
                     location,
                     serial: SERIAL_COUNTER.next_serial(),
-                    time: data.frame_timestamp_millis(),
+                    time: InputTime::now(),
                 },
             );
             pointer.frame(data);
@@ -220,14 +239,9 @@ impl<BackendData: Backend + 'static> PointerConstraintsHandler for State<Backend
         &mut self,
         surface: &WlSurface,
         _pointer: &PointerHandle<Self>,
-        _constraint: Option<&PointerConstraint>,
+        _reason: ConstraintRemove,
     ) {
-        let Some((hint_surface, hint)) = self.cursor_position_hint.take() else {
-            return;
-        };
-        if &hint_surface == surface {
-            self.warp_to_cursor_position_hint(hint_surface, hint);
-        }
+        self.apply_cursor_position_hint(surface);
     }
 
     fn cursor_position_hint(

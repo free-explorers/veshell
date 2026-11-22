@@ -1,6 +1,4 @@
-use std::time::Duration;
-
-use smithay::backend::input::ButtonState;
+use smithay::backend::input::{ButtonState, InputTime};
 use smithay::input::pointer::ButtonEvent;
 use tracing::info;
 
@@ -35,7 +33,7 @@ pub fn mouse_buttons_event<BackendData: Backend + 'static>(
         result.success(None);
         return;
     }
-    let now = Duration::from(data.clock.now()).as_millis() as u32;
+    let now = InputTime::now();
     let pointer = data.pointer.clone();
 
     let args = method_call.arguments().unwrap().clone();

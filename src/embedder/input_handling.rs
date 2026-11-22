@@ -2,8 +2,8 @@ use std::mem::size_of;
 
 use smithay::backend::input::{
     self, AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, GestureBeginEvent,
-    GestureEndEvent, GesturePinchUpdateEvent, InputBackend, PointerAxisEvent, PointerButtonEvent,
-    PointerMotionEvent,
+    GestureEndEvent, GesturePinchUpdateEvent, InputBackend, InputTime, PointerAxisEvent,
+    PointerButtonEvent, PointerMotionEvent,
 };
 use smithay::input::pointer::{
     AxisFrame, ButtonEvent, GesturePinchBeginEvent as PointerPinchBeginEvent,
@@ -168,7 +168,7 @@ impl<BackendData: Backend> State<BackendData> {
     fn consume_floating_gesture_motion(
         &mut self,
         pointer_location: Point<f64, Logical>,
-        time: u32,
+        time: InputTime,
     ) -> bool {
         if self.floating_move.is_none() && self.floating_resize.is_none() {
             return false;
@@ -230,7 +230,7 @@ impl<BackendData: Backend> State<BackendData> {
         // not forward the motion to the client while the window follows it.
         if self.floating_move.is_some() || self.floating_resize.is_some() {
             let location = self.clamp_coords(pointer_location + event.delta());
-            self.consume_floating_gesture_motion(location, event.time_msec());
+            self.consume_floating_gesture_motion(location, event.time());
             return;
         }
 
@@ -243,7 +243,7 @@ impl<BackendData: Backend> State<BackendData> {
             Some(RelativeMotionEvent {
                 delta: event.delta(),
                 delta_unaccel: event.delta_unaccel(),
-                utime: event.time(),
+                time: event.time(),
             }),
         ) else {
             self.register_frame();
@@ -257,7 +257,7 @@ impl<BackendData: Backend> State<BackendData> {
             &MotionEvent {
                 location: pointer_location,
                 serial: SERIAL_COUNTER.next_serial(),
-                time: event.time_msec(),
+                time: event.time(),
             },
         );
         self.update_pointer_constraint(self.keyboard_focus_surface());
@@ -329,7 +329,7 @@ impl<BackendData: Backend> State<BackendData> {
 
         // See `on_pointer_motion`: an active floating gesture consumes the
         // motion instead of forwarding it to the client.
-        if self.consume_floating_gesture_motion(pointer_location, event.time_msec()) {
+        if self.consume_floating_gesture_motion(pointer_location, event.time()) {
             return;
         }
 
@@ -344,7 +344,7 @@ impl<BackendData: Backend> State<BackendData> {
             Some(RelativeMotionEvent {
                 delta,
                 delta_unaccel: delta,
-                utime: event.time(),
+                time: event.time(),
             }),
         ) else {
             self.register_frame();
@@ -359,7 +359,7 @@ impl<BackendData: Backend> State<BackendData> {
             &MotionEvent {
                 location: pointer_location,
                 serial,
-                time: event.time_msec(),
+                time: event.time(),
             },
         );
         self.update_pointer_constraint(self.keyboard_focus_surface());
@@ -423,7 +423,7 @@ impl<BackendData: Backend> State<BackendData> {
                     button: event.button_code(),
                     state: state.try_into().unwrap(),
                     serial: SERIAL_COUNTER.next_serial(),
-                    time: event.time_msec(),
+                    time: event.time(),
                 },
             );
             pointer.frame(self);
@@ -566,7 +566,7 @@ impl<BackendData: Backend> State<BackendData> {
         let horizontal_amount_discrete = event.amount_v120(input::Axis::Horizontal);
         let vertical_amount_discrete = event.amount_v120(input::Axis::Vertical);
 
-        let mut frame = AxisFrame::new(event.time_msec()).source(event.source());
+        let mut frame = AxisFrame::new(event.time()).source(event.source());
         if horizontal_amount != 0.0 {
             frame = frame
                 .relative_direction(Axis::Horizontal, event.relative_direction(Axis::Horizontal));
@@ -753,7 +753,7 @@ impl<BackendData: Backend> State<BackendData> {
                 self,
                 &PointerPinchBeginEvent {
                     serial: SERIAL_COUNTER.next_serial(),
-                    time: event.time_msec(),
+                    time: event.time(),
                     fingers: event.fingers(),
                 },
             );
@@ -785,14 +785,14 @@ impl<BackendData: Backend> State<BackendData> {
                     // The session locked or a screenshot selection started
                     // mid-pinch: close the client's gesture.
                     self.pinch_target = None;
-                    self.end_client_pinch(event.time_msec(), true);
+                    self.end_client_pinch(event.time(), true);
                     return;
                 }
                 let pointer = self.pointer.clone();
                 pointer.gesture_pinch_update(
                     self,
                     &PointerPinchUpdateEvent {
-                        time: event.time_msec(),
+                        time: event.time(),
                         delta: (event.delta_x(), event.delta_y()).into(),
                         scale: event.scale(),
                         rotation: event.rotation(),
@@ -832,7 +832,7 @@ impl<BackendData: Backend> State<BackendData> {
             None => {}
             Some(PinchTarget::Client) => {
                 let cancelled = event.cancelled() || !self.client_gestures_allowed();
-                self.end_client_pinch(event.time_msec(), cancelled);
+                self.end_client_pinch(event.time(), cancelled);
             }
             Some(PinchTarget::Shell {
                 view_id, device_id, ..
@@ -852,7 +852,7 @@ impl<BackendData: Backend> State<BackendData> {
 
     /// Ends the client's pinch, also used to cancel it when the session state
     /// changes mid-gesture.
-    fn end_client_pinch(&mut self, time: u32, cancelled: bool) {
+    fn end_client_pinch(&mut self, time: InputTime, cancelled: bool) {
         let pointer = self.pointer.clone();
         pointer.gesture_pinch_end(
             self,
@@ -949,7 +949,7 @@ impl<BackendData: Backend> State<BackendData> {
         let event = MotionEvent {
             location: pointer.current_location(),
             serial: SERIAL_COUNTER.next_serial(),
-            time: self.frame_timestamp_millis(),
+            time: InputTime::now(),
         };
         pointer.motion(self, focus, &event);
         self.update_pointer_constraint(self.keyboard_focus_surface());
@@ -1379,7 +1379,7 @@ mod tests {
 
     #[test]
     fn scale_client_wheel_frame_scales_the_wheel_axis_and_v120() {
-        let frame = AxisFrame::new(0)
+        let frame = AxisFrame::new(InputTime::from_micros(0))
             .source(AxisSource::Wheel)
             .value(Axis::Vertical, 15.0)
             .v120(Axis::Vertical, 120);
@@ -1392,7 +1392,7 @@ mod tests {
 
     #[test]
     fn scale_client_wheel_frame_leaves_other_sources_alone() {
-        let frame = AxisFrame::new(0)
+        let frame = AxisFrame::new(InputTime::from_micros(0))
             .source(AxisSource::Finger)
             .value(Axis::Vertical, 15.0);
 

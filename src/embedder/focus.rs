@@ -1,5 +1,6 @@
 use std::{borrow::Cow, sync::Arc};
 
+use smithay::backend::input::InputTime;
 use smithay::input::{
     dnd::{DndFocus, OfferData, Source},
     pointer::{
@@ -114,7 +115,7 @@ impl<BackendData: Backend + 'static> DndFocus<State<BackendData>> for PointerFoc
         offer: Option<&mut Self::OfferData<S>>,
         seat: &Seat<State<BackendData>>,
         location: Point<f64, Logical>,
-        time: u32,
+        time: InputTime,
     ) {
         match (self, offer) {
             (Self::WlSurface(surface), Some(PointerOfferData::Wl(offer))) => {
@@ -249,7 +250,7 @@ impl<BackendData: Backend> PointerTarget<State<BackendData>> for PointerFocusTar
         seat: &Seat<State<BackendData>>,
         data: &mut State<BackendData>,
         serial: Serial,
-        time: u32,
+        time: InputTime,
     ) {
         match self {
             PointerFocusTarget::WlSurface(w) => PointerTarget::leave(w, seat, data, serial, time),
@@ -411,7 +412,7 @@ impl<BackendData: Backend> KeyboardTarget<State<BackendData>> for KeyboardFocusT
         key: KeysymHandle<'_>,
         state: KeyState,
         serial: Serial,
-        time: u32,
+        time: InputTime,
     ) {
         match self {
             KeyboardFocusTarget::WlSurface(s) => {
