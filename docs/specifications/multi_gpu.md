@@ -12,7 +12,12 @@ out.
 
 ## Choosing the render GPU
 
-- By default the render GPU is the seat's boot GPU (`boot_vga`).
+- By default the render GPU is the one driving a connected built-in panel
+  (eDP, LVDS or DSI): the panel is then composited without a copy between
+  GPUs, even when the firmware booted on a discrete GPU that only drives the
+  external ports.
+- Without a connected built-in panel (a desktop, a closed lid at startup), it
+  is the seat's boot GPU (`boot_vga`).
 - `DRM_DEVICE` (a `/dev/dri/card*` or `/dev/dri/renderD*` path) names another
   one. It only picks where rendering happens: the outputs of every GPU are
   driven regardless. An Optimus laptop can render on the dGPU, which has no
@@ -32,7 +37,16 @@ The backend uses Smithay's `GpuManager`: one GLES renderer per GPU, and a
 - The composite is rendered on the render GPU into an offscreen buffer, then
   handed to the output's GPU: as a dmabuf when both GPUs share a format and
   modifier (often only `LINEAR` across vendors), or as a copy through memory
-  otherwise.
+  otherwise. Only the composite's damage is copied.
+- The NVIDIA proprietary driver cannot render into a `LINEAR` buffer (it imports
+  one for sampling only) and no other GPU reads its own tilings: when it is the
+  render GPU, the outputs of another GPU always go through memory. The copy is
+  synchronous and costs the main thread a few milliseconds per changed frame,
+  as with niri and Smithay's `MultiRenderer` in general. An iGPU rendering for
+  an output of an NVIDIA GPU shares `LINEAR` buffers instead.
+- The 10-bit output format is `ABGR2101010` only: the composite of another
+  GPU's output is rendered in the output's format, and the NVIDIA driver
+  renders 10-bit only as `XB30`/`AB30`.
 - When the flip cannot wait on the composite's fence (the driver takes no
   in-fence, or the fence cannot be exported, as after a copy), the composite is
   waited for before the flip is queued.

@@ -165,7 +165,8 @@ pub struct DrmBackend {
     /// Every GPU of the seat, by its primary (`card`) node.
     gpus: HashMap<DrmNode, GpuData>,
     /// The render GPU: Flutter renders on it and every output is composited
-    /// on it, whatever GPU drives the output. The boot GPU, or `DRM_DEVICE`.
+    /// on it, whatever GPU drives the output. `DRM_DEVICE`, else the GPU
+    /// driving the built-in panel, else the boot GPU.
     primary_gpu: DrmNode,
     /// The render GPU's primary (`card`) node, its key in [`Self::gpus`].
     primary_node: DrmNode,
@@ -430,13 +431,12 @@ struct UdevOutputId {
 // - some formats might perform terribly
 // - we might need some work-arounds, if one supports modifiers, but the other does not
 //
-// So lets just pick `ARGB2101010` (10-bit) or `ARGB8888` (8-bit) for now, they are widely supported.
-const SUPPORTED_FORMATS: &[Fourcc] = &[
-    Fourcc::Abgr2101010,
-    Fourcc::Argb2101010,
-    Fourcc::Abgr8888,
-    Fourcc::Argb8888,
-];
+// So lets just pick `ABGR2101010` (10-bit) or `ARGB8888` (8-bit) for now, they are widely supported.
+//
+// The 10-bit format is only ever `ABGR2101010`: the composite of an output on
+// another GPU is rendered in the output's format, and the NVIDIA proprietary
+// driver renders 10-bit only as `XB30`/`AB30`, not `XR30`/`AR30`.
+const SUPPORTED_FORMATS: &[Fourcc] = &[Fourcc::Abgr2101010, Fourcc::Abgr8888, Fourcc::Argb8888];
 const SUPPORTED_FORMATS_8BIT_ONLY: &[Fourcc] = &[Fourcc::Abgr8888, Fourcc::Argb8888];
 
 impl DmabufHandler for State<DrmBackend> {
@@ -499,6 +499,42 @@ fn acquire_primary_gpu(state: &mut State<DrmBackend>, node: DrmNode) {
     }
 }
 
+/// Where the kernel lists DRM devices and their connectors.
+const SYSFS_DRM: &str = "/sys/class/drm";
+
+/// The GPU among `gpus` (`/dev/dri/card*` paths) that drives a connected
+/// built-in panel (eDP, LVDS or DSI), read from the connectors `sysfs_drm`
+/// lists as `card<N>-<type>-<index>/status`.
+fn gpu_with_builtin_panel(
+    sysfs_drm: &Path,
+    gpus: &[std::path::PathBuf],
+) -> Option<std::path::PathBuf> {
+    let entries: Vec<String> = std::fs::read_dir(sysfs_drm)
+        .ok()?
+        .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+        .collect();
+    gpus.iter()
+        .find(|gpu| {
+            let Some(card) = gpu.file_name().and_then(|name| name.to_str()) else {
+                return false;
+            };
+            entries.iter().any(|connector| {
+                let Some(kind) = connector
+                    .strip_prefix(card)
+                    .and_then(|rest| rest.strip_prefix('-'))
+                else {
+                    return false;
+                };
+                ["eDP-", "LVDS-", "DSI-"]
+                    .iter()
+                    .any(|panel| kind.starts_with(panel))
+                    && std::fs::read_to_string(sysfs_drm.join(connector).join("status"))
+                        .is_ok_and(|status| status.trim() == "connected")
+            })
+        })
+        .cloned()
+}
+
 /// Runs the compositor on the DRM backend.
 ///
 /// `real_session` is the `--session` marker: only the user's login session
@@ -524,18 +560,25 @@ pub fn run_drm_backend(real_session: bool) {
     let primary_gpu = if let Ok(var) = std::env::var("DRM_DEVICE") {
         DrmNode::from_path(var).expect("Invalid drm device path")
     } else {
-        let primary = primary_gpu(session.seat())
-            .ok()
-            .flatten()
-            .and_then(|path| DrmNode::from_path(path).ok())
-            .and_then(|node| node.node_with_type(NodeType::Render).and_then(Result::ok));
-        let gpu = primary.or_else(|| {
-            all_gpus(session.seat()).ok().and_then(|paths| {
-                paths
-                    .into_iter()
+        let gpus = all_gpus(session.seat()).unwrap_or_default();
+        // The GPU driving the built-in panel renders: the panel is always
+        // lit, and is then composited without a copy between GPUs. Firmware
+        // can boot on a discrete GPU that only drives the external ports.
+        let panel_gpu = gpu_with_builtin_panel(Path::new(SYSFS_DRM), &gpus)
+            .and_then(|path| DrmNode::from_path(path).ok());
+        let boot_gpu = || {
+            primary_gpu(session.seat())
+                .ok()
+                .flatten()
+                .and_then(|path| DrmNode::from_path(path).ok())
+        };
+        let gpu = panel_gpu
+            .or_else(boot_gpu)
+            .and_then(|node| node.node_with_type(NodeType::Render).and_then(Result::ok))
+            .or_else(|| {
+                gpus.into_iter()
                     .find_map(|path| DrmNode::from_path(path).ok())
-            })
-        });
+            });
         let Some(gpu) = gpu else {
             error!("No DRM GPU is available; cannot start a session compositor");
             return;
@@ -3190,6 +3233,77 @@ fn spawn_environment_import(names: &[String], completed: Option<channel::Sender<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A fake `/sys/class/drm` with the given connectors and their status,
+    /// removed when dropped.
+    struct FakeSysfsDrm(std::path::PathBuf);
+
+    impl FakeSysfsDrm {
+        fn new(name: &str, connectors: &[(&str, &str)]) -> Self {
+            let root = std::env::temp_dir()
+                .join(format!("veshell-sysfs-drm-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&root);
+            for (connector, status) in connectors {
+                let dir = root.join(connector);
+                std::fs::create_dir_all(&dir).unwrap();
+                std::fs::write(dir.join("status"), format!("{status}\n")).unwrap();
+            }
+            Self(root)
+        }
+    }
+
+    impl Drop for FakeSysfsDrm {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn cards(names: &[&str]) -> Vec<std::path::PathBuf> {
+        names
+            .iter()
+            .map(|name| Path::new("/dev/dri").join(name))
+            .collect()
+    }
+
+    #[test]
+    fn the_gpu_driving_the_connected_panel_renders() {
+        // A hybrid laptop: the panel on the iGPU (card1), the ports on both.
+        let sysfs = FakeSysfsDrm::new(
+            "hybrid",
+            &[
+                ("card0-HDMI-A-1", "connected"),
+                ("card1-eDP-1", "connected"),
+                ("card1-HDMI-A-2", "disconnected"),
+            ],
+        );
+        assert_eq!(
+            gpu_with_builtin_panel(&sysfs.0, &cards(&["card0", "card1"])),
+            Some(Path::new("/dev/dri/card1").to_path_buf())
+        );
+    }
+
+    #[test]
+    fn a_closed_lid_or_a_desktop_has_no_panel_gpu() {
+        let sysfs = FakeSysfsDrm::new(
+            "lid",
+            &[("card1-eDP-1", "disconnected"), ("card0-DP-1", "connected")],
+        );
+        assert_eq!(
+            gpu_with_builtin_panel(&sysfs.0, &cards(&["card0", "card1"])),
+            None
+        );
+    }
+
+    #[test]
+    fn a_card_number_is_not_a_prefix_of_another() {
+        // card1's panel must not be credited to card10, nor the reverse.
+        let sysfs = FakeSysfsDrm::new("prefix", &[("card10-eDP-1", "connected")]);
+        assert_eq!(gpu_with_builtin_panel(&sysfs.0, &cards(&["card1"])), None);
+        assert_eq!(
+            gpu_with_builtin_panel(&sysfs.0, &cards(&["card1", "card10"])),
+            Some(Path::new("/dev/dri/card10").to_path_buf())
+        );
+    }
 
     fn handle(raw: u32) -> crtc::Handle {
         control::from_u32(raw).expect("crtc handle must be non-zero")
