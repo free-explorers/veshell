@@ -24,14 +24,16 @@ use smithay::backend::drm::{
     NodeType, VrrSupport,
 };
 use smithay::backend::egl::context::ContextPriority;
-use smithay::backend::egl::{EGLContext, EGLDevice, EGLDisplay};
+use smithay::backend::egl::{EGLDevice, EGLDisplay};
 use smithay::backend::input::{
     Event, GestureBeginEvent, GestureEndEvent, InputEvent, KeyboardKeyEvent,
 };
 use smithay::backend::libinput::{LibinputInputBackend, LibinputSessionInterface};
 use smithay::backend::renderer::element::texture::TextureRenderElement;
 use smithay::backend::renderer::gles::ffi::{self, Gles2};
-use smithay::backend::renderer::gles::{GlesError, GlesRenderer, GlesTexture};
+use smithay::backend::renderer::gles::{GlesError, GlesFrame, GlesRenderer, GlesTexture};
+use smithay::backend::renderer::multigpu::gbm::GbmGlesBackend;
+use smithay::backend::renderer::multigpu::{Error as MultiError, GpuManager, MultiRenderer};
 use smithay::backend::renderer::{
     ImportAll, ImportDma, ImportEgl, Offscreen, Renderer, RendererSuper,
 };
@@ -88,49 +90,36 @@ use crate::settings::{self, AccelerationProfile, MonitorConfiguration, MouseAndT
 use crate::state;
 use crate::{flutter_engine::EmbedderChannels, send_frames_surface_tree, State};
 
-use super::render::{get_render_elements, CLEAR_COLOR};
+use super::render::{get_render_elements, VeshellRenderer, CLEAR_COLOR};
 use super::vsync_clock::{self, VsyncClock};
 use super::Backend;
-/*
-type DrmRenderer<'a> = MultiRenderer<
-    'a,
-    'a,
-    GbmGlesBackend<GlesRenderer, DrmDeviceFd>,
-    GbmGlesBackend<GlesRenderer, DrmDeviceFd>,
->;
+/// The graphics API every GPU is driven through: GBM buffers, GLES rendering.
+type GbmGlesApi = GbmGlesBackend<GlesRenderer, DrmDeviceFd>;
 
-/// Trait for getting the underlying `GlesRenderer`.
-pub trait AsGlesRendererMut {
-    fn as_gles_renderer_mut(&mut self) -> &mut GlesRenderer;
-}
+/// Composites an output: on the render GPU, then, for an output of another
+/// GPU, copied to that GPU (a dmabuf import when the GPUs share a format and
+/// modifier, a copy through memory otherwise).
+pub type DrmRenderer<'render> = MultiRenderer<'render, 'render, GbmGlesApi, GbmGlesApi>;
 
-impl AsGlesRendererMut for GlesRenderer {
-    fn as_gles_renderer_mut(&mut self) -> &mut GlesRenderer {
-        self
-    }
-}
-
-impl<'render> AsGlesRendererMut for DrmRenderer<'render> {
-    fn as_gles_renderer_mut(&mut self) -> &mut GlesRenderer {
+impl VeshellRenderer for DrmRenderer<'_> {
+    fn as_gles_renderer(&mut self) -> &mut GlesRenderer {
         self.as_mut()
     }
-}
 
-pub trait AsGlesRenderer {
-    fn as_gles_renderer(&self) -> &GlesRenderer;
-}
+    fn as_gles_frame<'a, 'frame, 'buffer>(
+        frame: &'a mut Self::Frame<'frame, 'buffer>,
+    ) -> &'a mut GlesFrame<'frame, 'buffer>
+    where
+        'buffer: 'frame,
+        Self: 'frame,
+    {
+        frame.as_mut()
+    }
 
-impl AsGlesRenderer for GlesRenderer {
-    fn as_gles_renderer(&self) -> &GlesRenderer {
-        self
+    fn gles_error(error: GlesError) -> Self::Error {
+        MultiError::Render(error)
     }
 }
-
-impl<'render> AsGlesRenderer for DrmRenderer<'render> {
-    fn as_gles_renderer(&self) -> &GlesRenderer {
-        self.as_ref()
-    }
-} */
 
 /// Default cap for software (llvmpipe/swrast) composites.
 ///
@@ -173,9 +162,16 @@ fn is_software_renderer(renderer: &GlesRenderer) -> bool {
 
 pub struct DrmBackend {
     pub session: LibSeatSession,
+    /// Every GPU of the seat, by its primary (`card`) node.
     gpus: HashMap<DrmNode, GpuData>,
+    /// The render GPU: Flutter renders on it and every output is composited
+    /// on it, whatever GPU drives the output. The boot GPU, or `DRM_DEVICE`.
     primary_gpu: DrmNode,
-    //gpu_manager: GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>,
+    /// The render GPU's primary (`card`) node, its key in [`Self::gpus`].
+    primary_node: DrmNode,
+    /// The renderers of every GPU, by render node, and the copies between
+    /// them (see [`DrmRenderer`]).
+    gpu_manager: GpuManager<GbmGlesApi>,
     /// Fastest-refresh CRTC per DRM node. A node's vblank drives rendering of
     /// that node's surfaces only when it comes from this CRTC.
     highest_hz_crtc: HashMap<DrmNode, (i32, crtc::Handle)>,
@@ -306,15 +302,17 @@ impl Backend for DrmBackend {
         &mut self,
         f: impl FnOnce(&mut GlesRenderer) -> T,
     ) -> Option<T> {
-        /* let mut renderer = self.g.single_renderer(&self.primary_gpu).ok()?;
-        Some(f(renderer.as_gles_renderer_mut())) */
-        Some(f(&mut self.get_primary_gpu_data_mut().renderer))
+        let render_node = self.render_node()?;
+        let mut renderer = self.gpu_manager.single_renderer(&render_node).ok()?;
+        Some(f(renderer.as_mut()))
     }
 
     fn new_swapchain(&mut self, width: u32, height: u32) -> ViewSwapchain {
-        let primary_gpu_data = self.get_primary_gpu_data_mut();
-        let renderer = &primary_gpu_data.renderer;
-        let formats = renderer.egl_context().dmabuf_texture_formats();
+        let formats = self
+            .with_primary_renderer_mut(|renderer| {
+                renderer.egl_context().dmabuf_texture_formats().clone()
+            })
+            .unwrap_or_default();
         if formats.iter().next().is_none() {
             // Software EGL (kms_swrast/llvmpipe) may expose no dmabuf
             // formats. Flutter can still render into plain GL textures; the
@@ -344,11 +342,9 @@ impl Backend for DrmBackend {
     }
 
     fn new_texture(&mut self, width: u32, height: u32) -> Option<GlesTexture> {
-        match self
-            .get_primary_gpu_data_mut()
-            .renderer
-            .create_buffer(Fourcc::Abgr8888, (width as i32, height as i32).into())
-        {
+        match self.with_primary_renderer_mut(|renderer| {
+            renderer.create_buffer(Fourcc::Abgr8888, (width as i32, height as i32).into())
+        })? {
             Ok(texture) => Some(texture),
             Err(err) => {
                 warn!("Failed to allocate a Flutter backing texture: {err}");
@@ -358,23 +354,23 @@ impl Backend for DrmBackend {
     }
 
     fn capture_dmabuf_setup(&mut self) -> Option<super::CaptureDmabufSetup> {
-        let data = self.get_primary_gpu_data_mut();
         // Only the RGBA byte order the capture readback already produces
         // (Abgr8888 maps back as R,G,B,A) is offered, so the dmabuf path
         // and the shared-memory path agree on channels.
-        let formats = data
-            .renderer
-            .egl_context()
-            .dmabuf_texture_formats()
-            .iter()
-            .filter(|format| format.code == Fourcc::Abgr8888)
-            .map(|format| (format.code, format.modifier))
-            .collect::<Vec<_>>();
+        let formats = self.with_primary_renderer_mut(|renderer| {
+            renderer
+                .egl_context()
+                .dmabuf_texture_formats()
+                .iter()
+                .filter(|format| format.code == Fourcc::Abgr8888)
+                .map(|format| (format.code, format.modifier))
+                .collect::<Vec<_>>()
+        })?;
         if formats.is_empty() {
             return None;
         }
         Some(super::CaptureDmabufSetup {
-            allocator: std::rc::Rc::new(data.gbm_device.clone()),
+            allocator: std::rc::Rc::new(self.get_primary_gpu_data_mut().gbm_device.clone()),
             formats,
         })
     }
@@ -413,13 +409,13 @@ impl Backend for DrmBackend {
 
 impl DrmBackend {
     fn get_primary_gpu_data_mut(&mut self) -> &mut GpuData {
-        let primary_node = self
-            .primary_gpu
-            .node_with_type(NodeType::Primary)
-            .and_then(|x| x.ok())
-            .unwrap();
+        self.gpus.get_mut(&self.primary_node).unwrap()
+    }
 
-        self.gpus.get_mut(&primary_node).unwrap()
+    /// The render GPU's render node, its key in the [`GpuManager`]. `None`
+    /// until the render GPU is added.
+    fn render_node(&self) -> Option<DrmNode> {
+        self.gpus.get(&self.primary_node).map(|gpu| gpu.render_node)
     }
 }
 
@@ -454,25 +450,13 @@ impl DmabufHandler for State<DrmBackend> {
         dmabuf: Dmabuf,
         notifier: ImportNotifier,
     ) {
-        /* if self
+        // Client buffers are composited on the render GPU, whatever output
+        // shows them: that is where they must import.
+        let imported = self
             .backend_data
-            .gpu_manager
-            .single_renderer(&self.backend_data.primary_gpu)
-            .and_then(|mut renderer| renderer.import_dmabuf(&dmabuf, None))
-            .is_ok()
-        {
-            dmabuf.set_node(self.backend_data.primary_gpu);
-            let _ = notifier.successful::<State<DrmBackend>>();
-        } else {
-            notifier.failed();
-        } */
-        if self
-            .backend_data
-            .get_primary_gpu_data_mut()
-            .renderer
-            .import_dmabuf(&dmabuf, None)
-            .is_ok()
-        {
+            .with_primary_renderer_mut(|renderer| renderer.import_dmabuf(&dmabuf, None).is_ok())
+            .unwrap_or(false);
+        if imported {
             dmabuf.set_node(self.backend_data.primary_gpu);
             let _ = notifier.successful::<State<DrmBackend>>();
         } else {
@@ -558,7 +542,34 @@ pub fn run_drm_backend(real_session: bool) {
         };
         gpu
     };
-    info!("Using {} as primary gpu.", primary_gpu);
+    let Some(primary_node) = primary_gpu
+        .node_with_type(NodeType::Primary)
+        .and_then(|x| x.ok())
+    else {
+        error!("The render GPU has no primary DRM node; cannot start a session compositor");
+        return;
+    };
+    // Clients are told about the render GPU by its render node when it has
+    // one, whichever node `DRM_DEVICE` or the seat named.
+    let primary_gpu = primary_gpu
+        .node_with_type(NodeType::Render)
+        .and_then(Result::ok)
+        .unwrap_or(primary_gpu);
+    info!("Using {} as the render GPU.", primary_gpu);
+
+    // The composite must not queue behind a GPU-bound client: a game that
+    // saturates the GPU would otherwise hold back the compositor's frame
+    // (and the flip waiting on its fence) by a whole refresh. Drivers that
+    // do not support or grant high priority fall back to the default; Smithay
+    // logs the level actually granted.
+    let gpu_manager =
+        match GpuManager::new(GbmGlesApi::with_context_priority(ContextPriority::High)) {
+            Ok(gpu_manager) => gpu_manager,
+            Err(err) => {
+                error!("Failed to create the GPU manager: {err}");
+                return;
+            }
+        };
 
     let udev_backend = match UdevBackend::new(session.seat()) {
         Ok(ret) => ret,
@@ -625,8 +636,9 @@ pub fn run_drm_backend(real_session: bool) {
         DrmBackend {
             session,
             gpus: HashMap::new(),
-            //gpu_manager: gpu_manager,
+            gpu_manager,
             primary_gpu,
+            primary_node,
             highest_hz_crtc: HashMap::new(),
             pacing_crtc: None,
             vsync_clock: VsyncClock::new(Duration::from_millis(16)),
@@ -744,49 +756,33 @@ pub fn run_drm_backend(real_session: bool) {
         })
         .unwrap();
 
-    // Initialize GPU state.
-    /* for (device_id, path) in udev_backend.device_list() {
-        if let Err(err) = DrmNode::from_dev_id(device_id)
-            .map_err(DeviceAddError::DrmNode)
-            .and_then(|node| state.device_added(node, path))
-        {
-            error!("Skipping device {device_id}: {err}");
-        }
-    } */
-
-    let Some(primary_node) = primary_gpu
-        .node_with_type(NodeType::Primary)
-        .and_then(|x| x.ok())
-    else {
-        error!("The primary GPU has no primary DRM node; cannot start a session compositor");
-        return;
-    };
+    // The render GPU first: the session cannot run without it. Then every
+    // other GPU, whose outputs are composited on the render GPU and copied
+    // over; one that fails to open only loses its outputs.
     acquire_primary_gpu(&mut state, primary_node);
-
-    /*     let mut renderer = match state.backend_data.gpu_manager.single_renderer(&primary_gpu) {
-        Ok(renderer) => renderer,
-        Err(err) => {
-            error!("Failed to create renderer: {:?}", err);
-            return;
-        }
-    }; */
-
-    let renderer = &mut state.backend_data.get_primary_gpu_data_mut().renderer;
+    for (device_id, path) in udev_backend.device_list() {
+        state.secondary_device_added(device_id, path);
+    }
 
     info!(
         ?primary_gpu,
         "Trying to initialize EGL Hardware Acceleration",
     );
-    match renderer.bind_wl_display(&state.display_handle) {
-        Ok(_) => info!("EGL hardware-acceleration enabled"),
-        Err(err) => info!(?err, "Failed to initialize EGL hardware-acceleration"),
-    }
+    let display_handle_for_egl = state.display_handle.clone();
+    let dmabuf_formats = state
+        .backend_data
+        .with_primary_renderer_mut(|renderer| {
+            match renderer.bind_wl_display(&display_handle_for_egl) {
+                Ok(_) => info!("EGL hardware-acceleration enabled"),
+                Err(err) => info!(?err, "Failed to initialize EGL hardware-acceleration"),
+            }
+            renderer.dmabuf_formats().clone()
+        })
+        .expect("the render GPU's renderer was created when it was added");
 
     state.gl = Some(Gles2::load_with(
         |s| unsafe { egl::get_proc_address(s) } as *const _
     ));
-
-    let dmabuf_formats = renderer.dmabuf_formats().clone();
 
     // A software EGL context may expose no dmabuf formats at all. Do not
     // publish an empty dmabuf global: clients would bind it and be unable to
@@ -1023,28 +1019,20 @@ pub fn run_drm_backend(real_session: bool) {
     event_loop
         .handle()
         .insert_source(udev_backend, move |event, _, data| match event {
-            UdevEvent::Added {
-                device_id: _,
-                path: _,
-            } => {
-                /* debug!("UdevEvent::Added {{ device_id: {device_id}");
-                if let Err(err) = DrmNode::from_dev_id(device_id)
-                    .map_err(DeviceAddError::DrmNode)
-                    .and_then(|node| data.device_added(node, &path))
-                {
-                    error!("Skipping device {device_id}: {err}");
-                } */
+            UdevEvent::Added { device_id, path } => {
+                if let Some(node) = data.secondary_device_added(device_id, &path) {
+                    data.device_changed(node, OutputUpdates::Immediate);
+                }
             }
             UdevEvent::Changed { device_id } => {
                 if let Ok(node) = DrmNode::from_dev_id(device_id) {
                     data.device_changed(node, OutputUpdates::Immediate)
                 }
             }
-            UdevEvent::Removed { device_id: _ } => {
-                /* debug!("UdevEvent::Removed {{ device_id: {device_id} }}");
+            UdevEvent::Removed { device_id } => {
                 if let Ok(node) = DrmNode::from_dev_id(device_id) {
                     data.device_removed(node)
-                } */
+                }
             }
         })
         .unwrap();
@@ -1231,7 +1219,6 @@ struct GpuData {
     drm_scanner: DrmScanner,
     render_node: DrmNode,
     registration_token: RegistrationToken,
-    renderer: GlesRenderer,
     /// EGL has no DRM render node (llvmpipe/swrast, e.g. a VM without 3D
     /// acceleration). Composites are capped to keep the software rasterizer
     /// from free-running on virtual page flips.
@@ -1253,10 +1240,8 @@ enum DeviceAddError {
     AddNode(egl::Error),
     #[error("Failed to create an EGL display: {0}")]
     EglDisplay(egl::Error),
-    #[error("Failed to create an EGL context: {0}")]
-    EglContext(egl::Error),
-    #[error("Failed to create the GLES renderer: {0}")]
-    Renderer(GlesError),
+    #[error("Failed to create the renderer: {0}")]
+    Renderer(String),
 }
 
 impl DeviceAddError {
@@ -1354,6 +1339,31 @@ impl State<DrmBackend> {
         // Computed before borrowing the GPU state so it can read the space.
         let default_position = self.default_output_position();
         let layout_origin = self.output_layout_origin;
+
+        // The swapchain is allocated and scanned out on this GPU, so it takes
+        // the formats this GPU renders to, as in a single-GPU setup: the
+        // multi-GPU renderer copies the composite into it.
+        let Some(device_render_node) = self.backend_data.gpus.get(&node).map(|gpu| gpu.render_node)
+        else {
+            return;
+        };
+        let (render_formats, texture_formats) = match self
+            .backend_data
+            .gpu_manager
+            .single_renderer(&device_render_node)
+        {
+            Ok(mut renderer) => {
+                let renderer: &mut GlesRenderer = renderer.as_mut();
+                (
+                    renderer.egl_context().dmabuf_render_formats().clone(),
+                    renderer.dmabuf_formats(),
+                )
+            }
+            Err(err) => {
+                warn!(%node, "No renderer for the GPU of a new connector: {err}");
+                return;
+            }
+        };
 
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
             device
@@ -1523,10 +1533,6 @@ impl State<DrmBackend> {
             SUPPORTED_FORMATS
         };
 
-        let renderer = &mut device.renderer;
-
-        let render_formats = renderer.egl_context().dmabuf_render_formats().clone();
-
         let driver = match device.drm_device.get_driver() {
             Ok(driver) => driver,
             Err(err) => {
@@ -1541,7 +1547,7 @@ impl State<DrmBackend> {
             self.backend_data.primary_gpu,
             device.render_node,
             node,
-            &renderer.dmabuf_formats(),
+            &texture_formats,
             &surface,
         );
 
@@ -1667,8 +1673,15 @@ impl State<DrmBackend> {
         }
     }
 
+    /// Opens a GPU and adds it to the [`GpuManager`]; its outputs are scanned
+    /// by [`Self::device_changed`].
+    ///
+    /// Opening the device and acquiring master are the only steps that can
+    /// fail transiently, and nothing is registered before them, so the render
+    /// GPU's acquisition can retry the whole call (see
+    /// [`acquire_primary_gpu`]). A later failure undoes what this call added.
     fn device_added(&mut self, node: DrmNode, path: &Path) -> Result<(), DeviceAddError> {
-        info!("device_added");
+        info!(%node, ?path, "device_added");
         // Try to open the device
         let fd = self
             .backend_data
@@ -1683,6 +1696,39 @@ impl State<DrmBackend> {
 
         let (drm, notifier) =
             DrmDevice::new(fd.clone(), true).map_err(DeviceAddError::DrmDevice)?;
+
+        let gbm_device = GbmDevice::new(fd.clone()).map_err(DeviceAddError::GbmDevice)?;
+        // Only asked for the device's render node; the GPU manager opens its
+        // own display for the renderer.
+        let drm_render_node = {
+            let egl_display = unsafe { EGLDisplay::new(gbm_device.clone()) }
+                .map_err(DeviceAddError::EglDisplay)?;
+            EGLDevice::device_for_display(&egl_display)
+                .ok()
+                .and_then(|device| device.try_get_render_node().ok().flatten())
+        };
+        let render_node = drm_render_node.unwrap_or(node);
+
+        self.backend_data
+            .gpu_manager
+            .as_mut()
+            .add_node(render_node, gbm_device.clone())
+            .map_err(DeviceAddError::AddNode)?;
+        // The renderer is created here rather than on first use: a GPU whose
+        // renderer cannot be created must not be kept.
+        let software_rendering = match self.backend_data.gpu_manager.single_renderer(&render_node) {
+            // Only a software rasterizer is capped; hardware GPUs report
+            // their model in GL_RENDERER, so they always take the uncapped
+            // path.
+            Ok(mut renderer) => is_software_renderer(renderer.as_mut()),
+            Err(err) => {
+                self.backend_data
+                    .gpu_manager
+                    .as_mut()
+                    .remove_node(&render_node);
+                return Err(DeviceAddError::Renderer(err.to_string()));
+            }
+        };
 
         let registration_token = self
             .loop_handle
@@ -1700,40 +1746,12 @@ impl State<DrmBackend> {
             )
             .unwrap();
 
-        let gbm_device = GbmDevice::new(fd.clone()).map_err(DeviceAddError::GbmDevice)?;
-        let egl_display =
-            unsafe { EGLDisplay::new(gbm_device.clone()) }.map_err(DeviceAddError::EglDisplay)?;
-
-        let egl_device = EGLDevice::device_for_display(&egl_display).ok();
-        let drm_render_node = egl_device
-            .as_ref()
-            .and_then(|device| device.try_get_render_node().ok().flatten());
-        let render_node = drm_render_node.unwrap_or(node);
-
-        // The composite must not queue behind a GPU-bound client: a game
-        // that saturates the GPU would otherwise hold back the compositor's
-        // frame (and the flip waiting on its fence) by a whole refresh.
-        // Drivers that do not support or grant high priority fall back to
-        // the default; Smithay logs the level actually granted.
-        let egl_context = EGLContext::new_with_priority(&egl_display, ContextPriority::High)
-            .map_err(DeviceAddError::EglContext)?;
-        let renderer =
-            unsafe { GlesRenderer::new(egl_context) }.map_err(DeviceAddError::Renderer)?;
-        // Only a software rasterizer is capped; hardware GPUs report their
-        // model in GL_RENDERER, so they always take the uncapped path.
-        let software_rendering = is_software_renderer(&renderer);
-
-        /*         self.backend_data
-        .gpu_manager
-        .as_mut()
-        .add_node(render_node, gbm_device.clone())
-        .map_err(DeviceAddError::AddNode)?; */
-
         let gbm_allocator = GbmAllocator::new(
             gbm_device.clone(),
             GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT,
         );
 
+        info!(%node, %render_node, software_rendering, "GPU added");
         self.backend_data.gpus.insert(
             node,
             GpuData {
@@ -1746,12 +1764,37 @@ impl State<DrmBackend> {
                 render_node,
                 surfaces: HashMap::new(),
                 active_leases: Vec::new(),
-                renderer,
                 software_rendering,
             },
         );
 
         Ok(())
+    }
+
+    /// Adds a GPU other than the render GPU, found at startup or plugged in
+    /// later. Its outputs are composited on the render GPU and copied over.
+    ///
+    /// Returns the GPU's primary node when it was added. A GPU that is
+    /// already open (the render GPU is in the udev device list too) or fails
+    /// to open is skipped: the session goes on without its outputs.
+    fn secondary_device_added(&mut self, device_id: libc::dev_t, path: &Path) -> Option<DrmNode> {
+        let node = match DrmNode::from_dev_id(device_id) {
+            Ok(node) => node,
+            Err(err) => {
+                warn!(device_id, ?path, "Skipping a GPU with no DRM node: {err}");
+                return None;
+            }
+        };
+        if self.backend_data.gpus.contains_key(&node) {
+            return None;
+        }
+        match self.device_added(node, path) {
+            Ok(()) => Some(node),
+            Err(err) => {
+                warn!(%node, ?path, "Skipping a GPU that failed to open: {err}");
+                None
+            }
+        }
     }
 
     fn device_changed(&mut self, node: DrmNode, updates: OutputUpdates) {
@@ -1780,13 +1823,19 @@ impl State<DrmBackend> {
         }
     }
 
-    #[allow(dead_code)]
     fn device_removed(&mut self, node: DrmNode) {
+        if node == self.backend_data.primary_node {
+            // Flutter and every composite run on the render GPU: there is
+            // nothing to fall back to. Its outputs go with their connectors.
+            error!(%node, "The render GPU was removed; its outputs stay dark");
+            return;
+        }
         let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
             device
         } else {
             return;
         };
+        info!(%node, "GPU removed");
 
         let crtcs: Vec<_> = device
             .drm_scanner
@@ -1800,13 +1849,15 @@ impl State<DrmBackend> {
 
         // drop the backends on this side
         if let Some(backend_data) = self.backend_data.gpus.remove(&node) {
-            /*             self.backend_data
-            .gpu_manager
-            .as_mut()
-            .remove_node(&backend_data.render_node); */
+            self.backend_data
+                .gpu_manager
+                .as_mut()
+                .remove_node(&backend_data.render_node);
 
             self.loop_handle.remove(backend_data.registration_token);
         }
+        self.backend_data.render_scheduled.remove(&node);
+        self.backend_data.software_throttled_nodes.remove(&node);
     }
 
     fn on_vblank(&mut self, node: DrmNode, crtc: crtc::Handle, meta: DrmEventMetadata) {
@@ -2442,12 +2493,13 @@ impl State<DrmBackend> {
         // Cap composites on a software renderer; the throttle timer releases
         // the skipped one so the loop keeps flipping and Flutter keeps
         // receiving its batons.
-        let software_rendering = self
-            .backend_data
-            .gpus
-            .get(&node)
-            .map(|gpu| gpu.software_rendering)
-            .unwrap_or(false);
+        // Every output is composited on the render GPU: its rasterizer is the
+        // one that pays, whatever GPU drives the output; a software output
+        // GPU also pays for the copy it receives.
+        let software_rendering = [node, self.backend_data.primary_node]
+            .iter()
+            .filter_map(|node| self.backend_data.gpus.get(node))
+            .any(|gpu| gpu.software_rendering);
         if software_rendering {
             let interval = *self
                 .backend_data
@@ -2466,28 +2518,38 @@ impl State<DrmBackend> {
             self.backend_data.software_throttled_nodes.remove(&node);
         }
 
-        let (surface, renderer) = {
-            let gpu_data = self.backend_data.gpus.get_mut(&node);
-            let gpu_data = if let Some(gpu_data) = gpu_data {
-                gpu_data
-            } else {
-                error!("Trying to render without gpu_data {}", node);
-                return;
-            };
-
-            let surface = match gpu_data.surfaces.get_mut(&crtc) {
-                Some(surface) => surface,
-                None => return,
-            };
-
-            let renderer = &mut gpu_data.renderer;
-            (surface, renderer)
+        let Some(render_node) = self.backend_data.render_node() else {
+            return;
         };
+        let DrmBackend {
+            gpus, gpu_manager, ..
+        } = &mut *self.backend_data;
+        let Some(gpu_data) = gpus.get_mut(&node) else {
+            error!("Trying to render without gpu_data {}", node);
+            return;
+        };
+        let target_node = gpu_data.render_node;
+        let Some(surface) = gpu_data.surfaces.get_mut(&crtc) else {
+            return;
+        };
+        // Composited on the render GPU; an output of another GPU receives a
+        // copy of the composite.
+        let mut renderer =
+            match gpu_manager.renderer(&render_node, &target_node, surface.compositor.format()) {
+                Ok(renderer) => renderer,
+                Err(err) => {
+                    warn!(output = %surface.name, "No renderer for this output: {err}");
+                    return;
+                }
+            };
+        let renderer = &mut renderer;
 
         let Some(frame) = frame else {
             debug!("Flutter hasn't rendered anything yet.");
             // Flutter hasn't rendered anything yet. Render a solid color to schedule the next VBLANK.
-            initial_render(surface, renderer).expect("Failed to render initial frame");
+            if let Err(err) = initial_render(surface, renderer) {
+                warn!(output = %surface.name, "Failed to render the initial frame: {err}");
+            }
             return;
         };
 
@@ -2556,6 +2618,17 @@ impl State<DrmBackend> {
                     ),
                     overlays: frame_result.overlay_elements.len(),
                 };
+                // The flip cannot wait on the composite's fence itself (the
+                // driver takes no in-fence, or the fence is not exportable, as
+                // after a copy to another GPU): the composite must be complete
+                // before it is queued, or the panel shows a partial frame.
+                if frame_result.needs_sync() {
+                    if let PrimaryPlaneElement::Swapchain(element) = &frame_result.primary_element {
+                        if let Err(err) = element.sync.wait() {
+                            warn!("error waiting for the composite to complete: {err:?}");
+                        }
+                    }
+                }
                 if let Err(err) = surface.compositor.queue_frame(None) {
                     warn!("error queueing frame: {err}");
                     return;
@@ -2594,23 +2667,28 @@ impl State<DrmBackend> {
         crtc: crtc::Handle,
         evt_handle: LoopHandle<'static, State<DrmBackend>>,
     ) {
-        let device = if let Some(device) = self.backend_data.gpus.get_mut(&node) {
-            device
-        } else {
+        let Some(render_node) = self.backend_data.render_node() else {
+            return;
+        };
+        let DrmBackend {
+            gpus, gpu_manager, ..
+        } = &mut *self.backend_data;
+        let Some(device) = gpus.get_mut(&node) else {
+            return;
+        };
+        let target_node = device.render_node;
+        let Some(surface) = device.surfaces.get_mut(&crtc) else {
             return;
         };
 
-        let surface = if let Some(surface) = device.surfaces.get_mut(&crtc) {
-            surface
-        } else {
-            return;
-        };
-
-        let node = surface.render_node;
-        let result = {
-            let renderer = &mut device.renderer;
-            initial_render(surface, renderer)
-        };
+        let result =
+            match gpu_manager.renderer(&render_node, &target_node, surface.compositor.format()) {
+                Ok(mut renderer) => initial_render(surface, &mut renderer),
+                Err(err) => {
+                    warn!(output = %surface.name, "No renderer for this output: {err}");
+                    return;
+                }
+            };
 
         if let Err(err) = result {
             match err {

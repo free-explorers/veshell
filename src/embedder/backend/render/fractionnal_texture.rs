@@ -1,8 +1,10 @@
+use super::VeshellRenderer;
 use crate::flutter_engine::view::FlutterFrameFence;
 use smithay::backend::renderer::element::{Element, Id, Kind, RenderElement, UnderlyingStorage};
+use smithay::backend::renderer::gles::GlesTexture;
 use smithay::backend::renderer::sync::SyncPoint;
 use smithay::backend::renderer::utils::{CommitCounter, DamageSet, DamageSnapshot, OpaqueRegions};
-use smithay::backend::renderer::{ContextId, Frame as _, Renderer, Texture};
+use smithay::backend::renderer::{ContextId, Frame, Renderer, Texture};
 use smithay::utils::user_data::UserDataMap;
 use smithay::utils::{Buffer, Logical, Physical, Point, Rectangle, Scale, Size, Transform};
 use tracing::warn;
@@ -205,11 +207,10 @@ impl<T: Texture> Element for FractionnalTextureRenderElement<T> {
     }
 }
 
-impl<R, T> RenderElement<R> for FractionnalTextureRenderElement<T>
-where
-    R: Renderer<TextureId = T>,
-    T: Texture,
-{
+/// Drawn through the render GPU's GLES frame: the Flutter texture lives on the
+/// render GPU, including when the output is on another GPU (see
+/// [`VeshellRenderer`]).
+impl<R: VeshellRenderer> RenderElement<R> for FractionnalTextureRenderElement<GlesTexture> {
     fn draw(
         &self,
         frame: &mut R::Frame<'_, '_>,
@@ -219,6 +220,7 @@ where
         opaque_regions: &[Rectangle<i32, Physical>],
         _cache: Option<&UserDataMap>,
     ) -> Result<(), R::Error> {
+        let frame = R::as_gles_frame(frame);
         if frame.context_id() != self.buffer.renderer_context_id {
             warn!("trying to render texture from different renderer");
             return Ok(());
@@ -232,10 +234,13 @@ where
                 .get::<FlutterFrameFence>()
                 .is_some_and(FlutterFrameFence::wait_in_current_context);
             if !inserted {
-                frame.wait(sync)?;
+                frame.wait(sync).map_err(R::gles_error)?;
             }
         }
-        frame.render_texture_from_to(
+        // The trait method: `GlesFrame` has an inherent one that also takes a
+        // shader program.
+        Frame::render_texture_from_to(
+            frame,
             &self.buffer.texture,
             src,
             dest,
@@ -244,6 +249,7 @@ where
             self.buffer.transform,
             self.alpha,
         )
+        .map_err(R::gles_error)
     }
 
     fn underlying_storage(&self, _renderer: &mut R) -> Option<UnderlyingStorage<'_>> {
