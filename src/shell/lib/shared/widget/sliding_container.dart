@@ -114,6 +114,7 @@ class SlidingContainer extends HookConsumerWidget {
     this.selectionIndicator,
     this.viewportMetaData,
     this.buildsNeighbors = false,
+    this.keepsPagesAlive = false,
     super.key,
   });
   final Axis direction;
@@ -146,6 +147,13 @@ class SlidingContainer extends HookConsumerWidget {
   /// Keeps a viewport's worth of pages built on each side of the visible ones,
   /// so a page sliding in from off screen is already there.
   final bool buildsNeighbors;
+
+  /// Keeps every page that was built alive once it leaves the screen. Off
+  /// screen it is neither laid out nor painted, but sliding back to it
+  /// reuses it instead of building the whole page again in the first frame
+  /// of the slide (heavy pages, such as workspaces, would make that frame
+  /// late every time).
+  final bool keepsPagesAlive;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // A page leaving the hit test reports the arrow while it is still painted
@@ -759,16 +767,32 @@ class SlidingContainer extends HookConsumerWidget {
                                 // RepaintBoundary per page, so sliding
                                 // translates layers instead of re-recording
                                 // both pages every frame.
-                                (context, index) => children[index],
+                                (context, page) => keepsPagesAlive
+                                    ? _KeptAlivePage(
+                                        key: switch (children[page].key) {
+                                          final Key key => _KeptAliveKey(key),
+                                          null => null,
+                                        },
+                                        // A page kept off screen is not
+                                        // shown: its animations stop rather
+                                        // than keep asking for frames.
+                                        ticking:
+                                            (page - index).abs() <= visible,
+                                        child: children[page],
+                                      )
+                                    : children[page],
                                 childCount: children.length,
                                 // A keyed page keeps its state when it moves
                                 // to another index, instead of the page now at
                                 // its old index taking that state over.
                                 findChildIndexCallback: (key) {
-                                  final index = children.indexWhere(
-                                    (child) => child.key == key,
+                                  final pageKey = key is _KeptAliveKey
+                                      ? key.value
+                                      : key;
+                                  final page = children.indexWhere(
+                                    (child) => child.key == pageKey,
                                   );
-                                  return index < 0 ? null : index;
+                                  return page < 0 ? null : page;
                                 },
                               ),
                             ),
@@ -911,6 +935,36 @@ class _SelectionIndicatorPainter extends CustomPainter {
       pageController != oldDelegate.pageController ||
       pageExtent != oldDelegate.pageExtent ||
       direction != oldDelegate.direction;
+}
+
+/// A page kept alive off screen ([SlidingContainer.keepsPagesAlive]).
+class _KeptAlivePage extends StatefulWidget {
+  const _KeptAlivePage({super.key, required this.ticking, required this.child});
+
+  /// Whether the page's animations run (see [TickerMode]).
+  final bool ticking;
+  final Widget child;
+
+  @override
+  State<_KeptAlivePage> createState() => _KeptAlivePageState();
+}
+
+class _KeptAlivePageState extends State<_KeptAlivePage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return TickerMode(enabled: widget.ticking, child: widget.child);
+  }
+}
+
+/// The key of a [_KeptAlivePage]: its page's key, wrapped so that the two do
+/// not sit in the tree as the same key (a `GlobalKey` would be used twice).
+class _KeptAliveKey extends ValueKey<Key> {
+  const _KeptAliveKey(super.value);
 }
 
 /// What a `PageView` builds for [SlidingContainer] (the same scrollable,

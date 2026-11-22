@@ -352,6 +352,85 @@ void main() {
     );
   });
 
+  group('a page left and then shown again', () {
+    testWidgets('is reused when pages are kept alive', (tester) async {
+      final events = StreamController<PlatformEvent>.broadcast();
+      addTearDown(events.close);
+      tester.view
+        ..devicePixelRatio = 1.0
+        ..physicalSize = const Size(600, 100);
+      addTearDown(tester.view.reset);
+      Widget pagesAt(int index) => ProviderScope(
+        overrides: [platformManagerProvider.overrideWithValue(events.stream)],
+        child: MaterialApp(
+          home: SlidingContainer(
+            index: index,
+            keepsPagesAlive: true,
+            children: const [
+              _StatefulPage(key: ValueKey('a'), id: 'a'),
+              _StatefulPage(key: ValueKey('b'), id: 'b'),
+              _StatefulPage(key: ValueKey('c'), id: 'c'),
+            ],
+          ),
+        ),
+      );
+      final page = find.byWidgetPredicate(
+        (widget) => widget is _StatefulPage && widget.id == 'a',
+        skipOffstage: false,
+      );
+      await tester.pumpWidget(pagesAt(0));
+      final before = tester.state(page);
+
+      await tester.pumpWidget(pagesAt(2));
+      await tester.pumpAndSettle();
+      // Off screen, it is kept rather than disposed.
+      expect(tester.state(page), same(before));
+
+      await tester.pumpWidget(pagesAt(0));
+      await tester.pumpAndSettle();
+      expect(tester.state(page), same(before));
+      expect(find.text('a'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('is built again otherwise', (tester) async {
+      final events = StreamController<PlatformEvent>.broadcast();
+      addTearDown(events.close);
+      tester.view
+        ..devicePixelRatio = 1.0
+        ..physicalSize = const Size(600, 100);
+      addTearDown(tester.view.reset);
+      Widget pagesAt(int index) => ProviderScope(
+        overrides: [platformManagerProvider.overrideWithValue(events.stream)],
+        child: MaterialApp(
+          home: SlidingContainer(
+            index: index,
+            children: const [
+              _StatefulPage(key: ValueKey('a'), id: 'a'),
+              _StatefulPage(key: ValueKey('b'), id: 'b'),
+              _StatefulPage(key: ValueKey('c'), id: 'c'),
+            ],
+          ),
+        ),
+      );
+      final page = find.byWidgetPredicate(
+        (widget) => widget is _StatefulPage && widget.id == 'a',
+        skipOffstage: false,
+      );
+      await tester.pumpWidget(pagesAt(0));
+      final before = tester.state(page);
+
+      await tester.pumpWidget(pagesAt(2));
+      await tester.pumpAndSettle();
+      expect(page, findsNothing);
+
+      await tester.pumpWidget(pagesAt(0));
+      await tester.pumpAndSettle();
+      expect(tester.state(page), isNot(same(before)));
+      await tester.pump(const Duration(seconds: 1));
+    });
+  });
+
   testWidgets('changing the page count resizes the tiles from their old size', (
     tester,
   ) async {

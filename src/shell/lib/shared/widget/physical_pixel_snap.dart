@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:material_ui/material_ui.dart';
@@ -53,23 +55,34 @@ class RenderPhysicalPixelSnap extends RenderProxyBox {
   @override
   void attach(PipelineOwner owner) {
     super.attach(owner);
-    _watchShift();
+    _SettledShiftCheck.watch(this);
   }
 
-  /// An ancestor can move without repainting this box (a repaint boundary
-  /// above it is only re-offset), which would keep a stale shift. Check after
-  /// every frame and repaint only when the remainder actually changed. This
-  /// never schedules a frame by itself.
-  void _watchShift() {
-    SchedulerBinding.instance.addPostFrameCallback((_) {
-      if (!attached) {
-        return;
-      }
-      if (_shift() != _paintedShift) {
-        markNeedsPaint();
-      }
-      _watchShift();
-    }, debugLabel: 'PhysicalPixelSnap');
+  @override
+  void detach() {
+    _SettledShiftCheck.forget(this);
+    super.detach();
+  }
+
+  /// Repaints this box if an ancestor moved it without repainting it (a
+  /// repaint boundary above it only re-offset, as a sliding page is), which
+  /// left it with a stale shift. A box outside the composited scene (a page
+  /// kept alive off screen) is not seen, and is checked when it next paints.
+  void _checkSettledShift() {
+    if (attached && _isComposited() && _shift() != _paintedShift) {
+      markNeedsPaint();
+    }
+  }
+
+  /// Whether this box's last paint is part of the composited scene: the layer
+  /// of its nearest repaint boundary is attached to the layer tree. A subtree
+  /// its parent stopped painting has a detached layer.
+  bool _isComposited() {
+    RenderObject? node = this;
+    while (node != null && !node.isRepaintBoundary) {
+      node = node.parent;
+    }
+    return node?.layer?.attached ?? false;
   }
 
   /// The sub-pixel shift that puts this box's origin on a physical pixel, or
@@ -109,5 +122,66 @@ class RenderPhysicalPixelSnap extends RenderProxyBox {
   @override
   void applyPaintTransform(RenderBox child, Matrix4 transform) {
     transform.translateByDouble(_paintedShift.dx, _paintedShift.dy, 0, 1);
+  }
+}
+
+/// Checks every [RenderPhysicalPixelSnap] once the frames stop.
+///
+/// While something moves, a box re-offset without a repaint is a fraction of
+/// a physical pixel off the grid, which motion hides. Checking each box after
+/// every frame walked to the root for hundreds of boxes (every grid-fitted
+/// icon) and repainted them all on every frame of a slide. Instead, the boxes
+/// are checked together when no frame followed for [_settleDelay]: once per
+/// animation, repainting only the boxes whose shift changed. Frames that never
+/// stop (a video playing, a looping animation) still get a check at least
+/// every [_longestWait]. The check never schedules a frame by itself.
+abstract final class _SettledShiftCheck {
+  static const _settleDelay = Duration(milliseconds: 50);
+  static const _longestWait = Duration(milliseconds: 500);
+  static final Set<RenderPhysicalPixelSnap> _boxes = {};
+  static Timer? _timer;
+  static bool _listening = false;
+
+  /// The frame that started the wait for the pending check.
+  static Duration? _waitingSince;
+
+  static void watch(RenderPhysicalPixelSnap box) {
+    _boxes.add(box);
+    if (!_listening) {
+      _listening = true;
+      SchedulerBinding.instance.addPersistentFrameCallback(_onFrame);
+    }
+    _timer ??= Timer(_settleDelay, _check);
+  }
+
+  static void forget(RenderPhysicalPixelSnap box) {
+    _boxes.remove(box);
+    if (_boxes.isEmpty) {
+      _timer?.cancel();
+      _timer = null;
+      _waitingSince = null;
+    }
+  }
+
+  /// Each frame pushes the pending check back, until it has waited
+  /// [_longestWait]: then it runs [_settleDelay] after it was last pushed.
+  static void _onFrame(Duration timeStamp) {
+    if (_boxes.isEmpty) {
+      return;
+    }
+    final since = _waitingSince ??= timeStamp;
+    if (_timer != null && timeStamp - since >= _longestWait) {
+      return;
+    }
+    _timer?.cancel();
+    _timer = Timer(_settleDelay, _check);
+  }
+
+  static void _check() {
+    _timer = null;
+    _waitingSince = null;
+    for (final box in _boxes.toList()) {
+      box._checkSettledShift();
+    }
   }
 }

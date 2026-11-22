@@ -166,6 +166,74 @@ void main() {
       expect(physicalOrigin(tester), const Offset(1.25, 3.75));
     });
 
+    testWidgets('re-snaps when only a repaint boundary above it moves', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1.25;
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      Widget boundaryAt(double left) => Directionality(
+        textDirection: TextDirection.ltr,
+        child: Stack(
+          children: [
+            Positioned(
+              left: left,
+              top: 8,
+              child: const RepaintBoundary(
+                child: PhysicalPixelSnap(
+                  key: snapKey,
+                  child: SizedBox(key: childKey, width: 10, height: 10),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpWidget(boundaryAt(4));
+      // The boundary's layer is only re-offset: the box does not repaint, and
+      // keeps its old shift while frames keep coming.
+      await tester.pumpWidget(boundaryAt(1));
+      expect(physicalOrigin(tester).dx, isNot(moreOrLessEquals(1)));
+
+      // Once the frames stop, the check catches the new remainder.
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.pump();
+      expect(physicalOrigin(tester).dx, moreOrLessEquals(1));
+    });
+
+    testWidgets('re-snaps while frames never stop', (tester) async {
+      tester.view.devicePixelRatio = 1.25;
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      Widget boundaryAt(double left) => Directionality(
+        textDirection: TextDirection.ltr,
+        child: Stack(
+          children: [
+            Positioned(
+              left: left,
+              top: 8,
+              child: const RepaintBoundary(
+                child: PhysicalPixelSnap(
+                  key: snapKey,
+                  child: SizedBox(key: childKey, width: 10, height: 10),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+      await tester.pumpWidget(boundaryAt(4));
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.pumpWidget(boundaryAt(1));
+
+      // A frame every 16 ms, as a playing video gives: never 50 ms apart.
+      for (var elapsed = 0; elapsed < 600; elapsed += 16) {
+        tester.binding.scheduleFrame();
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(physicalOrigin(tester).dx, moreOrLessEquals(1));
+    });
+
     testWidgets('re-snaps after an ancestor moves', (tester) async {
       tester.view.devicePixelRatio = 1.25;
       addTearDown(tester.view.resetDevicePixelRatio);
