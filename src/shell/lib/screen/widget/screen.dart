@@ -1,4 +1,3 @@
-import 'package:collection/collection.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
@@ -22,6 +21,7 @@ import 'package:shell/status_bar/provider/status_notch_geometry.dart';
 import 'package:shell/status_bar/widget/status_notch.dart';
 import 'package:shell/status_bar/widget/status_top_panel.dart';
 import 'package:shell/tile_grab/model/tile_grab_marker.dart';
+import 'package:shell/workspace/provider/workspace_state.dart';
 import 'package:shell/workspace/widget/workspace.dart';
 
 /// Widget that represent the Screen in the widget tree
@@ -40,6 +40,31 @@ class ScreenWidget extends HookConsumerWidget {
     final screenFocusScopeNode = useFocusScopeNode(
       debugLabel: 'ScreenFocusNode',
     );
+
+    // The workspaces are kept alive by the container below, so every one of
+    // them is rebuilt whenever this list is. A page whose workspace and
+    // selection did not change keeps its widget instance, and Flutter stops
+    // there: switching workspaces rebuilds the two whose selection changed,
+    // not all of them. The cache key holds every argument of the page: one
+    // added to WorkspaceWidget must be added to the key too, or a cached page
+    // would keep its old value.
+    final workspacePageCache = useRef(<(WorkspaceId, bool), Widget>{});
+    final workspacePages = <(WorkspaceId, bool), Widget>{
+      for (final (index, workspaceId) in screenState.workspaceList.indexed)
+        (workspaceId, screenState.selectedIndex == index):
+            workspacePageCache.value[(
+              workspaceId,
+              screenState.selectedIndex == index,
+            )] ??
+            WorkspaceWidget(
+              // A kept page follows its workspace when others are inserted
+              // or removed.
+              key: ValueKey(workspaceId),
+              workspaceId: workspaceId,
+              isSelected: screenState.selectedIndex == index,
+            ),
+    };
+    workspacePageCache.value = workspacePages;
 
     return CurrentScreenId(
       screenId: screenId,
@@ -188,6 +213,10 @@ class ScreenWidget extends HookConsumerWidget {
                                           Positioned.fill(
                                             child: SlidingContainer(
                                               direction: Axis.vertical,
+                                              // Switching workspaces back and
+                                              // forth reuses them rather than
+                                              // building each one again.
+                                              keepsPagesAlive: true,
                                               index: screenState.selectedIndex,
                                               onIndexChanged: (newIndex) {
                                                 ref
@@ -204,20 +233,7 @@ class ScreenWidget extends HookConsumerWidget {
                                                         placementScreenProvider,
                                                       ) &&
                                                   !overviewDisplayed,
-                                              children: screenState
-                                                  .workspaceList
-                                                  .mapIndexed(
-                                                    (
-                                                      index,
-                                                      workspaceId,
-                                                    ) => WorkspaceWidget(
-                                                      workspaceId: workspaceId,
-                                                      isSelected:
-                                                          screenState
-                                                              .selectedIndex ==
-                                                          index,
-                                                    ),
-                                                  )
+                                              children: workspacePages.values
                                                   .toList(),
                                             ),
                                           ),
