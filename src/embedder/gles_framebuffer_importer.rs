@@ -23,7 +23,8 @@
 //!   The view's render target is multisampled instead, and resolved on
 //!   present, as Flutter's own GTK embedder does. The sample count follows
 //!   the `theme.antialiasing` setting ([`set_antialiasing`]); `auto` weighs the
-//!   GPU (see [`GpuKind`]).
+//!   GPU (see [`GpuKind`]). Skia (`VESHELL_RENDERER=skia`) antialiases
+//!   analytically: its targets keep a single sample, whatever the setting.
 //! * Partial repaint. The view's target also keeps its last complete frame,
 //!   so the engine paints only what changed
 //!   ([`GlesFramebufferImporter::keeps_last_frame`]) and only that is
@@ -131,6 +132,9 @@ pub struct GlesFramebufferImporter {
     egl_display: EGLDisplay,
     /// The GPU Flutter renders on; known once a context is current.
     gpu: Option<Gpu>,
+    /// Whether Flutter's renderer antialiases through multisampling
+    /// (Impeller); Skia's targets keep a single sample.
+    multisamples: bool,
 
     // caches
     buffers: Vec<GlesFramebuffer>,
@@ -263,7 +267,7 @@ pub struct PaintedRegion {
 }
 
 impl GlesFramebufferImporter {
-    pub unsafe fn new(egl_display: EGLDisplay) -> Result<Self, GlesError> {
+    pub unsafe fn new(egl_display: EGLDisplay, multisamples: bool) -> Result<Self, GlesError> {
         let gl = ffi::Gles2::load_with(|s| egl::get_proc_address(s) as *const _);
 
         info!("Initializing OpenGL ES buffer importer");
@@ -284,6 +288,7 @@ impl GlesFramebufferImporter {
             gl,
             egl_display,
             gpu: None,
+            multisamples,
             buffers: vec![],
             texture_framebuffers: HashMap::new(),
             view_targets: vec![],
@@ -787,7 +792,8 @@ impl GlesFramebufferImporter {
         let gpu = Gpu {
             kind,
             blits: major >= 3,
-            max_samples,
+            // Without multisampling, every setting renders single-sample.
+            max_samples: if self.multisamples { max_samples } else { 1 },
         };
         info!(
             ?kind,
