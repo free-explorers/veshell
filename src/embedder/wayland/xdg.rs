@@ -3,6 +3,7 @@ pub mod xdg {
 
     use serde_json::json;
     use smithay::{
+        backend::input::InputTime,
         desktop::{find_popup_root_surface, get_popup_toplevel_coords, PopupKind},
         reexports::{
             wayland_protocols::xdg::{
@@ -299,7 +300,7 @@ pub mod xdg {
                 return;
             };
             if pointer.has_grab(serial) {
-                pointer.unset_grab(self, serial, self.clock.now().as_millis());
+                pointer.unset_grab(self, serial, InputTime::now());
             }
 
             if !meta_window.allows_interactive_resize() {
@@ -654,6 +655,20 @@ pub mod xdg {
             // wasn't sent, then we will send this as part of the initial configure later.
             if toplevel.is_initial_configure_sent() {
                 toplevel.send_configure();
+            }
+        }
+
+        fn decoration_destroyed(&mut self, toplevel: ToplevelSurface) {
+            // The client draws its own decorations again: stop drawing ours.
+            let surface = toplevel.wl_surface();
+            if let Some(meta_window) = self.get_meta_window(get_surface_id(surface)) {
+                self.patch_meta_window(
+                    MetaWindowPatch::UpdateNeedDecoration {
+                        id: meta_window.id,
+                        value: false,
+                    },
+                    true,
+                );
             }
         }
     }

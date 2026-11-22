@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use smithay::backend::allocator::dmabuf::Dmabuf;
-use smithay::backend::input::KeyState;
+use smithay::backend::input::{InputTime, KeyState};
 use smithay::backend::renderer::gles::ffi::Gles2;
 use smithay::delegate_dispatch2;
 use smithay::desktop::{Space, Window};
@@ -364,7 +364,13 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         for mut key_code in keyboard.pressed_keys() {
             key_code = swap_left_alt_and_meta(self, key_code);
             // Focus loss is not a user key-up gesture, but Flutter still needs its key state cleared.
-            handle_keyboard_event::<BackendData>(self, key_code, KeyState::Released, 0, true);
+            handle_keyboard_event::<BackendData>(
+                self,
+                key_code,
+                KeyState::Released,
+                InputTime::now(),
+                true,
+            );
         }
     }
 

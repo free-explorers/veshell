@@ -408,7 +408,7 @@ pub fn run_winit_backend() -> Result<(), Box<dyn std::error::Error>> {
                             data,
                             event.key_code(),
                             event.state(),
-                            event.time_msec(),
+                            event.time(),
                             false,
                         );
                     }

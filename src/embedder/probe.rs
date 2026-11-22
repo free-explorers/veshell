@@ -26,8 +26,8 @@ use std::time::Duration;
 use serde_json::{json, Value};
 use smithay::backend::input::{
     AbsolutePositionEvent, Axis, AxisRelativeDirection, AxisSource, ButtonState, Device,
-    DeviceCapability, Event, InputBackend, KeyState, PointerAxisEvent, PointerButtonEvent,
-    PointerMotionAbsoluteEvent, UnusedEvent,
+    DeviceCapability, Event, InputBackend, InputTime, KeyState, PointerAxisEvent,
+    PointerButtonEvent, PointerMotionAbsoluteEvent, UnusedEvent,
 };
 use smithay::input::keyboard::Keycode;
 use smithay::reexports::calloop::{channel, LoopHandle};
@@ -299,7 +299,7 @@ fn inject_one<BackendData: Backend + 'static>(
                 } else {
                     KeyState::Released
                 },
-                (time / 1000) as u32,
+                InputTime::from_micros(time),
                 false,
             );
         }
@@ -503,8 +503,8 @@ pub struct ProbeMotion {
 }
 
 impl Event<ProbeInput> for ProbeMotion {
-    fn time(&self) -> u64 {
-        self.time
+    fn time(&self) -> InputTime {
+        InputTime::from_micros(self.time)
     }
 
     fn device(&self) -> ProbeDevice {
@@ -539,8 +539,8 @@ pub struct ProbeButton {
 }
 
 impl Event<ProbeInput> for ProbeButton {
-    fn time(&self) -> u64 {
-        self.time
+    fn time(&self) -> InputTime {
+        InputTime::from_micros(self.time)
     }
 
     fn device(&self) -> ProbeDevice {
@@ -566,8 +566,8 @@ pub struct ProbeAxis {
 }
 
 impl Event<ProbeInput> for ProbeAxis {
-    fn time(&self) -> u64 {
-        self.time
+    fn time(&self) -> InputTime {
+        InputTime::from_micros(self.time)
     }
 
     fn device(&self) -> ProbeDevice {

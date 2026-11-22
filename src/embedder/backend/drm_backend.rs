@@ -895,7 +895,7 @@ pub fn run_drm_backend(real_session: bool) {
                         data,
                         event.key_code(),
                         event.state(),
-                        event.time_msec(),
+                        event.time(),
                         false,
                     );
                 }
@@ -931,7 +931,7 @@ pub fn run_drm_backend(real_session: bool) {
                         .invoke_method(
                             "gesture_swipe_begin",
                             Some(Box::new(json!(GestureSwipeBeginEventMessage {
-                                time: event.time_msec(),
+                                time: event.time().millis(),
                                 fingers,
                                 natural_scroll: event
                                     .device()
@@ -948,7 +948,7 @@ pub fn run_drm_backend(real_session: bool) {
                         // The session locked, a game took the input or a
                         // screenshot selection started mid-swipe: close the
                         // shell's gesture without committing it.
-                        data.cancel_shell_swipe(event.time_msec());
+                        data.cancel_shell_swipe(event.time().millis());
                         return;
                     }
                     let fingers = event.fingers();
@@ -966,7 +966,7 @@ pub fn run_drm_backend(real_session: bool) {
                         .invoke_method(
                             "gesture_swipe_update",
                             Some(Box::new(json!(GestureSwipeUpdateEventMessage {
-                                time: event.time_msec(),
+                                time: event.time().millis(),
                                 fingers,
                                 delta_x,
                                 delta_y
@@ -984,7 +984,7 @@ pub fn run_drm_backend(real_session: bool) {
                         .invoke_method(
                             "gesture_swipe_end",
                             Some(Box::new(json!(GestureSwipeEndEventMessage {
-                                time: event.time_msec(),
+                                time: event.time().millis(),
                                 fingers,
                                 cancelled,
                             }))),
