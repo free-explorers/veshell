@@ -39,15 +39,18 @@ const _xeMin = ['device/tile0/gt0/freq0/rpn_freq'];
 /// overrides it with the engine times sampled from `fdinfo` (see
 /// `GpuStatsState`); this value is the first sample's fallback. Returns `null`
 /// when nothing at all is readable, so the card is then omitted.
-Future<GpuStats?> readIntelGpuStats(GpuDevice device) async {
+///
+/// Synchronous, like the other readers: it runs on the monitoring sampler's
+/// isolate.
+GpuStats? readIntelGpuStats(GpuDevice device) {
   final card = device.cardPath;
-  final current = await _firstInt(card, [..._i915Current, ..._xeCurrent]);
-  final maximum = await _firstInt(card, [..._i915Max, ..._xeMax]);
-  final minimum = await _firstInt(card, [..._i915Min, ..._xeMin]);
+  final current = _firstInt(card, [..._i915Current, ..._xeCurrent]);
+  final maximum = _firstInt(card, [..._i915Max, ..._xeMax]);
+  final minimum = _firstInt(card, [..._i915Min, ..._xeMin]);
   final hwmon = device.hwmonPath;
   final temperatureMilli = hwmon == null
       ? null
-      : await _readInt('$hwmon/temp1_input');
+      : _readInt('$hwmon/temp1_input');
 
   final load = intelLoadFromFrequency(
     current: current,
@@ -73,15 +76,15 @@ int? intelLoadFromFrequency({int? current, int? min, int? max}) {
   return ((current - min) / (max - min) * 100).clamp(0, 100).round();
 }
 
-Future<int?> _firstInt(String base, List<String> relatives) async {
+int? _firstInt(String base, List<String> relatives) {
   for (final relative in relatives) {
-    final value = await _readInt('$base/$relative');
+    final value = _readInt('$base/$relative');
     if (value != null) return value;
   }
   return null;
 }
 
-Future<int?> _readInt(String path) async {
-  final text = await readTextFile(path);
+int? _readInt(String path) {
+  final text = readTextFileSync(path);
   return text == null ? null : int.tryParse(text.trim());
 }

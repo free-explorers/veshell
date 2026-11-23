@@ -8,7 +8,7 @@ import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/nvidi
 ///
 /// Each reader returns `null` rather than throwing when its interface is
 /// unavailable, so an unsupported or half-readable card simply yields no data.
-Future<GpuStats?> readGpuStats(GpuDevice device) {
+GpuStats? readGpuStats(GpuDevice device) {
   switch (device.vendor) {
     case GpuVendor.amd:
       return readAmdGpuStats(device);
@@ -17,6 +17,6 @@ Future<GpuStats?> readGpuStats(GpuDevice device) {
     case GpuVendor.nvidia:
       return readNvidiaGpuStats(device);
     case GpuVendor.unknown:
-      return Future.value();
+      return null;
   }
 }

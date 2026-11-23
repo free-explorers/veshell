@@ -7,6 +7,7 @@ import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/widget/gpu_m
 import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/widget/memory_monitoring.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/provider/any_upower_device.dart';
 import 'package:shell/overview/helm/monitoring_panel/power_management/widget/battery_indicator.dart';
+import 'package:shell/overview/helm/monitoring_panel/sampling/provider/machine_sampler.dart';
 import 'package:shell/overview/helm/widget/panel_column.dart';
 
 /// The monitoring cards: battery (when present), CPU, memory, GPU (when a
@@ -14,7 +15,11 @@ import 'package:shell/overview/helm/widget/panel_column.dart';
 ///
 /// The cards are grouped in a [Column] with the shared [panelGap] so they keep
 /// the same spacing as any other card in the panel.
+///
+/// While the section is mounted the charts are sampled at the full rate (see
+/// [monitoringOnScreenProvider]).
 Widget monitoringSection(WidgetRef ref) {
+  ref.watch(monitoringOnScreenProvider);
   return Column(
     mainAxisSize: MainAxisSize.min,
     spacing: panelGap,

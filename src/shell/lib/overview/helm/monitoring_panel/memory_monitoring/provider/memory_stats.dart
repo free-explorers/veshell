@@ -1,15 +1,13 @@
-import 'dart:io';
-
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/model/memory.dart';
 import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/provider/memory_chart.dart';
-import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 import 'package:shell/overview/helm/monitoring_panel/sampling/proc_parsing.dart';
+import 'package:shell/overview/helm/monitoring_panel/sampling/provider/machine_sampler.dart';
 
 part 'memory_stats.g.dart';
 
-/// Whole-machine memory usage, sampled from `/proc/meminfo` every
-/// [monitoringSampleInterval].
+/// Whole-machine memory usage, from the `/proc/meminfo` of each
+/// [MachineSample].
 ///
 /// Kept alive and primed at startup, like the CPU sampler, so the graph always
 /// describes the recent past. The per-process breakdown stays gated on the
@@ -18,16 +16,17 @@ part 'memory_stats.g.dart';
 class MemoryStatsState extends _$MemoryStatsState {
   @override
   MemoryStats build() {
-    final cancel = startPolling(monitoringSampleInterval, _sample);
-    ref.onDispose(cancel);
+    ref.listen(machineSamplerProvider, (_, next) {
+      final sample = next.value;
+      final contents = sample?.memInfo;
+      if (contents != null) _sample(contents, sample!.slots);
+    });
     return MemoryStats(memoryUsage: 0);
   }
 
-  Future<void> _sample() async {
-    final contents = await File('/proc/meminfo').readAsString();
-    if (!ref.mounted) return;
+  void _sample(String contents, int slots) {
     final usage = memoryUsedPercent(parseMemInfo(contents));
     state = MemoryStats(memoryUsage: usage);
-    ref.read(memoryChartProvider.notifier).add(usage.toDouble());
+    ref.read(memoryChartProvider.notifier).add(usage.toDouble(), slots: slots);
   }
 }
