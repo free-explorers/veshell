@@ -25,6 +25,7 @@ use smithay::reexports::calloop;
 use smithay::reexports::calloop::channel::Event::Msg;
 use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
 use smithay::reexports::calloop::{Dispatcher, LoopHandle};
+use smithay::utils::{Buffer as BufferCoords, Rectangle, Size};
 use smithay::{
     backend::{
         egl::{
@@ -813,6 +814,51 @@ impl<BackendData: Backend + 'static> FlutterEngine<BackendData> {
     ) -> Result<(), Box<dyn std::error::Error>> {
         let result =
             unsafe { FlutterEngineMarkExternalTextureFrameAvailable(self.handle, texture_id) };
+        if result != 0 {
+            return Err(
+                format!("Could not mark external texture frame available, error {result}").into(),
+            );
+        }
+        Ok(())
+    }
+
+    /// Marks a new frame of `texture_id`, `size` pixels large, of which only
+    /// `damage` (in pixels of the frame) differs from the previous frame: the
+    /// engine then only repaints that part of the texture.
+    pub fn mark_external_texture_frame_available_with_damage(
+        &self,
+        texture_id: i64,
+        size: Size<i32, BufferCoords>,
+        damage: &[Rectangle<i32, BufferCoords>],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut rects: Vec<embedder::FlutterRect> = damage
+            .iter()
+            .map(|rect| embedder::FlutterRect {
+                left: rect.loc.x as f64,
+                top: rect.loc.y as f64,
+                right: (rect.loc.x + rect.size.w) as f64,
+                bottom: (rect.loc.y + rect.size.h) as f64,
+            })
+            .collect();
+        let frame_info = embedder::FlutterExternalTextureFrameInfo {
+            struct_size: size_of::<embedder::FlutterExternalTextureFrameInfo>(),
+            size: embedder::FlutterUIntSize {
+                width: size.w.max(0) as u32,
+                height: size.h.max(0) as u32,
+            },
+            damage: embedder::FlutterDamage {
+                struct_size: size_of::<embedder::FlutterDamage>(),
+                num_rects: rects.len(),
+                damage: rects.as_mut_ptr(),
+            },
+        };
+        let result = unsafe {
+            embedder::FlutterEngineMarkExternalTextureFrameAvailableWithInfo(
+                self.handle,
+                texture_id,
+                &frame_info,
+            )
+        };
         if result != 0 {
             return Err(
                 format!("Could not mark external texture frame available, error {result}").into(),
