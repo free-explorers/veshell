@@ -87,6 +87,10 @@ bitflags = "2.2.1"
 png = "0.17.16"
 xdg-user = "0.2.1"
 zbus = "5"
+# Not used directly: holds zbus's thread pool below 1.7.0, whose idle threads
+# never exit and wake every 500 ms (smol-rs/blocking#83). Lift once a release
+# fixes it.
+blocking = "~1.6"
 # NameOwnerChanged subscription streams (kept minimal; only StreamExt)
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
 async-channel = "2"
