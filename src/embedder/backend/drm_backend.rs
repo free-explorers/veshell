@@ -202,6 +202,10 @@ pub struct DrmBackend {
     /// Nodes with a composite skipped by the software cap, waiting for the
     /// throttle timer to render the next allowed frame.
     software_throttled_nodes: HashSet<DrmNode>,
+    /// The one-shot timer that releases [`Self::software_throttled_nodes`].
+    /// Armed only while a composite is held back, so a hardware session, or
+    /// an idle software one, never wakes for it.
+    software_throttle_timer: Option<RegistrationToken>,
     /// Nodes with a composite already queued on the event loop's idle list.
     /// Every client commit and every pointer event asks for a composite, and a
     /// 1000 Hz mouse would otherwise queue a thousand idle renders a second;
@@ -690,6 +694,7 @@ pub fn run_drm_backend(real_session: bool) {
             vsync_timer_firing: false,
             software_frame_interval: None,
             software_throttled_nodes: HashSet::new(),
+            software_throttle_timer: None,
             render_scheduled: HashSet::new(),
             shell_paused_for_games: false,
             presentation: None,
@@ -878,24 +883,6 @@ pub fn run_drm_backend(real_session: bool) {
     // Delivers the vblanks no flip reports (see `State::on_vsync_timer`); it
     // runs while something waits for a frame that no flip will answer.
     state.request_vsync();
-
-    // Software EGL caps full-output composites to a sane frame rate (see
-    // `State::render_surface`). This timer releases a composite that the cap
-    // skipped; in a hardware session nothing is ever queued, so it is a cheap
-    // no-op. The period is the cap itself: a flip that arrives too early is
-    // held until the next tick, which keeps the cap exact even on virtual
-    // displays whose page flips complete immediately.
-    let software_interval = software_frame_interval();
-    event_loop
-        .handle()
-        .insert_source(
-            Timer::from_duration(software_interval),
-            move |_, _, data: &mut State<DrmBackend>| {
-                data.on_software_throttle_timer();
-                TimeoutAction::ToDuration(software_interval)
-            },
-        )
-        .unwrap();
 
     // Mandatory formats by the Wayland spec.
     // TODO: Add more formats based on the GLES version.
@@ -2298,15 +2285,30 @@ impl State<DrmBackend> {
     /// next allowed frame so the loop keeps flipping (and delivering batons)
     /// without free-running at raster speed.
     fn on_software_throttle_timer(&mut self) {
-        if self.backend_data.software_frame_interval.is_none()
-            || self.backend_data.software_throttled_nodes.is_empty()
-        {
-            return;
-        }
+        self.backend_data.software_throttle_timer = None;
         let nodes: Vec<DrmNode> = self.backend_data.software_throttled_nodes.drain().collect();
         for node in nodes {
             self.render(node, None);
         }
+    }
+
+    /// Releases the held composites once [`software_frame_interval`] has
+    /// elapsed since the last one, which keeps the cap exact even on virtual
+    /// displays whose page flips complete immediately. An armed timer is kept:
+    /// it fires within one interval, and a node it releases too early is held
+    /// again and re-arms it.
+    fn arm_software_throttle_timer(&mut self, delay: Duration) {
+        if self.backend_data.software_throttle_timer.is_some() {
+            return;
+        }
+        let token = self
+            .loop_handle
+            .insert_source(Timer::from_duration(delay), |_, _, state| {
+                state.on_software_throttle_timer();
+                TimeoutAction::Drop
+            })
+            .unwrap();
+        self.backend_data.software_throttle_timer = Some(token);
     }
 
     /// Something waits for a frame: a client commit, input, or a Flutter frame
@@ -2554,8 +2556,12 @@ impl State<DrmBackend> {
                 .get(&node)
                 .and_then(|gpu| gpu.surfaces.get(&crtc))
                 .and_then(|surface| surface.last_composite);
-            if last_composite.is_some_and(|last| last.elapsed() < interval) {
+            if let Some(remaining) = last_composite
+                .map(|last| interval.saturating_sub(last.elapsed()))
+                .filter(|remaining| !remaining.is_zero())
+            {
                 self.backend_data.software_throttled_nodes.insert(node);
+                self.arm_software_throttle_timer(remaining);
                 return;
             }
             self.backend_data.software_throttled_nodes.remove(&node);
