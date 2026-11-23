@@ -202,10 +202,10 @@ pub struct DrmBackend {
     /// Nodes with a composite skipped by the software cap, waiting for the
     /// throttle timer to render the next allowed frame.
     software_throttled_nodes: HashSet<DrmNode>,
-    /// The one-shot timer that releases [`Self::software_throttled_nodes`].
-    /// Armed only while a composite is held back, so a hardware session, or
-    /// an idle software one, never wakes for it.
-    software_throttle_timer: Option<RegistrationToken>,
+    /// The one-shot timer that releases [`Self::software_throttled_nodes`],
+    /// and when it fires. Armed only while a composite is held back, so a
+    /// hardware session, or an idle software one, never wakes for it.
+    software_throttle_timer: Option<(RegistrationToken, Instant)>,
     /// Nodes with a composite already queued on the event loop's idle list.
     /// Every client commit and every pointer event asks for a composite, and a
     /// 1000 Hz mouse would otherwise queue a thousand idle renders a second;
@@ -2294,12 +2294,16 @@ impl State<DrmBackend> {
 
     /// Releases the held composites once [`software_frame_interval`] has
     /// elapsed since the last one, which keeps the cap exact even on virtual
-    /// displays whose page flips complete immediately. An armed timer is kept:
-    /// it fires within one interval, and a node it releases too early is held
-    /// again and re-arms it.
+    /// displays whose page flips complete immediately. One timer serves every
+    /// held node: it fires at the earliest release, and a node it releases too
+    /// early is held again and re-arms it.
     fn arm_software_throttle_timer(&mut self, delay: Duration) {
-        if self.backend_data.software_throttle_timer.is_some() {
-            return;
+        let deadline = Instant::now() + delay;
+        if let Some((token, armed)) = self.backend_data.software_throttle_timer {
+            if armed <= deadline {
+                return;
+            }
+            self.loop_handle.remove(token);
         }
         let token = self
             .loop_handle
@@ -2308,7 +2312,7 @@ impl State<DrmBackend> {
                 TimeoutAction::Drop
             })
             .unwrap();
-        self.backend_data.software_throttle_timer = Some(token);
+        self.backend_data.software_throttle_timer = Some((token, deadline));
     }
 
     /// Something waits for a frame: a client commit, input, or a Flutter frame
