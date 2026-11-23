@@ -177,7 +177,7 @@ void main() {
       reason: 'a supported card exposes gpu_busy_percent but was not detected',
     );
 
-    final stats = await readGpuStats(device!);
+    final stats = readGpuStats(device!);
     expect(stats, isNotNull);
     expect(stats!.load, inInclusiveRange(0, 100));
     expect(stats.vramTotalMb, greaterThan(0));

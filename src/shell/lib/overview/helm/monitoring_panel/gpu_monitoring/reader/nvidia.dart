@@ -126,7 +126,7 @@ class _Nvml {
 }
 
 /// Reads NVIDIA telemetry through NVML, or `null` when unavailable.
-Future<GpuStats?> readNvidiaGpuStats(GpuDevice device) async {
+GpuStats? readNvidiaGpuStats(GpuDevice device) {
   final nvml = _Nvml.instance();
   if (nvml == null) return null;
   return _read(device, nvml);

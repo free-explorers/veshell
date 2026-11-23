@@ -84,15 +84,20 @@ Future<DeviceEngineSample> sampleDevice(GpuDevice device) {
       .whenComplete(() => _pending = null);
 }
 
-/// Walks `/proc` for [device]'s clients. Top-level so it can run off-isolate.
-Future<DeviceEngineSample> walkDeviceClients(GpuDevice device) async {
+/// Walks `/proc` for [device]'s clients.
+///
+/// Synchronous, and only ever run off the UI isolate (the monitoring sampler,
+/// or [sampleDevice]'s `Isolate.run`): blocking reads of `/proc` cost one
+/// system call each, where asynchronous ones would wake an IO thread several
+/// times per file.
+DeviceEngineSample walkDeviceClients(GpuDevice device) {
   final processNanoseconds = <int, int>{};
   final clientEngines = <int, Map<String, int>>{};
   final seenClients = <int>{};
   final seenPerPid = <int, Set<int>>{};
   var hasEngineCounters = false;
 
-  final pids = await listProcessIds();
+  final pids = listProcessIdsSync();
   for (final pid in pids) {
     final fdDirectory = Directory('/proc/$pid/fd');
     List<FileSystemEntity> fds;
@@ -114,7 +119,7 @@ Future<DeviceEngineSample> walkDeviceClients(GpuDevice device) async {
       }
       if (!target.contains('/dev/dri/')) continue;
 
-      final contents = await readTextFile('/proc/$pid/fdinfo/$name');
+      final contents = readTextFileSync('/proc/$pid/fdinfo/$name');
       if (contents == null) continue;
       final info = parseDrmFdInfo(contents);
       if (info == null) continue;

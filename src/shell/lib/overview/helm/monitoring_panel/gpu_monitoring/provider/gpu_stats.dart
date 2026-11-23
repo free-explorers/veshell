@@ -3,16 +3,13 @@ import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/model/gpu_st
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_chart.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_device.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_memory_chart.dart';
-import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/gpu_device.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/gpu_parsing.dart';
-import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/gpu_stats_reader.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/process_gpu.dart';
-import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
+import 'package:shell/overview/helm/monitoring_panel/sampling/provider/machine_sampler.dart';
 
 part 'gpu_stats.g.dart';
 
-/// GPU telemetry, sampled from the amdgpu sysfs every
-/// [monitoringSampleInterval].
+/// GPU telemetry, from the GPU reading of each [MachineSample].
 ///
 /// Kept alive and primed at startup like the CPU and memory samplers, so the
 /// chart describes the recent past when the overview opens. When no supported
@@ -26,23 +23,24 @@ class GpuStatsState extends _$GpuStatsState {
   GpuStats build() {
     final device = ref.watch(gpuDeviceProvider);
     if (device == null) return const GpuStats();
-    final cancel = startPolling(
-      monitoringSampleInterval,
-      () => _sample(device),
-    );
-    ref.onDispose(cancel);
+    ref.listen(machineSamplesProvider, (_, next) {
+      final sample = next.value;
+      if (sample != null) _sample(sample);
+    });
     return const GpuStats();
   }
 
-  Future<void> _sample(GpuDevice device) async {
-    final stats = await readGpuStats(device);
-    if (!ref.mounted || stats == null) return;
+  void _sample(MachineSample sample) {
+    final stats = sample.gpu;
+    if (stats == null) return;
     // Intel's reader can only offer a frequency proxy; prefer the engine times
-    // the kernel exposes in fdinfo. Other vendors already report a real busy
-    // counter, so their value is kept as is.
-    final load = device.vendor == GpuVendor.intel
-        ? await _engineLoad(device) ?? stats.load
-        : stats.load;
+    // the kernel exposes in fdinfo, which the sampler walks on Intel only.
+    // Other vendors already report a real busy counter, so their value is kept
+    // as is.
+    final engines = sample.gpuEngines;
+    final load = engines == null
+        ? stats.load
+        : _engineLoad(engines, sample.takenAt) ?? stats.load;
     final reading = stats.copyWith(load: load);
     state = reading;
     ref.read(gpuChartProvider.notifier).add(reading.load.toDouble());
@@ -52,7 +50,8 @@ class GpuStatsState extends _$GpuStatsState {
     }
   }
 
-  /// Busy share of [device]'s busiest engine since the previous sample.
+  /// Busy share of the GPU's busiest engine in [sample], since the previous
+  /// one, taken at [now].
   ///
   /// The deltas are taken per client, then summed per engine: a client that
   /// exits only loses its own counters instead of subtracting its lifetime
@@ -63,15 +62,13 @@ class GpuStatsState extends _$GpuStatsState {
   /// `null` until a second sample exists, and when the clients report no
   /// `drm-engine-*` counters at all (Xe reports `drm-cycles-*`), so the caller
   /// keeps the reader's own value. Engine counters with no work read 0.
-  Future<int?> _engineLoad(GpuDevice device) async {
-    final now = DateTime.now();
-    final sample = await sampleDevice(device);
+  int? _engineLoad(DeviceEngineSample sample, DateTime now) {
     final clients = sample.clientEngines;
     final previous = _previousClients;
     final previousAt = _previousAt;
     _previousClients = clients;
     _previousAt = now;
-    if (previous == null || previousAt == null || !ref.mounted) return null;
+    if (previous == null || previousAt == null) return null;
     if (!sample.hasEngineCounters) return null;
     final elapsed = now.difference(previousAt).inMicroseconds * 1000;
     if (elapsed <= 0) return null;
