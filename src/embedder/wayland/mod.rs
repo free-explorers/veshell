@@ -13,7 +13,7 @@ pub mod wayland {
             gles::GlesTexture,
             utils::{
                 import_surface, on_commit_buffer_handler, with_renderer_surface_state,
-                RendererSurfaceStateUserData,
+                CommitCounter, RendererSurfaceStateUserData,
             },
             Renderer, Texture,
         },
@@ -46,6 +46,12 @@ pub mod wayland {
     pub struct WlSurfaceVeshellState {
         pub surface_id: u64,
         pub old_texture_size: Option<Size<i32, BufferCoords>>,
+        /// The renderer commit of the last buffer handed to Flutter, the one
+        /// its damage is counted from.
+        pub last_buffer_commit: Option<CommitCounter>,
+        /// A buffer was attached that Flutter has not been handed yet (one
+        /// committed while a game draws the output).
+        pub unmarked_buffer: bool,
     }
 
     pub fn get_surface_id(surface: &WlSurface) -> u64 {
@@ -160,6 +166,8 @@ pub mod wayland {
                     RefCell::new(WlSurfaceVeshellState {
                         surface_id,
                         old_texture_size: None,
+                        last_buffer_commit: None,
+                        unmarked_buffer: false,
                     })
                 })
             });
@@ -200,6 +208,19 @@ pub mod wayland {
         }
 
         fn commit(&mut self, surface: &WlSurface) {
+            // Read before the renderer state takes it. The commit counter of
+            // the renderer state cannot tell: a new buffer that declares no
+            // damage leaves it as it is.
+            let buffer_attached = with_states(surface, |states| {
+                matches!(
+                    states
+                        .cached_state
+                        .get::<SurfaceAttributes>()
+                        .current()
+                        .buffer,
+                    Some(BufferAssignment::NewBuffer(_))
+                )
+            });
             on_commit_buffer_handler::<Self>(surface);
 
             let is_cursor_image = matches!(*self.cursor_image_status.lock().unwrap(),CursorImageStatus::Surface(ref cursor_surface) if cursor_surface == surface);
@@ -325,13 +346,18 @@ pub mod wayland {
                         tracing::error!("Failed to import surface: {:?}", err);
                     }
                 });
-                let (surface_id, old_texture_size) = {
+                let (surface_id, old_texture_size, last_buffer_commit, unmarked_buffer) = {
                     let my_state = surface_data
                         .data_map
                         .get::<RefCell<WlSurfaceVeshellState>>()
                         .unwrap()
                         .borrow();
-                    (my_state.surface_id, my_state.old_texture_size)
+                    (
+                        my_state.surface_id,
+                        my_state.old_texture_size,
+                        my_state.last_buffer_commit,
+                        my_state.unmarked_buffer,
+                    )
                 };
 
                 let mut binding = surface_data.cached_state.get::<SurfaceAttributes>();
@@ -404,20 +430,54 @@ pub mod wayland {
                             texture_id
                         });
 
-                        let swapchain = self.texture_swapchains.entry(texture_id).or_default();
-                        swapchain.commit(texture.clone());
+                        // A commit without a new buffer (a client asking for
+                        // a frame callback, or changing state only) leaves the
+                        // frame Flutter shows as it is: marking the texture
+                        // would make the engine render a frame for nothing.
+                        let new_buffer = size_changed || buffer_attached || unmarked_buffer;
+                        let commit = renderer_state.current_commit();
 
-                        if !game_active {
+                        if new_buffer {
+                            let swapchain = self.texture_swapchains.entry(texture_id).or_default();
+                            swapchain.commit(texture.clone());
+                        }
+
+                        if new_buffer && !game_active {
                             if self.surface_pacing.is_limited(surface_id) {
                                 // Shown at its limited pace: the shell redraws
                                 // it on the surface's next paced tick.
                                 self.surface_pacing
                                     .defer_texture_mark(surface_id, texture_id);
                             } else {
+                                // Only what changed since the frame Flutter has
+                                // is repainted; a new texture is new as a whole.
+                                let damage = renderer_state.damage_since(if size_changed {
+                                    None
+                                } else {
+                                    last_buffer_commit
+                                });
                                 self.flutter_engine_mut()
-                                    .mark_external_texture_frame_available(texture_id)
+                                    .mark_external_texture_frame_available_with_damage(
+                                        texture_id, size, &damage,
+                                    )
                                     .unwrap();
                             }
+                        }
+
+                        // Only once handed to Flutter: a buffer committed
+                        // while a game draws the output is marked on the next
+                        // commit after it, with the damage since the last one
+                        // Flutter had.
+                        let mut my_state = surface_data
+                            .data_map
+                            .get::<RefCell<WlSurfaceVeshellState>>()
+                            .unwrap()
+                            .borrow_mut();
+                        if new_buffer && !game_active {
+                            my_state.last_buffer_commit = Some(commit);
+                            my_state.unmarked_buffer = false;
+                        } else if new_buffer {
+                            my_state.unmarked_buffer = true;
                         }
 
                         (texture_id, Some(size))

@@ -106,8 +106,8 @@
       }
     },
     "engine": {
-      "url": "https://github.com/free-explorers/flutter-engine/releases/download/linux-engine-sdk-release-x86_64-4d35714800b9266b6693a58e1225ecd7e9e45ed7-veshell.1/linux-engine-sdk-release-x86_64-4d35714800b9266b6693a58e1225ecd7e9e45ed7-veshell.1.tar.gz",
-      "sha256": "57053853ab3b9aa35dfc8bcc0351c9e7ce62875c601ab2ff53b4b9c4cc2c16ee"
+      "url": "https://github.com/free-explorers/flutter-engine/releases/download/linux-engine-sdk-release-x86_64-4d35714800b9266b6693a58e1225ecd7e9e45ed7-veshell.2/linux-engine-sdk-release-x86_64-4d35714800b9266b6693a58e1225ecd7e9e45ed7-veshell.2.tar.gz",
+      "sha256": "d1860d06a4cdbab158dbe3fc5bb6b0aef4eb84729bb966e1ed75b3f2d3b24984"
     }
   }
 }
