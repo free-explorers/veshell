@@ -23,7 +23,7 @@ class GpuStatsState extends _$GpuStatsState {
   GpuStats build() {
     final device = ref.watch(gpuDeviceProvider);
     if (device == null) return const GpuStats();
-    ref.listen(machineSamplesProvider, (_, next) {
+    ref.listen(machineSamplerProvider, (_, next) {
       final sample = next.value;
       if (sample != null) _sample(sample);
     });
@@ -43,10 +43,14 @@ class GpuStatsState extends _$GpuStatsState {
         : _engineLoad(engines, sample.takenAt) ?? stats.load;
     final reading = stats.copyWith(load: load);
     state = reading;
-    ref.read(gpuChartProvider.notifier).add(reading.load.toDouble());
+    ref
+        .read(gpuChartProvider.notifier)
+        .add(reading.load.toDouble(), slots: sample.slots);
     // Integrated GPUs (Intel) have no dedicated VRAM; skip the series there.
     if (reading.vramTotalMb > 0) {
-      ref.read(gpuMemoryChartProvider.notifier).add(vramUsedPercent(reading));
+      ref
+          .read(gpuMemoryChartProvider.notifier)
+          .add(vramUsedPercent(reading), slots: sample.slots);
     }
   }
 

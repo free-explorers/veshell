@@ -16,10 +16,17 @@ class GpuChart extends _$GpuChart {
   @override
   List<FlSpot> build() => const [];
 
-  /// Appends [value], dropping the oldest point past [_maxPoints].
-  void add(double value) {
-    final lastX = state.isEmpty ? -1 : state.last.x;
-    final next = [...state, FlSpot(lastX + 1, value)];
+  /// Appends [value] for [slots] sample slots, dropping the oldest points past
+  /// [_maxPoints].
+  ///
+  /// A reading taken while the overview is closed covers several slots (see
+  /// `MachineSample.slots`); repeating it keeps the chart's time axis exact.
+  void add(double value, {int slots = 1}) {
+    final lastX = state.isEmpty ? -1.0 : state.last.x;
+    final next = [
+      ...state,
+      for (var slot = 1; slot <= slots; slot++) FlSpot(lastX + slot, value),
+    ];
     state = next.length > _maxPoints
         ? next.sublist(next.length - _maxPoints)
         : next;

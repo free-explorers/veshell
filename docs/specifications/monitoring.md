@@ -67,9 +67,15 @@ for the whole session.
 
 - **Aggregate samplers are keep-alive and primed.** `CpuStatsState`,
   `MemoryStatsState` and `GpuStatsState` take their readings of `/proc/stat`,
-  `/proc/meminfo` and the GPU sysfs every 500 ms from startup (`main.dart`
-  primes them), so the graph is already populated the first time the overview
-  opens.
+  `/proc/meminfo` and the GPU sysfs from startup (`main.dart` primes them), so
+  the graph is already populated the first time the overview opens.
+- **Full rate on screen, idle rate otherwise.** Readings are taken every
+  500 ms while a monitoring card is mounted (`monitoringSection` watches
+  `monitoringOnScreenProvider`; the overview unmounts its content when it
+  closes) and every 2 s otherwise. Coming on screen takes a reading at once.
+  A reading carries the number of 500 ms slots it covers, and the charts
+  append it once per slot, so their time axis stays exact: what happened
+  while the overview was closed shows at 2 s resolution.
 - **Aggregate readings are taken off the UI isolate.** One background isolate
   (`sampling/provider/machine_sampler.dart`) reads those files with blocking
   calls and posts one `MachineSample` per tick, which the three providers
@@ -84,7 +90,7 @@ for the whole session.
   the expensive part (hundreds of files); those providers are auto-disposed and
   run only while their card is expanded.
 - **Graphs are ring buffers.** The CPU, memory and GPU charts keep the newest
-  120 samples — about a minute at 500 ms. A sampler appends through `add()`, so
+  120 slots — a minute at 500 ms. A sampler appends through `add()`, so
   the chart always ends at *now* and a recent spike or a rising curve is visible
   the moment the overview opens.
 - **Graphs step by default.** With `theme.optimizedOverview` on (the default),

@@ -16,16 +16,17 @@ part 'memory_stats.g.dart';
 class MemoryStatsState extends _$MemoryStatsState {
   @override
   MemoryStats build() {
-    ref.listen(machineSamplesProvider, (_, next) {
-      final contents = next.value?.memInfo;
-      if (contents != null) _sample(contents);
+    ref.listen(machineSamplerProvider, (_, next) {
+      final sample = next.value;
+      final contents = sample?.memInfo;
+      if (contents != null) _sample(contents, sample!.slots);
     });
     return MemoryStats(memoryUsage: 0);
   }
 
-  void _sample(String contents) {
+  void _sample(String contents, int slots) {
     final usage = memoryUsedPercent(parseMemInfo(contents));
     state = MemoryStats(memoryUsage: usage);
-    ref.read(memoryChartProvider.notifier).add(usage.toDouble());
+    ref.read(memoryChartProvider.notifier).add(usage.toDouble(), slots: slots);
   }
 }

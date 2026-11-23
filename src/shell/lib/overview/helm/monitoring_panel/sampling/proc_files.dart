@@ -8,6 +8,14 @@ import 'package:shell/shared/util/logger.dart';
 /// the same cadence.
 const monitoringSampleInterval = Duration(milliseconds: 500);
 
+/// How often the aggregate charts are sampled while no chart is on screen.
+///
+/// The history must stay continuous, but nobody watches it while the overview
+/// is closed: a slower cadence there saves most of the sampler's wakeups. Each
+/// reading then fills several chart slots (see `MachineSample.slots`). A
+/// multiple of [monitoringSampleInterval].
+const monitoringIdleSampleInterval = Duration(seconds: 2);
+
 /// Number of samples visible in the scrolling monitoring charts.
 ///
 /// At [monitoringSampleInterval] this is the one-minute window the dashboard

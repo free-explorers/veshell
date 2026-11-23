@@ -49,7 +49,7 @@ void main() {
       );
       addTearDown(container.dispose);
       final first = Completer<MachineSample>();
-      container.listen(machineSamplesProvider, (_, next) {
+      container.listen(machineSamplerProvider, (_, next) {
         final sample = next.value;
         if (sample != null && !first.isCompleted) first.complete(sample);
       });
@@ -76,9 +76,57 @@ void main() {
       })
       // Primed as main.dart does: a listened provider is never paused.
       ..listen(cpuStatsStateProvider, (_, _) {})
-      ..listen(memoryStatsStateProvider, (_, _) {});
+      ..listen(memoryStatsStateProvider, (_, _) {})
+      // As if the cards were on screen: full rate, one slot per reading.
+      ..listen(monitoringOnScreenProvider, (_, _) {});
 
     await cpu.future.timeout(const Duration(seconds: 5));
     expect(container.read(memoryChartProvider), isNotEmpty);
   });
+
+  test('a chart repeats a reading over the slots it covers', () {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    container.read(cpuChartProvider.notifier)
+      ..add(10)
+      ..add(20, slots: 4);
+    expect(container.read(cpuChartProvider).map((spot) => (spot.x, spot.y)), [
+      (0.0, 10.0),
+      (1.0, 20.0),
+      (2.0, 20.0),
+      (3.0, 20.0),
+      (4.0, 20.0),
+    ]);
+  });
+
+  test('the sampler reads at once when a chart comes on screen', () async {
+    final container = ProviderContainer(
+      overrides: [gpuDeviceProvider.overrideWithValue(null)],
+    );
+    addTearDown(container.dispose);
+    final samples = <MachineSample>[];
+    container.listen(machineSamplerProvider, (_, next) {
+      final sample = next.value;
+      if (sample != null) samples.add(sample);
+    });
+    // The idle rate: the first reading, then nothing for two seconds.
+    await _until(() => samples.isNotEmpty);
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    expect(samples, hasLength(1));
+
+    // A chart on screen: a reading at once, then every 500 ms.
+    final onScreen = container.listen(monitoringOnScreenProvider, (_, _) {});
+    await _until(() => samples.length >= 3);
+    expect(samples.last.slots, 1);
+    onScreen.close();
+  });
+}
+
+/// Polls [condition] until it holds, failing after five seconds.
+Future<void> _until(bool Function() condition) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) fail('condition never held');
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
 }

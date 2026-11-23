@@ -19,14 +19,15 @@ class CpuStatsState extends _$CpuStatsState {
 
   @override
   CpuStats build() {
-    ref.listen(machineSamplesProvider, (_, next) {
-      final contents = next.value?.procStat;
-      if (contents != null) _sample(contents);
+    ref.listen(machineSamplerProvider, (_, next) {
+      final sample = next.value;
+      final contents = sample?.procStat;
+      if (contents != null) _sample(contents, sample!.slots);
     });
     return CpuStats(cpuLoad: 0);
   }
 
-  void _sample(String contents) {
+  void _sample(String contents, int slots) {
     final lines = parseProcStat(contents);
     if (lines.isEmpty) return;
     final now = lines.first;
@@ -35,6 +36,6 @@ class CpuStatsState extends _$CpuStatsState {
     if (previous == null) return;
     final usage = cpuUsagePercent(previous, now);
     state = CpuStats(cpuLoad: usage.round());
-    ref.read(cpuChartProvider.notifier).add(usage);
+    ref.read(cpuChartProvider.notifier).add(usage, slots: slots);
   }
 }
