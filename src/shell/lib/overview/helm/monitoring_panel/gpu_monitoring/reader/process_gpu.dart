@@ -6,31 +6,7 @@ import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/drm_f
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/reader/gpu_device.dart';
 import 'package:shell/overview/helm/monitoring_panel/sampling/proc_files.dart';
 
-/// Per-pid total GPU engine time, in nanoseconds, for clients of [device].
-///
-/// A DRM client shared between processes (an fd inherited across fork or passed
-/// over SCM_RIGHTS) counts for each holder: this is attribution, not a total.
-/// Processes with no client on [device] are omitted.
-Future<Map<int, int>> sampleProcessEngineNanoseconds(GpuDevice device) async {
-  final sample = await sampleDevice(device);
-  return sample.processNanoseconds;
-}
-
-/// Engine time per DRM client of [device], in nanoseconds, keyed by
-/// `drm-client-id` and then by engine.
-///
-/// A client id is unique per device, so one client is counted once even when
-/// several processes hold it. Keeping the values per client lets callers
-/// difference them between samples: a client that exits then loses only its own
-/// counters instead of subtracting its lifetime from the total.
-Future<Map<int, Map<String, int>>> sampleClientEngineNanoseconds(
-  GpuDevice device,
-) async {
-  final sample = await sampleDevice(device);
-  return sample.clientEngines;
-}
-
-/// One walk of a [GpuDevice]'s DRM clients, shared by the card and the list.
+/// One walk of a [GpuDevice]'s DRM clients.
 class DeviceEngineSample {
   /// Creates a sample.
   const DeviceEngineSample(
@@ -52,37 +28,12 @@ class DeviceEngineSample {
   final bool hasEngineCounters;
 }
 
-DeviceEngineSample? _cached;
-String? _cachedCard;
-DateTime? _cachedAt;
-Future<DeviceEngineSample>? _pending;
-
-/// How long one scan serves both callers.
+/// Walks [device]'s clients on a short-lived isolate, off the UI isolate.
 ///
-/// The card and the per-process list sample on the same interval; sharing the
-/// walk keeps them from scanning `/proc` twice for one reading.
-const _cacheFor = Duration(milliseconds: 400);
-
-/// Samples [device]'s clients off the UI isolate and caches the walk briefly.
-Future<DeviceEngineSample> sampleDevice(GpuDevice device) {
-  final now = DateTime.now();
-  final cached = _cached;
-  if (cached != null &&
-      _cachedCard == device.cardPath &&
-      _cachedAt != null &&
-      now.difference(_cachedAt!) < _cacheFor) {
-    return Future.value(cached);
-  }
-  // Share the walk between callers that miss the cache together.
-  return _pending ??= Isolate.run(() => walkDeviceClients(device))
-      .then((sample) {
-        _cached = sample;
-        _cachedCard = device.cardPath;
-        _cachedAt = DateTime.now();
-        return sample;
-      })
-      .whenComplete(() => _pending = null);
-}
+/// Used by the expanded GPU card's process list on vendors other than Intel;
+/// on Intel the monitoring sampler's walk serves the card and the list.
+Future<DeviceEngineSample> sampleDevice(GpuDevice device) =>
+    Isolate.run(() => walkDeviceClients(device));
 
 /// Walks `/proc` for [device]'s clients.
 ///

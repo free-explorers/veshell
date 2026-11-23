@@ -120,6 +120,29 @@ void main() {
     expect(samples.last.slots, 1);
     onScreen.close();
   });
+
+  test('readings stay an interval apart when the rate goes up', () async {
+    // A chart on screen as the sampler starts: the full rate is asked for
+    // right after the first reading. A second reading milliseconds later
+    // would make the CPU load a 0 or 100 % artifact.
+    final container = ProviderContainer(
+      overrides: [gpuDeviceProvider.overrideWithValue(null)],
+    );
+    addTearDown(container.dispose);
+    final samples = <MachineSample>[];
+    container
+      ..listen(machineSamplerProvider, (_, next) {
+        final sample = next.value;
+        if (sample != null) samples.add(sample);
+      })
+      ..listen(monitoringOnScreenProvider, (_, _) {});
+
+    await _until(() => samples.length >= 3);
+    for (var i = 1; i < samples.length; i++) {
+      final gap = samples[i].takenAt.difference(samples[i - 1].takenAt);
+      expect(gap, greaterThan(const Duration(milliseconds: 450)));
+    }
+  });
 }
 
 /// Polls [condition] until it holds, failing after five seconds.

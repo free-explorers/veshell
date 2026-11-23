@@ -72,7 +72,9 @@ for the whole session.
 - **Full rate on screen, idle rate otherwise.** Readings are taken every
   500 ms while a monitoring card is mounted (`monitoringSection` watches
   `monitoringOnScreenProvider`; the overview unmounts its content when it
-  closes) and every 2 s otherwise. Coming on screen takes a reading at once.
+  closes) and every 2 s otherwise. Coming on screen takes a reading at once,
+  unless the last one is under 500 ms old: rates computed over a few
+  milliseconds (the CPU load counts 10 ms ticks) would chart as 0 or 100 %.
   A reading carries the number of 500 ms slots it covers, and the charts
   append it once per slot, so their time axis stays exact: what happened
   while the overview was closed shows at 2 s resolution.

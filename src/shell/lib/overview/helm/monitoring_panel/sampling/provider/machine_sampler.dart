@@ -81,33 +81,66 @@ class MachineSampler extends _$MachineSampler {
           _sendRate();
         case final MachineSample sample:
           samples.add(sample);
+        case _SampleFailure(:final error, :final stackTrace):
+          monitoringLog.warning(
+            'monitoring sample failed',
+            error,
+            StackTrace.fromString(stackTrace),
+          );
       }
     });
+    // The isolate's own logger has no listener, and a dead sampler would only
+    // show as frozen charts: report both here.
+    final lifecycle = ReceivePort('MonitoringSamplerLifecycle')
+      ..listen((message) {
+        if (message case [final Object? error, final Object? stackTrace]) {
+          monitoringLog.severe(
+            'monitoring sampler failed',
+            error,
+            StackTrace.fromString('$stackTrace'),
+          );
+        } else if (!disposed) {
+          monitoringLog.severe('monitoring sampler exited; charts stopped');
+        }
+      });
     ref.onDispose(() {
       disposed = true;
       _control = null;
       isolate?.kill(priority: Isolate.immediate);
       port.close();
+      lifecycle.close();
       unawaited(samples.close());
     });
     unawaited(
-      Isolate.spawn(_runSampler, (
-        port.sendPort,
-        device,
-      ), debugName: 'MonitoringSampler').then((spawned) {
-        if (disposed) {
-          spawned.kill(priority: Isolate.immediate);
-        } else {
-          isolate = spawned;
-        }
-      }),
+      Isolate.spawn(
+            _runSampler,
+            (port.sendPort, device),
+            debugName: 'MonitoringSampler',
+            onError: lifecycle.sendPort,
+            onExit: lifecycle.sendPort,
+          )
+          .then((spawned) {
+            if (disposed) {
+              spawned.kill(priority: Isolate.immediate);
+            } else {
+              isolate = spawned;
+            }
+          })
+          .catchError((Object error, StackTrace stackTrace) {
+            monitoringLog.severe(
+              'monitoring sampler did not start',
+              error,
+              stackTrace,
+            );
+          }),
     );
     return samples.stream;
   }
 
   /// Samples at [monitoringSampleInterval] when [fullRate], otherwise at
   /// [monitoringIdleSampleInterval]. Switching to the full rate takes a
-  /// reading at once, so a chart that just appeared shows the present.
+  /// reading at once when the last one is at least [monitoringSampleInterval]
+  /// old, so a chart that just appeared shows the present.
   void setFullRate({required bool fullRate}) {
     if (_fullRate == fullRate) return;
     _fullRate = fullRate;
@@ -131,12 +164,25 @@ void monitoringOnScreen(Ref ref) {
   ref.onDispose(() => sampler.setFullRate(fullRate: false));
 }
 
+/// A reading that threw, reported to the UI isolate for logging: the
+/// sampler isolate's logger has no listener.
+class _SampleFailure {
+  const _SampleFailure(this.error, this.stackTrace);
+
+  final String error;
+  final String stackTrace;
+}
+
 /// The sampler isolate.
 ///
 /// It reads once immediately, so the charts are primed with a first point
-/// instead of waiting a full tick, then once per interval. A message from the
-/// provider changes the interval; a faster one also reads at once. A sample is
-/// synchronous, so a slow one delays the next tick rather than overlapping it.
+/// instead of waiting a full tick. Each next reading is due one interval after
+/// the previous one, and a message from the provider changes the interval:
+/// going to the full rate reads at once only when the previous reading is at
+/// least that old. Two readings closer than that would give rates computed
+/// over a few milliseconds (the CPU load counts 10 ms ticks), a 0 or 100 %
+/// point on the chart. A sample is synchronous, so a slow one delays the next
+/// rather than overlapping it.
 void _runSampler((SendPort, GpuDevice?) arguments) {
   final (port, device) = arguments;
   var interval = monitoringIdleSampleInterval;
@@ -170,21 +216,26 @@ void _runSampler((SendPort, GpuDevice?) arguments) {
       );
     } on Object catch (error, stackTrace) {
       // An uncaught error would end the isolate, and every chart with it.
-      monitoringLog.warning('monitoring sample failed', error, stackTrace);
+      port.send(_SampleFailure('$error', '$stackTrace'));
     }
   }
 
   void schedule() {
     timer?.cancel();
-    timer = Timer.periodic(interval, (_) => sample());
+    final last = previous;
+    final due = last == null
+        ? Duration.zero
+        : interval - DateTime.now().difference(last);
+    timer = Timer(due.isNegative ? Duration.zero : due, () {
+      sample();
+      schedule();
+    });
   }
 
   final control = ReceivePort('MonitoringSamplerControl')
     ..listen((message) {
       if (message is! Duration || message == interval) return;
-      final faster = message < interval;
       interval = message;
-      if (faster) sample();
       schedule();
     });
   port.send(control.sendPort);
