@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:path/path.dart' as path;
 import 'package:shell/application/model/desktop_exec.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
+import 'package:shell/application/model/launch_scope_tracker.dart';
 import 'package:shell/application/model/terminal_emulator.dart';
 import 'package:shell/application/model/terminal_program_policy.dart';
 import 'package:shell/shared/util/logger.dart';
@@ -10,20 +11,33 @@ import 'package:shell/window/model/resume_context.serializable.dart';
 
 /// A resume launch ready to hand to `AppLaunch`, plus the context it resolved.
 class ResumeLaunchPlan {
-  const ResumeLaunchPlan({required this.config, required this.context});
+  const ResumeLaunchPlan({
+    required this.config,
+    required this.context,
+    this.scope,
+  });
 
   final LaunchConfig config;
   final ResumeContext context;
+
+  /// The systemd scope the application runs in when it leaves the launch's
+  /// own cgroup (a Steam game, `flatpak run`, Chromium), so the tile can
+  /// follow it after its own launch process exits.
+  final ScopeIdentity? scope;
 }
 
 /// Builds the launch configuration for a persistent tile.
 ///
 /// Order of resolution:
 ///
-/// 1. the tile's custom exec, else the desktop entry's `Exec`, is parsed as
+/// 1. a game Steam ran through Proton is started through Steam again, unless
+///    the tile has a custom exec: its captured argv is a Windows command line;
+/// 2. the tile's custom exec, else the desktop entry's `Exec`, is parsed as
 ///    an `Exec` line and its document field codes are filled from the saved
 ///    context;
-/// 2. when there is neither, the saved argv/executable is the fallback.
+/// 3. when there is neither, a program plain Wine ran is run again through
+///    the same Wine build and configuration;
+/// 4. otherwise the saved argv/executable is the fallback.
 ///
 /// The working directory is the saved one when it still exists, then home,
 /// then the compositor's cwd. Missing documents and missing executables are
@@ -53,11 +67,27 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
       : _resolveWorkingDirectory(saved.workingDirectory, homeDirectory, exists);
   final resolved = saved.copyWith(workingDirectory: workingDirectory);
 
+  final hasCustomExec = customExec != null && customExec.trim().isNotEmpty;
+  final steamAppId = saved.steamAppId;
+  if (!hasCustomExec && steamAppId != null) {
+    return ResumeLaunchPlan(
+      config: LaunchConfig(
+        argv: _steamGameCommand(steamAppId, variables, executable),
+        workingDirectory: workingDirectory,
+      ),
+      context: resolved,
+      scope: ScopeIdentity.steamGame(steamAppId),
+    );
+  }
+
+  // The scope a launcher may move the application into names its desktop id.
+  final applicationScope = appId == null || appId.isEmpty
+      ? null
+      : ScopeIdentity(appId);
+
   // A custom exec is the tile's own `Exec` line: the editor starts from the
   // entry's, and it resumes exactly like one.
-  final template = customExec != null && customExec.trim().isNotEmpty
-      ? customExec
-      : execTemplate;
+  final template = hasCustomExec ? customExec : execTemplate;
 
   // A terminal's own argv describes the emulator (its flags and server mode),
   // not work to replay. The terminal context supplies the cwd; the desktop
@@ -144,11 +174,25 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
       return ResumeLaunchPlan(
         config: LaunchConfig(argv: argv, workingDirectory: workingDirectory),
         context: resolved,
+        scope: applicationScope,
       );
     }
   }
 
-  // No desktop entry (or an unusable one): fall back to the captured command.
+  // No desktop entry (or an unusable one). A Windows command line only runs
+  // through Wine again.
+  final wine = saved.wine;
+  if (wine != null) {
+    final command = _wineCommand(saved, wine, variables, executable);
+    if (command != null) {
+      return ResumeLaunchPlan(
+        config: LaunchConfig(argv: command, workingDirectory: workingDirectory),
+        context: resolved,
+      );
+    }
+  }
+
+  // Fall back to the captured command.
   final fallback = _fallbackArgv(
     saved: saved,
     workingDirectory: workingDirectory,
@@ -160,8 +204,105 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
   return ResumeLaunchPlan(
     config: LaunchConfig(argv: fallback, workingDirectory: workingDirectory),
     context: resolved,
+    scope: applicationScope,
   );
 }
+
+/// The command that asks Steam to start the game [appId].
+///
+/// `steam` hands the URI to the running client (or starts it). Without one on
+/// `PATH` (Flatpak Steam), the desktop's `steam:` URI handler is used.
+List<String> _steamGameCommand(
+  String appId,
+  Map<String, String> environment,
+  bool Function(String path) isExecutable,
+) {
+  final uri = steamGameUri(appId);
+  final steam = resolveExecutablePath(
+    'steam',
+    environment: environment,
+    isExecutable: isExecutable,
+  );
+  return steam != null ? [steam, uri] : ['xdg-open', uri];
+}
+
+/// The command that runs the captured Windows program through Wine again, or
+/// null when no Wine build is left to run it.
+///
+/// The Wine build the process ran is preferred: a runner (Lutris, Bottles)
+/// ships its own, and the program and its prefix were set up for it. The
+/// process ran as that build's preloader, which cannot start a program itself,
+/// so its `wine` launcher next to it is used. The captured argv is the
+/// program's Windows command line, passed as is: Wine resolves its drive
+/// letters through the prefix. Its configuration is restored through `env`,
+/// which keeps the launch an argument vector.
+List<String>? _wineCommand(
+  ResumeContext saved,
+  WineResumeContext wine,
+  Map<String, String> environment,
+  bool Function(String path) isExecutable,
+) {
+  if (saved.argv.isEmpty) {
+    return null;
+  }
+  final loader = _wineLoader(saved.executable, environment, isExecutable);
+  if (loader == null) {
+    matchingLog.warning(
+      'No Wine left to run "${saved.argv.first}"; replaying its command line',
+    );
+    return null;
+  }
+  final variables = wine.environment.entries.toList()
+    ..sort((a, b) => a.key.compareTo(b.key));
+  return [
+    if (variables.isNotEmpty) ...[
+      'env',
+      for (final variable in variables) '${variable.key}=${variable.value}',
+    ],
+    loader,
+    ...saved.argv,
+  ];
+}
+
+/// The Wine launcher of the build [executable] belongs to, else the one on
+/// `PATH`.
+String? _wineLoader(
+  String? executable,
+  Map<String, String> environment,
+  bool Function(String path) isExecutable,
+) {
+  if (executable != null &&
+      path.isAbsolute(executable) &&
+      _wineLoaderNames.contains(path.basename(executable))) {
+    final directory = path.dirname(executable);
+    for (final name in const ['wine', 'wine64']) {
+      final candidate = path.join(directory, name);
+      if (isExecutable(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  for (final name in const ['wine', 'wine64']) {
+    final resolved = resolveExecutablePath(
+      name,
+      environment: environment,
+      isExecutable: isExecutable,
+    );
+    if (resolved != null) {
+      return resolved;
+    }
+  }
+  return null;
+}
+
+/// Basenames a Wine process runs as; keep in sync with `WINE_LOADER_NAMES` in
+/// `process_info.rs`.
+const _wineLoaderNames = {
+  'wine-preloader',
+  'wine64-preloader',
+  'wine',
+  'wine64',
+};
 
 /// Whether the `Exec` line starts the captured process directly,
 /// so that the captured arguments speak the entry's command-line interface.

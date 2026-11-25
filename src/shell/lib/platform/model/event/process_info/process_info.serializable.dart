@@ -25,6 +25,7 @@ abstract class ProcessInfoMessage
     String? cwd,
     String? exe,
     TerminalInfoMessage? terminal,
+    WineInfoMessage? wine,
   }) = _ProcessInfoMessage;
 
   factory ProcessInfoMessage.fromJson(Map<String, dynamic> json) =>
@@ -55,4 +56,42 @@ abstract class ProcessDescriptorMessage with _$ProcessDescriptorMessage {
 
   factory ProcessDescriptorMessage.fromJson(Map<String, dynamic> json) =>
       _$ProcessDescriptorMessageFromJson(json);
+}
+
+/// Wine/Proton context of a process, read from its initial environment.
+///
+/// Wine rewrites argv to the Windows command line, so for these processes
+/// `cmdline` names a `.exe` path no Linux launcher can run; this says how the
+/// program was actually started.
+@freezed
+abstract class WineInfoMessage with _$WineInfoMessage {
+  const WineInfoMessage._();
+
+  factory WineInfoMessage({
+    /// `WINEPREFIX`, when set.
+    String? prefix,
+
+    /// The Steam app id the game was launched as, present only when Steam
+    /// itself launched it (not for Proton run by umu-launcher, which sets the
+    /// same Steam variables).
+    String? steamAppId,
+
+    /// `STEAM_COMPAT_DATA_PATH`: set whenever Proton runs, by Steam or by
+    /// umu-launcher.
+    String? compatDataPath,
+
+    /// `STEAM_COMPAT_TOOL_PATHS`: the Proton install, then the runtime(s).
+    @Default(<String>[]) List<String> compatToolPaths,
+
+    /// The Wine configuration variables the process started with (`WINE*`,
+    /// `DXVK_*`, `VKD3D_*`, `STAGING_*`), without Wine's session variables.
+    @Default(<String, String>{}) Map<String, String> environment,
+  }) = _WineInfoMessage;
+
+  factory WineInfoMessage.fromJson(Map<String, dynamic> json) =>
+      _$WineInfoMessageFromJson(json);
+
+  /// Whether the process runs on Proton (launched by Steam or umu-launcher)
+  /// rather than a plain Wine.
+  bool get isProton => compatDataPath != null;
 }

@@ -6,6 +6,85 @@ import 'package:shell/window/widget/resume_context_summary.dart';
 
 void main() {
   group('captureResumeContextFromProcessInfo', () {
+    test('keeps the Steam app id of a Proton game', () {
+      final info = ProcessInfoMessage(
+        pid: 42,
+        cmdline: const [r'Z:\home\user\games\Game.exe'],
+        exe: '/opt/Proton/files/bin/wine64-preloader',
+        wine: WineInfoMessage(
+          steamAppId: '1091500',
+          compatDataPath: '/steam/compatdata/1091500',
+        ),
+      );
+
+      final context = captureResumeContextFromProcessInfo(info)!;
+
+      expect(context.steamAppId, '1091500');
+      expect(context.displayCommand, 'steam://rungameid/1091500');
+    });
+
+    test('plain Wine is run again, not sent to Steam', () {
+      final info = ProcessInfoMessage(
+        pid: 42,
+        cmdline: const [r'C:\App.exe'],
+        exe: '/usr/bin/wine-preloader',
+        wine: WineInfoMessage(prefix: '/home/user/.wine'),
+      );
+
+      final context = captureResumeContextFromProcessInfo(info)!;
+      expect(context.steamAppId, isNull);
+      expect(context.wine, isNotNull);
+    });
+
+    test('keeps the Wine configuration of a plain Wine program', () {
+      final info = ProcessInfoMessage(
+        pid: 42,
+        cmdline: const [r'C:\App.exe'],
+        exe: '/usr/bin/wine64-preloader',
+        wine: WineInfoMessage(
+          prefix: '/home/user/.wine',
+          environment: const {
+            'WINEPREFIX': '/home/user/.wine',
+            'WINEFSYNC': '1',
+          },
+        ),
+      );
+
+      final context = captureResumeContextFromProcessInfo(info)!;
+      expect(context.wine!.environment, {
+        'WINEPREFIX': '/home/user/.wine',
+        'WINEFSYNC': '1',
+      });
+    });
+
+    test('Proton outside Steam is neither a Steam game nor rerun', () {
+      final info = ProcessInfoMessage(
+        pid: 42,
+        cmdline: const [r'Z:\Game.exe'],
+        exe: '/umu/GE-Proton/files/bin/wine64-preloader',
+        wine: WineInfoMessage(compatDataPath: '/prefixes/game'),
+      );
+
+      final context = captureResumeContextFromProcessInfo(info)!;
+      expect(context.steamAppId, isNull);
+      expect(context.wine, isNull);
+    });
+
+    test('a Proton game is left to Steam, not run through Wine', () {
+      final info = ProcessInfoMessage(
+        pid: 42,
+        cmdline: const [r'Z:\Game.exe'],
+        exe: '/opt/Proton/files/bin/wine',
+        wine: WineInfoMessage(
+          steamAppId: '570',
+          compatDataPath: '/steam/compatdata/570',
+          environment: const {'WINEPREFIX': '/steam/compatdata/570/pfx'},
+        ),
+      );
+
+      expect(captureResumeContextFromProcessInfo(info)!.wine, isNull);
+    });
+
     test('captures command line, cwd and executable', () {
       final info = ProcessInfoMessage(
         pid: 42,
