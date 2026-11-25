@@ -14,6 +14,8 @@ ResumeLaunchPlan? plan({
   String? entryIcon = 'app',
   String? appId,
   String? savedTitle,
+  String? steamAppId,
+  WineResumeContext? wine,
   bool Function(String path)? isExecutable,
 }) {
   return buildResumeLaunchPlan(
@@ -22,6 +24,8 @@ ResumeLaunchPlan? plan({
       argv: argv,
       executable: executable,
       terminal: terminal,
+      steamAppId: steamAppId,
+      wine: wine,
     ),
     customExec: customExec,
     execTemplate: execTemplate,
@@ -30,7 +34,7 @@ ResumeLaunchPlan? plan({
     homeDirectory: '/home/user',
     appId: appId,
     savedTitle: savedTitle,
-    environment: const {'SHELL': '/usr/bin/bash'},
+    environment: const {'SHELL': '/usr/bin/bash', 'PATH': '/usr/bin'},
     pathExists: existing.contains,
     isExecutable: isExecutable ?? (_) => true,
   );
@@ -632,6 +636,165 @@ void main() {
       )!;
 
       expect(result.config.argv, ['foot']);
+    });
+  });
+
+  test("follows the application's scope through its desktop id", () {
+    final result = plan(
+      argv: ['flatpak', 'run', 'com.rustdesk.RustDesk'],
+      appId: 'com.rustdesk.RustDesk',
+      existing: {'/home/user'},
+    )!;
+
+    expect(
+      result.scope?.matches('app-flatpak-com.rustdesk.RustDesk-4242.scope'),
+      isTrue,
+    );
+  });
+
+  group('Proton games', () {
+    const windowsArgv = [r'Z:\home\user\games\Game.exe', '-dx12'];
+
+    test('relaunch through Steam instead of the Windows command line', () {
+      final result = plan(
+        argv: windowsArgv,
+        executable: '/opt/Proton/files/bin/wine64-preloader',
+        steamAppId: '1091500',
+        execTemplate: null,
+        existing: {'/home/user'},
+        isExecutable: (path) => path == '/usr/bin/steam',
+      )!;
+
+      expect(result.config.argv, [
+        '/usr/bin/steam',
+        'steam://rungameid/1091500',
+      ]);
+    });
+
+    test('win over a desktop entry, whose Exec cannot take the argv', () {
+      final result = plan(
+        argv: windowsArgv,
+        steamAppId: '1091500',
+        execTemplate: 'steam %U',
+        existing: {'/home/user'},
+        isExecutable: (path) => path == '/usr/bin/steam',
+      )!;
+
+      expect(result.config.argv, [
+        '/usr/bin/steam',
+        'steam://rungameid/1091500',
+      ]);
+    });
+
+    test('use the steam: URI handler when steam is not on PATH', () {
+      final result = plan(
+        argv: windowsArgv,
+        steamAppId: '1091500',
+        existing: {'/home/user'},
+        isExecutable: (_) => false,
+      )!;
+
+      expect(result.config.argv, ['xdg-open', 'steam://rungameid/1091500']);
+    });
+
+    test('name the scope Steam will start the game in', () {
+      final result = plan(
+        argv: windowsArgv,
+        steamAppId: '1091500',
+        existing: {'/home/user'},
+      )!;
+
+      expect(result.scope?.matches('app-steam-app1091500-77.scope'), isTrue);
+      expect(result.carriedOutBy, contains('steam'));
+      expect(result.scope?.matches('app-flatpak-app1091500-77.scope'), isFalse);
+    });
+
+    test('a custom exec still wins', () {
+      final result = plan(
+        argv: windowsArgv,
+        steamAppId: '1091500',
+        customExec: 'gamemoderun steam steam://rungameid/1091500',
+        existing: {'/home/user'},
+      )!;
+
+      expect(result.scope?.launcher, isNull);
+      expect(result.carriedOutBy, isNull);
+      expect(result.config.argv, [
+        'gamemoderun',
+        'steam',
+        'steam://rungameid/1091500',
+      ]);
+    });
+  });
+
+  group('plain Wine programs', () {
+    const windowsArgv = [r'C:\Games\App\App.exe', '-windowed'];
+    const lutrisWine = '/home/user/.local/share/lutris/runners/wine/ge/bin';
+    const wine = WineResumeContext(
+      environment: {'WINEPREFIX': '/home/user/Games/app', 'DXVK_HUD': 'fps'},
+    );
+
+    test('run again through the Wine build and configuration they ran', () {
+      final result = plan(
+        cwd: '/home/user/Games/app/drive_c/Games/App',
+        argv: windowsArgv,
+        executable: '$lutrisWine/wine64-preloader',
+        wine: wine,
+        execTemplate: null,
+        existing: {'/home/user', '/home/user/Games/app/drive_c/Games/App'},
+        isExecutable: (path) => path == '$lutrisWine/wine',
+      )!;
+
+      expect(result.config.argv, [
+        'env',
+        'DXVK_HUD=fps',
+        'WINEPREFIX=/home/user/Games/app',
+        '$lutrisWine/wine',
+        ...windowsArgv,
+      ]);
+      expect(
+        result.config.workingDirectory,
+        '/home/user/Games/app/drive_c/Games/App',
+      );
+    });
+
+    test('use the Wine on PATH once their build is gone', () {
+      final result = plan(
+        argv: windowsArgv,
+        executable: '$lutrisWine/wine64-preloader',
+        wine: const WineResumeContext(),
+        execTemplate: null,
+        existing: {'/home/user'},
+        isExecutable: (path) => path == '/usr/bin/wine',
+      )!;
+
+      expect(result.config.argv, ['/usr/bin/wine', ...windowsArgv]);
+    });
+
+    test("leave a desktop entry (Wine's own menu entry) in charge", () {
+      final result = plan(
+        argv: windowsArgv,
+        executable: '$lutrisWine/wine64-preloader',
+        wine: wine,
+        execTemplate: r'env WINEPREFIX=/home/user/.wine wine C:\\App.exe',
+        existing: {'/home/user'},
+      )!;
+
+      expect(result.config.argv.first, 'env');
+      expect(result.config.argv, isNot(contains('DXVK_HUD=fps')));
+    });
+
+    test('replay the command line when no Wine is left at all', () {
+      final result = plan(
+        argv: windowsArgv,
+        executable: '$lutrisWine/wine64-preloader',
+        wine: wine,
+        execTemplate: null,
+        existing: {'/home/user'},
+        isExecutable: (_) => false,
+      )!;
+
+      expect(result.config.argv.first, windowsArgv.first);
     });
   });
 }

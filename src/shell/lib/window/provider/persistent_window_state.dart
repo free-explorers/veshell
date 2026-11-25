@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/experimental/persist.dart';
 import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shell/application/model/launch_handle.dart';
 import 'package:shell/application/model/resume_launch_plan.dart';
 import 'package:shell/application/provider/app_launch.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
@@ -69,6 +71,21 @@ class PersistentWindowState extends _$PersistentWindowState
 
   Timer? _resumeTimeoutTimer;
 
+  /// The resume launch this tile is waiting on, and its events.
+  LaunchHandle? _launch;
+  StreamSubscription<LaunchEvent>? _launchEvents;
+
+  /// Ends everything that follows an in-flight resume: its timeout and its
+  /// launch's events. The application itself is left running.
+  void _stopResumeTracking() {
+    _resumeTimeoutTimer?.cancel();
+    _resumeTimeoutTimer = null;
+    unawaited(_launchEvents?.cancel());
+    _launchEvents = null;
+    _launch?.cancel();
+    _launch = null;
+  }
+
   /// Whether a shell-requested close is waiting for a fresh process snapshot.
   ///
   /// The snapshot is what records a foreground program that exited since the
@@ -78,6 +95,18 @@ class PersistentWindowState extends _$PersistentWindowState
   /// A resume that has not produced a window by then is shown as retryable.
   static const _resumeTimeout = Duration(seconds: 25);
 
+  /// How long a resume whose launcher handed off keeps waiting.
+  ///
+  /// The window now comes from a process this tile cannot observe (a Steam
+  /// game syncs its saves and prepares Proton first), so it gets longer than
+  /// [_resumeTimeout] before it is shown as retryable.
+  static const _handedOffResumeTimeout = Duration(minutes: 2);
+
+  /// How long a launch whose scope ended without a window still waits, for a
+  /// running instance it may have handed the launch to.
+  @visibleForTesting
+  static Duration scopeEndGrace = const Duration(seconds: 5);
+
   @override
   PersistentWindow build(PersistentWindowId windowId) {
     persist(
@@ -85,10 +114,7 @@ class PersistentWindowState extends _$PersistentWindowState
       ref.watch(persistentStorageStateProvider).requireValue,
       options: const StorageOptions(cacheTime: StorageCacheTime.unsafe_forever),
     );
-    ref.onDispose(() {
-      _resumeTimeoutTimer?.cancel();
-      _resumeTimeoutTimer = null;
-    });
+    ref.onDispose(_stopResumeTracking);
 
     if (stateOrNull != null) {
       initialize(
@@ -152,14 +178,21 @@ class PersistentWindowState extends _$PersistentWindowState
       return null;
     }
 
-    final process = await ref
+    final launch = await ref
         .read(appLaunchProvider.notifier)
-        .launchApplication(plan.config, trackedWindowId: state.windowId);
+        .launch(
+          plan.config,
+          forWindowId: state.windowId,
+          scope: plan.scope,
+          carriedOutBy: plan.carriedOutBy,
+        );
+    final process = launch.process;
     if (!ref.mounted) {
+      launch.cancel();
       return process;
     }
 
-    _resumeTimeoutTimer?.cancel();
+    _stopResumeTracking();
     state = state.copyWith(
       resumeContext: plan.context.copyWith(
         capturedAt: plan.context.capturedAt ?? DateTime.now(),
@@ -172,23 +205,80 @@ class PersistentWindowState extends _$PersistentWindowState
     // other pids from their own windows. It is a weak match signal, the
     // waiting bonus is the strong one.
     waitForSurface(process.pid);
-    _resumeTimeoutTimer = Timer(_resumeTimeout, _onResumeTimeout);
-    unawaited(
-      process.exitCode.then((value) {
-        matchingLog.info('Launch of tile $windowId exited with code $value');
-        // This failure/success only resets the visual waiting state. The
-        // attribution association lives in [AppLaunch] and is cleared
-        // there, by the same exit. The tile may have been removed (or its
-        // notifier rebuilt) while the process ran, so the notifier state is
-        // only touched while it is still mounted.
-        if (!ref.mounted) return;
+    _launch = launch;
+    // A launch another application carries out may first have to start it
+    // (Steam logging in, updating): it is handed off from the start.
+    _resumeTimeoutTimer = Timer(
+      launch.handsOff ? _handedOffResumeTimeout : _resumeTimeout,
+      _onResumeTimeout,
+    );
+    _launchEvents = launch.events.listen(
+      (event) => _onLaunchEvent(launch, event),
+    );
+    return process;
+  }
+
+  /// Shows what happens to [launch] on the tile while it waits for a window.
+  ///
+  /// Only the waiting state lives here: the attribution of the launch's
+  /// windows is [AppLaunch]'s, and ends with the same exit. The tile may have
+  /// been removed (or its notifier rebuilt) while the launch ran, and a retry
+  /// may have replaced it, so only the current launch of a mounted tile
+  /// counts.
+  void _onLaunchEvent(LaunchHandle launch, LaunchEvent event) {
+    if (!ref.mounted || !identical(_launch, launch)) return;
+    switch (event) {
+      case LaunchExited(:final exitCode):
+        matchingLog.info('Launch of tile $windowId exited with code $exitCode');
+        if (event.isClean && state.isWaitingForSurface) {
+          // A clean exit before any window is a hand-off, not the end of the
+          // launch: the application went on elsewhere, and its window is
+          // still to come. Ending the wait here would put the idle launcher
+          // back while the application is starting.
+          matchingLog.info(
+            'Launch of tile $windowId handed off; waiting for its window',
+          );
+          _resumeTimeoutTimer?.cancel();
+          _resumeTimeoutTimer = null;
+          // Once the application's unit is there, it is running: its end,
+          // not a timeout, decides. Until then the launcher may still be
+          // preparing it (Steam syncs saves, processes shaders, asks the user
+          // to pick a launch option).
+          if (!launch.unitStarted) {
+            _resumeTimeoutTimer = Timer(
+              _handedOffResumeTimeout,
+              _onResumeTimeout,
+            );
+          }
+          return;
+        }
+        _stopResumeTracking();
+        state = state.copyWith(isWaitingForSurface: false);
+      case LaunchUnitStarted(:final unit):
+        // The application really started: the timeout no longer applies, and
+        // a tile that already gave up waits again (the user answered a slow
+        // launcher prompt).
+        matchingLog.info('Launch of tile $windowId started in $unit');
         _resumeTimeoutTimer?.cancel();
         _resumeTimeoutTimer = null;
-        state = state.copyWith(isWaitingForSurface: false);
-      }),
-    );
-
-    return process;
+        if (state.metaWindowId == null && state.resumeTimedOut) {
+          state = state.copyWith(
+            isWaitingForSurface: true,
+            resumeTimedOut: false,
+          );
+        }
+      case LaunchUnitEnded(:final unit):
+        if (state.metaWindowId != null || !state.isWaitingForSurface) return;
+        matchingLog.info(
+          'Launch of tile $windowId left $unit before any window',
+        );
+        // The application quit or crashed on start. A single-instance
+        // application can also start in a unit of its own, hand the launch to
+        // its running instance and leave, that instance's window still to
+        // come: give it a moment before showing the failure.
+        _resumeTimeoutTimer?.cancel();
+        _resumeTimeoutTimer = Timer(scopeEndGrace, _onResumeTimeout);
+    }
   }
 
   void _onResumeTimeout() {
@@ -200,8 +290,8 @@ class PersistentWindowState extends _$PersistentWindowState
       return;
     }
     matchingLog.warning(
-      'Resume of tile $windowId produced no window within '
-      '${_resumeTimeout.inSeconds}s; keeping the saved context',
+      'Resume of tile $windowId produced no window in time; keeping the saved '
+      'context',
     );
     state = state.copyWith(isWaitingForSurface: false, resumeTimedOut: true);
   }
@@ -230,8 +320,7 @@ class PersistentWindowState extends _$PersistentWindowState
   /// Retries a failed or timed-out resume without duplicating a live launch.
   Future<void> retryResume() async {
     ref.read(appLaunchProvider.notifier).cancelPendingLaunch(state.windowId);
-    _resumeTimeoutTimer?.cancel();
-    _resumeTimeoutTimer = null;
+    _stopResumeTracking();
     state = state.copyWith(isWaitingForSurface: false, resumeTimedOut: false);
     await launchSelf();
   }
@@ -239,8 +328,7 @@ class PersistentWindowState extends _$PersistentWindowState
   /// Clears the saved resume context and title, keeping the tile itself.
   void forgetResumeContext() {
     ref.read(appLaunchProvider.notifier).cancelPendingLaunch(state.windowId);
-    _resumeTimeoutTimer?.cancel();
-    _resumeTimeoutTimer = null;
+    _stopResumeTracking();
     state = state.copyWith(
       resumeContext: null,
       properties: state.properties.copyWith(title: null),
@@ -408,8 +496,7 @@ class PersistentWindowState extends _$PersistentWindowState
       return;
     }
     final metaWindow = ref.read(metaWindowStateProvider(metaWindowId));
-    _resumeTimeoutTimer?.cancel();
-    _resumeTimeoutTimer = null;
+    _stopResumeTracking();
     // Keep the appId defined by the desktop entry: the displayed native window
     // may belong to a helper process with a different or unknown app id. The
     // other identity fields follow the displayed window so the stored title
@@ -537,8 +624,7 @@ class PersistentWindowState extends _$PersistentWindowState
 
   @override
   void removeWindow() {
-    _resumeTimeoutTimer?.cancel();
-    _resumeTimeoutTimer = null;
+    _stopResumeTracking();
     // The tile is going away: stop the compositor from writing a preview for
     // a window it still displays.
     final displayed = state.metaWindowId;

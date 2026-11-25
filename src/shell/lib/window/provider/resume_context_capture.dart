@@ -42,10 +42,18 @@ ResumeContext? captureResumeContextFromProcessInfo(
           isExecutable,
         );
 
+  final wine = info.wine;
   return ResumeContext(
     workingDirectory: workingDirectory,
     argv: argv,
     executable: executable,
+    steamAppId: wine?.steamAppId,
+    // A Steam game is relaunched through Steam. Proton is left out of a
+    // direct Wine run even outside Steam: its build needs the runtime
+    // umu-launcher set up around it.
+    wine: wine != null && !wine.isProton
+        ? WineResumeContext(environment: wine.environment)
+        : null,
     terminal: shellDescriptor == null
         ? null
         : TerminalResumeContext(

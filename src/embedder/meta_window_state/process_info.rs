@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -30,6 +30,30 @@ const SHELL_NAMES: &[&str] = &[
 /// fresh shell. Keep this string in sync with `_shellSurvivalScript`.
 const RESUME_WRAPPER_SCRIPT: &str =
     r#"if [ -n "$1" ]; then printf "\033]0;%s\007" "$1"; fi; shift; "$@"; exec "$0""#;
+
+/// Basenames of the loaders a Wine (and so Proton) process runs as.
+///
+/// Wine rewrites a process's argv to its Windows command line
+/// (`C:\...\Game.exe`), so `cmdline` alone names a path no Linux launcher
+/// can run; `/proc/<pid>/exe` still points at the loader. Older builds start
+/// through the preloaders, newer (WoW64) ones run `wine` directly.
+const WINE_LOADER_NAMES: &[&str] = &["wine-preloader", "wine64-preloader", "wine", "wine64"];
+
+/// Prefixes of the variables that configure how Wine runs a program.
+///
+/// Runners (Lutris, Bottles) set the prefix, DLL overrides, sync primitives
+/// and translation layers per game; a relaunch through a bare `wine` needs them
+/// back to run the program the same way.
+const WINE_ENVIRONMENT_PREFIXES: &[&str] = &["WINE", "DXVK_", "VKD3D_", "STAGING_"];
+
+/// Variables Wine sets for its own children, which describe the running
+/// session rather than its configuration.
+const WINE_INTERNAL_VARIABLES: &[&str] = &[
+    "WINELOADER",
+    "WINELOADERNOEXEC",
+    "WINEPRELOADRESERVE",
+    "WINESERVERSOCKET",
+];
 
 /// The wrapper shape used before the terminal title was seeded on resume.
 ///
@@ -65,6 +89,31 @@ pub struct ProcessInfo {
     pub cwd: Option<String>,
     pub exe: Option<String>,
     pub terminal: Option<TerminalInfo>,
+    /// Present only for a Wine process (Proton included).
+    pub wine: Option<WineInfo>,
+}
+
+/// Wine/Proton context of a process, read from its initial environment.
+///
+/// Proton is told apart from plain Wine (Lutris, Bottles, a bare `wine`) by
+/// the Steam compatibility variables: only a Steam launch through a compat
+/// tool sets `STEAM_COMPAT_DATA_PATH`.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct WineInfo {
+    /// `WINEPREFIX`, when set (Proton sets it to `<compat data>/pfx`).
+    pub prefix: Option<String>,
+    /// The Steam app id the game was launched as (`steam://rungameid/<id>`),
+    /// present only when Steam itself launched it.
+    pub steam_app_id: Option<String>,
+    /// `STEAM_COMPAT_DATA_PATH`: the per-game compat data; set only by Proton.
+    pub compat_data_path: Option<String>,
+    /// `STEAM_COMPAT_TOOL_PATHS`: the Proton install, then the runtime(s).
+    pub compat_tool_paths: Vec<String>,
+    /// The Wine configuration variables of the process (`WINE*`, `DXVK_*`,
+    /// `VKD3D_*`, `STAGING_*`), `WINEPREFIX` included, minus Wine's own
+    /// session variables. Sorted, so an unchanged capture compares equal.
+    pub environment: BTreeMap<String, String>,
 }
 
 /// One process in the terminal's shell/foreground chain.
@@ -98,18 +147,163 @@ impl ProcessInfo {
     pub fn for_pid_in(proc_root: &Path, pid: i32) -> Self {
         let (_, flatpak_id) = get_flatpack_app_id_from_pid(pid);
         let (_, snap_id) = get_snap_app_id_from_pid(pid);
+        let cmdline = read_cmdline(proc_root, pid);
+        let exe = read_exe(proc_root, pid);
+        let wine = wine_info(proc_root, pid, exe.as_deref(), &cmdline);
         Self {
             pid,
             cgroup: get_cgroup_from_pid(pid),
             flatpak_id,
             snap_id,
             binary_name: get_binary_name_from_pid(pid),
-            cmdline: read_cmdline(proc_root, pid),
+            cmdline,
             cwd: read_cwd(proc_root, pid),
-            exe: read_exe(proc_root, pid),
+            exe,
             terminal: terminal_info(proc_root, pid),
+            wine,
         }
     }
+}
+
+/// Wine context of [pid], or `None` when it is not a Wine process.
+///
+/// The environment is read only once the loader identifies a Wine process, so
+/// ordinary clients never have theirs parsed. When the `exe` link cannot be
+/// read, a Windows-looking argv[0] stands in for it.
+fn wine_info(
+    proc_root: &Path,
+    pid: i32,
+    exe: Option<&str>,
+    cmdline: &[String],
+) -> Option<WineInfo> {
+    let is_wine = match exe {
+        Some(exe) => is_wine_loader(exe),
+        None => cmdline
+            .first()
+            .is_some_and(|program| program.to_ascii_lowercase().ends_with(".exe")),
+    };
+    if !is_wine {
+        return None;
+    }
+    let environment = read_environ(proc_root, pid);
+    let variable = |name: &str| {
+        environment
+            .get(name)
+            .filter(|value| !value.is_empty())
+            .cloned()
+    };
+    let compat_data_path = variable("STEAM_COMPAT_DATA_PATH");
+    // Only Steam's own launch makes the game a Steam game: umu-launcher
+    // (Heroic, Lutris) runs Proton outside Steam with the same compat
+    // variables, and sets `SteamAppId` to the store id it looks game fixes up
+    // with, which the user may not own on Steam.
+    let steam_app_id = steam_launch(proc_root, pid).and_then(|launch_app_id| {
+        // Non-Steam shortcuts report `SteamAppId=0`; their id is
+        // `SteamGameId`. The launcher's own `AppId=`, then the compat data
+        // directory (named after the app id), are the last resorts.
+        variable("SteamAppId")
+            .filter(|id| id != "0")
+            .or_else(|| variable("SteamGameId").filter(|id| id != "0"))
+            .or(launch_app_id)
+            .or_else(|| {
+                compat_data_path.as_deref().and_then(|path| {
+                    Path::new(path)
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .filter(|name| is_app_id(name))
+                        .map(str::to_owned)
+                })
+            })
+    });
+    Some(WineInfo {
+        prefix: variable("WINEPREFIX"),
+        steam_app_id,
+        compat_data_path,
+        compat_tool_paths: variable("STEAM_COMPAT_TOOL_PATHS")
+            .map(|paths| {
+                paths
+                    .split(':')
+                    .filter(|path| !path.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default(),
+        environment: environment
+            .iter()
+            .filter(|(name, _)| is_wine_configuration(name))
+            .map(|(name, value)| (name.clone(), value.clone()))
+            .collect(),
+    })
+}
+
+/// How deep [steam_launch] looks for Steam's launcher: a game sits a handful
+/// of processes under it (launch wrapper, Proton script, runtime container).
+const STEAM_LAUNCH_SEARCH_DEPTH: usize = 32;
+
+/// Whether an ancestor of [pid] is Steam's game launcher, and the `AppId=` it
+/// was given.
+///
+/// Steam starts every game, Proton or native, under
+/// `reaper SteamLaunch AppId=<id> -- ...`. `/proc` shows host pids, so the
+/// chain is intact across the runtime's container.
+fn steam_launch(proc_root: &Path, pid: i32) -> Option<Option<String>> {
+    let mut current = pid;
+    for _ in 0..STEAM_LAUNCH_SEARCH_DEPTH {
+        let parent = parse_stat_file(proc_root, current)?.ppid;
+        if parent <= 1 {
+            return None;
+        }
+        let cmdline = read_cmdline(proc_root, parent);
+        let is_reaper = cmdline
+            .first()
+            .is_some_and(|program| Path::new(program).file_name() == Some("reaper".as_ref()));
+        if is_reaper && cmdline.iter().any(|argument| argument == "SteamLaunch") {
+            return Some(
+                cmdline
+                    .iter()
+                    .take_while(|argument| *argument != "--")
+                    .find_map(|argument| argument.strip_prefix("AppId="))
+                    .filter(|id| is_app_id(id) && *id != "0")
+                    .map(str::to_owned),
+            );
+        }
+        current = parent;
+    }
+    None
+}
+
+fn is_app_id(value: &str) -> bool {
+    !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit())
+}
+
+fn is_wine_configuration(name: &str) -> bool {
+    WINE_ENVIRONMENT_PREFIXES
+        .iter()
+        .any(|prefix| name.starts_with(prefix))
+        && !WINE_INTERNAL_VARIABLES.contains(&name)
+}
+
+fn is_wine_loader(exe: &str) -> bool {
+    Path::new(exe)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| WINE_LOADER_NAMES.contains(&name))
+}
+
+/// The initial environment of [pid] (`/proc/<pid>/environ`), empty when
+/// unreadable.
+fn read_environ(proc_root: &Path, pid: i32) -> HashMap<String, String> {
+    let Ok(bytes) = std::fs::read(proc_root.join(pid.to_string()).join("environ")) else {
+        return HashMap::new();
+    };
+    bytes
+        .split(|byte| *byte == 0)
+        .filter_map(|entry| {
+            let entry = String::from_utf8_lossy(entry);
+            let (name, value) = entry.split_once('=')?;
+            Some((name.to_owned(), value.to_owned()))
+        })
+        .collect()
 }
 
 fn terminal_info(proc_root: &Path, pid: i32) -> Option<TerminalInfo> {
@@ -750,6 +944,249 @@ mod tests {
         std::fs::remove_dir_all(root).ok();
     }
 
+    /// Parent of every test Wine process; a Steam launch puts `reaper` there.
+    const STEAM_LAUNCHER_PID: i32 = 50;
+
+    fn add_steam_launcher(root: &Path, app_id: &str) {
+        let reaper = "/home/user/.steam/steam/ubuntu12_32/reaper";
+        let app_id = format!("AppId={app_id}");
+        add_process(
+            root,
+            STEAM_LAUNCHER_PID,
+            40,
+            "reaper",
+            &[
+                reaper,
+                "SteamLaunch",
+                &app_id,
+                "--",
+                "/home/user/.steam/steam/ubuntu12_32/steam-launch-wrapper",
+            ],
+            "/home/user",
+        );
+    }
+
+    fn add_wine_process(root: &Path, pid: i32, exe: &str, args: &[&str], environ: &[&str]) {
+        let dir = root.join(pid.to_string());
+        std::fs::create_dir_all(dir.join("task").join(pid.to_string())).unwrap();
+        std::fs::write(
+            dir.join("stat"),
+            format!("{pid} (Game.exe) S {STEAM_LAUNCHER_PID} {pid} {pid} 0 -1 0"),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("cmdline"),
+            args.iter()
+                .map(|arg| format!("{arg}\0"))
+                .collect::<String>(),
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("environ"),
+            environ
+                .iter()
+                .map(|var| format!("{var}\0"))
+                .collect::<String>(),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink("/home/user/games/game", dir.join("cwd")).unwrap();
+        std::os::unix::fs::symlink(exe, dir.join("exe")).unwrap();
+    }
+
+    #[test]
+    fn reports_the_proton_context_of_a_steam_game() {
+        let root = proc_root();
+        add_steam_launcher(&root, "1091500");
+        let proton = "/home/user/.steam/steam/steamapps/common/Proton 9.0 (Beta)";
+        let compat = "/home/user/.steam/steam/steamapps/compatdata/1091500";
+        let tools = format!("STEAM_COMPAT_TOOL_PATHS={proton}:/home/user/.steam/steam/steamapps/common/SteamLinuxRuntime_sniper");
+        add_wine_process(
+            &root,
+            100,
+            &format!("{proton}/files/bin/wine64-preloader"),
+            &["Z:\\home\\user\\games\\game\\Game.exe"],
+            &[
+                "HOME=/home/user",
+                "SteamAppId=1091500",
+                &format!("STEAM_COMPAT_DATA_PATH={compat}"),
+                &format!("WINEPREFIX={compat}/pfx"),
+                &tools,
+            ],
+        );
+
+        let info = ProcessInfo::for_pid_in(&root, 100);
+        let wine = info.wine.expect("wine context");
+        assert_eq!(wine.steam_app_id.as_deref(), Some("1091500"));
+        assert_eq!(wine.compat_data_path.as_deref(), Some(compat));
+        assert_eq!(wine.prefix, Some(format!("{compat}/pfx")));
+        assert_eq!(wine.compat_tool_paths.len(), 2);
+        assert_eq!(wine.compat_tool_paths[0], proton);
+        assert!(info.terminal.is_none());
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn a_non_steam_shortcut_takes_its_game_id() {
+        let root = proc_root();
+        add_steam_launcher(&root, "3141592653");
+        add_wine_process(
+            &root,
+            100,
+            "/opt/proton/files/bin/wine",
+            &["C:\\Game.exe"],
+            &[
+                "SteamAppId=0",
+                "SteamGameId=12345678901234567890",
+                "STEAM_COMPAT_DATA_PATH=/home/user/compatdata/3141592653",
+            ],
+        );
+
+        let wine = ProcessInfo::for_pid_in(&root, 100)
+            .wine
+            .expect("wine context");
+        assert_eq!(wine.steam_app_id.as_deref(), Some("12345678901234567890"));
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn the_compat_data_directory_names_the_app_when_no_id_is_set() {
+        let root = proc_root();
+        add_steam_launcher(&root, "0");
+        add_wine_process(
+            &root,
+            100,
+            "/opt/proton/files/bin/wine64",
+            &["C:\\Game.exe"],
+            &["STEAM_COMPAT_DATA_PATH=/home/user/compatdata/570/"],
+        );
+
+        let wine = ProcessInfo::for_pid_in(&root, 100)
+            .wine
+            .expect("wine context");
+        assert_eq!(wine.steam_app_id.as_deref(), Some("570"));
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn the_steam_launcher_names_the_app_when_the_environment_does_not() {
+        let root = proc_root();
+        add_steam_launcher(&root, "1245620");
+        add_wine_process(
+            &root,
+            100,
+            "/opt/proton/files/bin/wine64-preloader",
+            &["C:\\Game.exe"],
+            &["STEAM_COMPAT_DATA_PATH=/home/user/compatdata/elden"],
+        );
+
+        let wine = ProcessInfo::for_pid_in(&root, 100)
+            .wine
+            .expect("wine context");
+        assert_eq!(wine.steam_app_id.as_deref(), Some("1245620"));
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn proton_run_by_umu_outside_steam_is_no_steam_game() {
+        let root = proc_root();
+        add_wine_process(
+            &root,
+            100,
+            "/home/user/.local/share/umu/GE-Proton/files/bin/wine64-preloader",
+            &["Z:\\home\\user\\Games\\Heroic\\Game\\Game.exe"],
+            &[
+                "GAMEID=umu-1091500",
+                "SteamAppId=1091500",
+                "SteamGameId=1091500",
+                "STEAM_COMPAT_DATA_PATH=/home/user/Games/Heroic/Prefixes/Game",
+                "WINEPREFIX=/home/user/Games/Heroic/Prefixes/Game",
+            ],
+        );
+
+        let wine = ProcessInfo::for_pid_in(&root, 100)
+            .wine
+            .expect("wine context");
+        assert!(wine.steam_app_id.is_none());
+        assert!(wine.compat_data_path.is_some());
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn plain_wine_has_a_prefix_but_no_steam_context() {
+        let root = proc_root();
+        add_wine_process(
+            &root,
+            100,
+            "/usr/bin/wine-preloader",
+            &["C:\\Program Files\\App\\App.exe"],
+            &[
+                "WINEPREFIX=/home/user/.wine",
+                "WINEDLLOVERRIDES=d3d11=n",
+                "WINEFSYNC=1",
+                "DXVK_HUD=fps",
+                "WINELOADERNOEXEC=1",
+                "WINESERVERSOCKET=3",
+                "HOME=/home/user",
+            ],
+        );
+
+        let wine = ProcessInfo::for_pid_in(&root, 100)
+            .wine
+            .expect("wine context");
+        assert_eq!(
+            wine.environment.keys().collect::<Vec<_>>(),
+            ["DXVK_HUD", "WINEDLLOVERRIDES", "WINEFSYNC", "WINEPREFIX"],
+        );
+        assert_eq!(wine.prefix.as_deref(), Some("/home/user/.wine"));
+        assert!(wine.compat_data_path.is_none());
+        assert!(wine.steam_app_id.is_none());
+        assert!(wine.compat_tool_paths.is_empty());
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn a_native_program_has_no_wine_context_even_with_steam_variables() {
+        let root = proc_root();
+        add_wine_process(
+            &root,
+            100,
+            "/home/user/games/native/game.x86_64",
+            &["./game.x86_64"],
+            &[
+                "SteamAppId=440",
+                "STEAM_COMPAT_DATA_PATH=/home/user/compatdata/440",
+            ],
+        );
+
+        assert!(ProcessInfo::for_pid_in(&root, 100).wine.is_none());
+
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn a_windows_argv_stands_in_for_an_unreadable_exe() {
+        assert!(wine_info(
+            Path::new("/nonexistent"),
+            1,
+            None,
+            &["C:\\GAME.EXE".to_string()]
+        )
+        .is_some());
+        assert!(wine_info(
+            Path::new("/nonexistent"),
+            1,
+            None,
+            &["/usr/bin/firefox".to_string()]
+        )
+        .is_none());
+    }
+
     #[test]
     fn a_bad_pid_degrades_to_empty_facts() {
         let root = proc_root();
@@ -757,6 +1194,7 @@ mod tests {
         assert!(info.cmdline.is_empty());
         assert!(info.cwd.is_none());
         assert!(info.terminal.is_none());
+        assert!(info.wine.is_none());
         std::fs::remove_dir_all(root).ok();
     }
 }

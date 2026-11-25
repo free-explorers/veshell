@@ -1,14 +1,18 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
+import 'package:shell/application/model/launch_handle.dart';
+import 'package:shell/application/model/launch_scope_tracker.dart';
 import 'package:shell/application/provider/logs_for_pid.dart';
 import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/meta_window/provider/meta_window_window_map.dart';
 import 'package:shell/meta_window/provider/process_info_state.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
+import 'package:shell/window/provider/persistent_window_state.dart';
 import 'package:shell/window/provider/window_manager/window_manager.dart';
 import 'package:uuid/uuid.dart';
 
@@ -20,6 +24,10 @@ part 'app_launch.g.dart';
 /// tile's (full, fixed-length) uuid.
 String _launchUnitPrefix(WindowId trackedWindowId) =>
     'veshell-launch-${_windowKey(trackedWindowId)}-';
+
+/// Unit prefix of a launch made on behalf of an application without a tile:
+/// it names no tile, so [AppLaunch.windowForPid] attributes it to none.
+const _onBehalfUnitPrefix = 'veshell-launch-on-behalf-';
 
 String _windowKey(WindowId windowId) => switch (windowId) {
   DialogWindowId(:final uuid) => uuid,
@@ -134,7 +142,10 @@ class AppLaunch extends _$AppLaunch {
     LaunchConfig config, {
     required WindowId trackedWindowId,
   }) async {
-    final launch = await _launchTracked(config, trackedWindowId);
+    final launch = await _launchTracked(
+      config,
+      _launchUnitPrefix(trackedWindowId),
+    );
     ref
         .read(logsForPidProvider(launch.process.pid).notifier)
         .setProcess(launch.process, command: config.displayCommand);
@@ -149,6 +160,86 @@ class AppLaunch extends _$AppLaunch {
         }
       }),
     );
+    return launch.process;
+  }
+
+  /// Where launchers start the scopes of the applications they move; a
+  /// temporary directory in tests.
+  @visibleForTesting
+  static Directory? Function() appSliceDirectory = userAppSliceDirectory;
+
+  /// Launches [config] for the tile [forWindowId] and follows it.
+  ///
+  /// [scope] names the systemd unit the application may end up in (see
+  /// [ScopeIdentity]); the handle reports it starting and ending, which is all
+  /// that remains observable of a launch that left its own cgroup.
+  /// [carriedOutBy], the desktop ids of the application that carries the
+  /// launch out (Steam for a Steam game), makes the launch that
+  /// application's, since it may start it ([_launchOnBehalfOf]).
+  Future<LaunchHandle> launch(
+    LaunchConfig config, {
+    required WindowId forWindowId,
+    ScopeIdentity? scope,
+    Set<String>? carriedOutBy,
+  }) async {
+    final process = carriedOutBy == null
+        ? await launchApplication(config, trackedWindowId: forWindowId)
+        : await _launchOnBehalfOf(
+            config,
+            ownerWindowId: _tileOf(carriedOutBy, except: forWindowId),
+          );
+    return LaunchHandle(
+      process: process,
+      handsOff: carriedOutBy != null,
+      followUnit: followUnitIn(
+        scope == null ? null : appSliceDirectory(),
+        scope,
+      ),
+    );
+  }
+
+  /// The tile of the application installed under one of [desktopIds], other
+  /// than [except], if any.
+  PersistentWindowId? _tileOf(
+    Set<String> desktopIds, {
+    required WindowId except,
+  }) {
+    for (final windowId in ref.read(windowManagerProvider).windows) {
+      if (windowId is PersistentWindowId &&
+          windowId != except &&
+          desktopIds.contains(
+            ref.readPersistentWindow(windowId).properties.appId,
+          )) {
+        return windowId;
+      }
+    }
+    return null;
+  }
+
+  /// Launches [config] on behalf of another application, which carries the
+  /// launch out: `steam steam://rungameid/<id>` asks Steam to start a game.
+  ///
+  /// The command may start that application itself (Steam was not running),
+  /// so the launch must not belong to the tile that asked for it: its windows
+  /// would be attributed to that tile, and retrying or removing the tile would
+  /// stop the unit, application included. The unit is named after
+  /// [ownerWindowId], the application's own tile, so a client started here is
+  /// attributed to it like one its tile launched; without one, it is named
+  /// after no tile and its windows are matched normally. The launch is
+  /// registered under no tile either: nothing cancels it.
+  Future<Process> _launchOnBehalfOf(
+    LaunchConfig config, {
+    WindowId? ownerWindowId,
+  }) async {
+    final launch = await _launchTracked(
+      config,
+      ownerWindowId == null
+          ? _onBehalfUnitPrefix
+          : _launchUnitPrefix(ownerWindowId),
+    );
+    ref
+        .read(logsForPidProvider(launch.process.pid).notifier)
+        .setProcess(launch.process, command: config.displayCommand);
     return launch.process;
   }
 
@@ -248,10 +339,7 @@ class AppLaunch extends _$AppLaunch {
     ], workingDirectory: workingDirectory);
   }
 
-  Future<_Launch> _launchTracked(
-    LaunchConfig config,
-    WindowId trackedWindowId,
-  ) async {
+  Future<_Launch> _launchTracked(LaunchConfig config, String unitPrefix) async {
     // Without a running systemd user manager there is nothing to track: the
     // application would never be attributed to a cgroup by this launch, and
     // window matching would behave exactly like the untracked fallback — so
@@ -272,9 +360,7 @@ class AppLaunch extends _$AppLaunch {
     // The tile uuid is the stable part; the short suffix only makes this
     // particular launch's unit unique for `systemd-run` (a unit name cannot be
     // reused while it is still active).
-    final unitName =
-        '${_launchUnitPrefix(trackedWindowId)}'
-        '${const Uuid().v4().substring(0, 8)}';
+    final unitName = '$unitPrefix${const Uuid().v4().substring(0, 8)}';
     late final Process process;
     try {
       process = await Process.start(

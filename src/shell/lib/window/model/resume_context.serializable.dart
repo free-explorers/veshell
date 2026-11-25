@@ -28,6 +28,16 @@ abstract class ResumeContext with _$ResumeContext {
     /// Terminal-only context: the shell and its working directory.
     TerminalResumeContext? terminal,
 
+    /// Steam app id of a game Steam launched through Proton.
+    ///
+    /// Wine rewrites such a process's argv to its Windows command line
+    /// (`Z:\...\Game.exe`), which no Linux launcher can run: the game is
+    /// relaunched through Steam instead (`steam://rungameid/<id>`).
+    String? steamAppId,
+
+    /// How plain Wine (not Proton) ran the program, to run it again.
+    WineResumeContext? wine,
+
     /// When the context was last refreshed.
     DateTime? capturedAt,
   }) = _ResumeContext;
@@ -80,6 +90,10 @@ abstract class ResumeContext with _$ResumeContext {
   /// Mirrors the relaunch fallback: the captured [argv] when present,
   /// otherwise the resolved [executable].
   String? get displayCommand {
+    final appId = steamAppId;
+    if (appId != null) {
+      return steamGameUri(appId);
+    }
     if (argv.isNotEmpty) {
       return argv.join(' ');
     }
@@ -87,6 +101,9 @@ abstract class ResumeContext with _$ResumeContext {
     return program == null || program.isEmpty ? null : program;
   }
 }
+
+/// The Steam URI that starts the game [appId].
+String steamGameUri(String appId) => 'steam://rungameid/$appId';
 
 /// Where programs and their resources are installed, as opposed to where
 /// users keep documents.
@@ -122,6 +139,22 @@ abstract class TerminalResumeContext with _$TerminalResumeContext {
 
   factory TerminalResumeContext.fromJson(Map<String, dynamic> json) =>
       _$TerminalResumeContextFromJson(json);
+}
+
+/// The Wine configuration a Windows program ran with.
+///
+/// The program itself is the captured argv (its Windows command line, which
+/// Wine resolves through the prefix's drive letters) and the Wine build is the
+/// loader the process ran as ([ResumeContext.executable]).
+@freezed
+abstract class WineResumeContext with _$WineResumeContext {
+  const factory WineResumeContext({
+    /// Wine configuration variables, `WINEPREFIX` included.
+    @Default(<String, String>{}) Map<String, String> environment,
+  }) = _WineResumeContext;
+
+  factory WineResumeContext.fromJson(Map<String, dynamic> json) =>
+      _$WineResumeContextFromJson(json);
 }
 
 /// A terminal foreground program captured for a possible replay.
