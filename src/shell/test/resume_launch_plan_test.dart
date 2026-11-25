@@ -705,6 +705,7 @@ void main() {
       )!;
 
       expect(result.scope?.matches('app-steam-app1091500-77.scope'), isTrue);
+      expect(result.carriedOutBy, contains('steam'));
       expect(result.scope?.matches('app-flatpak-app1091500-77.scope'), isFalse);
     });
 
@@ -717,6 +718,7 @@ void main() {
       )!;
 
       expect(result.scope?.launcher, isNull);
+      expect(result.carriedOutBy, isNull);
       expect(result.config.argv, [
         'gamemoderun',
         'steam',

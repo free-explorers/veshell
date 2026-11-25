@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
+import 'package:shell/application/model/launch_handle.dart';
 import 'package:shell/application/model/launch_scope_tracker.dart';
 import 'package:shell/application/provider/app_launch.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
@@ -37,17 +38,36 @@ class _FakeProcess implements Process {
 }
 
 /// Hands out [_FakeProcess]es instead of starting anything.
+/// Hands out launches of [_FakeProcess]es instead of starting anything.
+///
+/// The handles are real: with a [slice], they follow the application's unit
+/// in it through inotify, as [AppLaunch.launch] does in `app.slice`.
 class _FakeAppLaunch extends AppLaunch {
+  _FakeAppLaunch({required this.slice});
+
   final launched = <_FakeProcess>[];
 
+  /// What each launch was carried out by, in order (null for the tile itself).
+  final carriers = <Set<String>?>[];
+
+  /// Stands in for `app.slice`, for the tests that follow a unit.
+  final Directory? Function() slice;
+
   @override
-  Future<Process> launchApplication(
+  Future<LaunchHandle> launch(
     LaunchConfig config, {
-    required WindowId trackedWindowId,
+    required WindowId forWindowId,
+    ScopeIdentity? scope,
+    Set<String>? carriedOutBy,
   }) async {
     final process = _FakeProcess(1000 + launched.length);
     launched.add(process);
-    return process;
+    carriers.add(carriedOutBy);
+    return LaunchHandle(
+      process: process,
+      handsOff: carriedOutBy != null,
+      followUnit: followUnitIn(slice(), scope),
+    );
   }
 
   @override
@@ -74,6 +94,7 @@ Future<void> _until(bool Function() condition) async {
 void main() {
   const windowId = PersistentWindowId('abc');
   late _FakeAppLaunch appLaunch;
+  Directory? appSlice;
 
   late Directory directory;
   late ProviderContainer container;
@@ -101,7 +122,7 @@ void main() {
       }),
     );
 
-    appLaunch = _FakeAppLaunch();
+    appLaunch = _FakeAppLaunch(slice: () => appSlice);
     container = ProviderContainer(
       overrides: [
         appLaunchProvider.overrideWith(() => appLaunch),
@@ -280,13 +301,13 @@ void main() {
 
     setUp(() {
       slice = Directory.systemTemp.createTempSync('veshell_app_slice_');
-      PersistentWindowState.appSliceDirectory = () => slice;
+      appSlice = slice;
       PersistentWindowState.scopeEndGrace = Duration.zero;
     });
 
     tearDown(() {
-      PersistentWindowState.appSliceDirectory = userAppSliceDirectory;
       PersistentWindowState.scopeEndGrace = const Duration(seconds: 5);
+      appSlice = null;
       slice.deleteSync(recursive: true);
     });
 
@@ -325,6 +346,12 @@ void main() {
       await _until(() => window().resumeTimedOut);
 
       expect(window().isWaitingForSurface, isFalse);
+    });
+
+    test('is launched as Steam, not as the game tile', () async {
+      await launchGame();
+
+      expect(appLaunch.carriers.single, contains('steam'));
     });
 
     test('ignores the scope of another game', () async {

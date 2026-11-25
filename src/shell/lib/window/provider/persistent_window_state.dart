@@ -7,7 +7,7 @@ import 'package:hooks_riverpod/experimental/persist.dart';
 import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import 'package:shell/application/model/launch_scope_tracker.dart';
+import 'package:shell/application/model/launch_handle.dart';
 import 'package:shell/application/model/resume_launch_plan.dart';
 import 'package:shell/application/provider/app_launch.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
@@ -71,22 +71,19 @@ class PersistentWindowState extends _$PersistentWindowState
 
   Timer? _resumeTimeoutTimer;
 
-  /// Where handed-off launches start their scopes; a temporary directory in
-  /// tests.
-  @visibleForTesting
-  static Directory? Function() appSliceDirectory = userAppSliceDirectory;
+  /// The resume launch this tile is waiting on, and its events.
+  LaunchHandle? _launch;
+  StreamSubscription<LaunchEvent>? _launchEvents;
 
-  /// The scope a handed-off launch (a Steam game) runs in, while the tile
-  /// follows it. See [LaunchScopeTracker].
-  LaunchScopeTracker? _launchScope;
-
-  /// Ends everything that follows an in-flight resume: its timeout and the
-  /// scope of a handed-off launch.
+  /// Ends everything that follows an in-flight resume: its timeout and its
+  /// launch's events. The application itself is left running.
   void _stopResumeTracking() {
     _resumeTimeoutTimer?.cancel();
     _resumeTimeoutTimer = null;
-    _launchScope?.cancel();
-    _launchScope = null;
+    unawaited(_launchEvents?.cancel());
+    _launchEvents = null;
+    _launch?.cancel();
+    _launch = null;
   }
 
   /// Whether a shell-requested close is waiting for a fresh process snapshot.
@@ -181,10 +178,17 @@ class PersistentWindowState extends _$PersistentWindowState
       return null;
     }
 
-    final process = await ref
+    final launch = await ref
         .read(appLaunchProvider.notifier)
-        .launchApplication(plan.config, trackedWindowId: state.windowId);
+        .launch(
+          plan.config,
+          forWindowId: state.windowId,
+          scope: plan.scope,
+          carriedOutBy: plan.carriedOutBy,
+        );
+    final process = launch.process;
     if (!ref.mounted) {
+      launch.cancel();
       return process;
     }
 
@@ -201,35 +205,46 @@ class PersistentWindowState extends _$PersistentWindowState
     // other pids from their own windows. It is a weak match signal, the
     // waiting bonus is the strong one.
     waitForSurface(process.pid);
-    _resumeTimeoutTimer = Timer(_resumeTimeout, _onResumeTimeout);
-    _followLaunchScope(plan.scope, process.pid);
-    unawaited(
-      process.exitCode.then((value) {
-        matchingLog.info('Launch of tile $windowId exited with code $value');
-        // A failure only resets the visual waiting state. The
-        // attribution association lives in [AppLaunch] and is cleared
-        // there, by the same exit. The tile may have been removed (or its
-        // notifier rebuilt) while the process ran, so the notifier state is
-        // only touched while it is still mounted.
-        if (!ref.mounted) return;
-        // A retry has started another launch since: its own exit decides.
-        if (state.pid != process.pid) return;
-        if (value == 0 && state.isWaitingForSurface) {
+    _launch = launch;
+    // A launch another application carries out may first have to start it
+    // (Steam logging in, updating): it is handed off from the start.
+    _resumeTimeoutTimer = Timer(
+      launch.handsOff ? _handedOffResumeTimeout : _resumeTimeout,
+      _onResumeTimeout,
+    );
+    _launchEvents = launch.events.listen(
+      (event) => _onLaunchEvent(launch, event),
+    );
+    return process;
+  }
+
+  /// Shows what happens to [launch] on the tile while it waits for a window.
+  ///
+  /// Only the waiting state lives here: the attribution of the launch's
+  /// windows is [AppLaunch]'s, and ends with the same exit. The tile may have
+  /// been removed (or its notifier rebuilt) while the launch ran, and a retry
+  /// may have replaced it, so only the current launch of a mounted tile
+  /// counts.
+  void _onLaunchEvent(LaunchHandle launch, LaunchEvent event) {
+    if (!ref.mounted || !identical(_launch, launch)) return;
+    switch (event) {
+      case LaunchExited(:final exitCode):
+        matchingLog.info('Launch of tile $windowId exited with code $exitCode');
+        if (event.isClean && state.isWaitingForSurface) {
           // A clean exit before any window is a hand-off, not the end of the
-          // launch: `steam steam://rungameid/...`, `xdg-open` or a
-          // single-instance application passed the launch to a running
-          // process, whose window is still to come. Ending the wait here would
-          // put the idle launcher back while the application is starting.
+          // launch: the application went on elsewhere, and its window is
+          // still to come. Ending the wait here would put the idle launcher
+          // back while the application is starting.
           matchingLog.info(
             'Launch of tile $windowId handed off; waiting for its window',
           );
           _resumeTimeoutTimer?.cancel();
           _resumeTimeoutTimer = null;
-          // Once the application's scope is there, it is running: its end,
+          // Once the application's unit is there, it is running: its end,
           // not a timeout, decides. Until then the launcher may still be
           // preparing it (Steam syncs saves, processes shaders, asks the user
           // to pick a launch option).
-          if (_launchScope?.scope == null) {
+          if (!launch.unitStarted) {
             _resumeTimeoutTimer = Timer(
               _handedOffResumeTimeout,
               _onResumeTimeout,
@@ -239,34 +254,11 @@ class PersistentWindowState extends _$PersistentWindowState
         }
         _stopResumeTracking();
         state = state.copyWith(isWaitingForSurface: false);
-      }),
-    );
-
-    return process;
-  }
-
-  /// Follows the systemd scope the launched application runs in when it
-  /// leaves the launch's own cgroup (see [LaunchScopeTracker]).
-  ///
-  /// The scope appearing means the application really started: the timeout
-  /// no longer applies, and a tile that already gave up waits again (the user
-  /// answered a slow launcher prompt). The scope ending before any window
-  /// means the application quit or crashed on start, which the tile shows
-  /// after [scopeEndGrace] instead of at the timeout.
-  void _followLaunchScope(ScopeIdentity? identity, int launchPid) {
-    if (identity == null) {
-      return;
-    }
-    final slice = appSliceDirectory();
-    if (slice == null) {
-      return;
-    }
-    _launchScope = LaunchScopeTracker.watch(
-      slice: slice,
-      identity: identity,
-      onStarted: (scope) {
-        if (!ref.mounted || state.pid != launchPid) return;
-        matchingLog.info('Launch of tile $windowId started in $scope');
+      case LaunchUnitStarted(:final unit):
+        // The application really started: the timeout no longer applies, and
+        // a tile that already gave up waits again (the user answered a slow
+        // launcher prompt).
+        matchingLog.info('Launch of tile $windowId started in $unit');
         _resumeTimeoutTimer?.cancel();
         _resumeTimeoutTimer = null;
         if (state.metaWindowId == null && state.resumeTimedOut) {
@@ -275,22 +267,18 @@ class PersistentWindowState extends _$PersistentWindowState
             resumeTimedOut: false,
           );
         }
-      },
-      onEnded: (scope) {
-        _launchScope = null;
-        if (!ref.mounted || state.pid != launchPid) return;
+      case LaunchUnitEnded(:final unit):
         if (state.metaWindowId != null || !state.isWaitingForSurface) return;
         matchingLog.info(
-          'Launch of tile $windowId left $scope before any window',
+          'Launch of tile $windowId left $unit before any window',
         );
-        // A single-instance application can start in a scope of its own,
-        // hand the launch to its running instance and leave: that instance's
-        // window is still to come. Give it a moment before showing the
-        // failure.
+        // The application quit or crashed on start. A single-instance
+        // application can also start in a unit of its own, hand the launch to
+        // its running instance and leave, that instance's window still to
+        // come: give it a moment before showing the failure.
         _resumeTimeoutTimer?.cancel();
         _resumeTimeoutTimer = Timer(scopeEndGrace, _onResumeTimeout);
-      },
-    );
+    }
   }
 
   void _onResumeTimeout() {

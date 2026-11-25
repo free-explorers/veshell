@@ -15,6 +15,7 @@ class ResumeLaunchPlan {
     required this.config,
     required this.context,
     this.scope,
+    this.carriedOutBy,
   });
 
   final LaunchConfig config;
@@ -24,7 +25,15 @@ class ResumeLaunchPlan {
   /// own cgroup (a Steam game, `flatpak run`, Chromium), so the tile can
   /// follow it after its own launch process exits.
   final ScopeIdentity? scope;
+
+  /// Desktop ids of the application that carries the launch out (Steam for
+  /// a Steam game): the launch runs as that application's, not the tile's,
+  /// since it may start it.
+  final Set<String>? carriedOutBy;
 }
+
+/// Desktop ids Steam is installed under (native, Flatpak).
+const steamDesktopIds = {'steam', 'com.valvesoftware.Steam'};
 
 /// Builds the launch configuration for a persistent tile.
 ///
@@ -77,6 +86,7 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
       ),
       context: resolved,
       scope: ScopeIdentity.steamGame(steamAppId),
+      carriedOutBy: steamDesktopIds,
     );
   }
 
