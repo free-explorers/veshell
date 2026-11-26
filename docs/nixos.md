@@ -179,6 +179,9 @@ the revision explicitly when embedding the package elsewhere.
   that input (`flutterPkgs` in `default.nix`); the module and overlay build the
   compositor (`nix/package.nix`) with the consumer's nixpkgs, so it must keep
   building on current nixpkgs-unstable and the latest stable release.
+  `.github/workflows/nix-unstable.yml` builds it on the head of
+  nixpkgs-unstable every week and on pull requests that change the Nix build
+  or `Cargo.lock`.
 - The engine closure is published to the `veshell` Cachix cache by
   `flutter-engine-nix`'s release workflow, and each release's package and shell
   bundle by the `nix` job of `.github/workflows/release.yml`, which then moves

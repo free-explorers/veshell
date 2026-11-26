@@ -1,0 +1,64 @@
+name: Nix on unstable
+
+# The NixOS module and the overlay build the compositor with the system's
+# nixpkgs, so a nixpkgs newer than the flake's pin can break it before any of
+# our pins move (libdisplay-info 0.4 did, #330). This builds the overlay's
+# package on the head of nixpkgs-unstable every week, and on pull requests that
+# change the Nix build or Cargo.lock. nixos-unstable trails nixpkgs-unstable
+# with the same packages, so a break shows here first. The engine and the
+# shell bundle come from the veshell cache when they are there.
+
+on:
+  schedule:
+    - cron: "0 6 * * 2"
+  pull_request:
+    branches: [main]
+    paths:
+      - "nix/**"
+      - "default.nix"
+      - "flake.nix"
+      - "flake.lock"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "Makefile"
+      - ".github/workflows/nix-unstable.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nix-unstable-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            extra-substituters = https://veshell.cachix.org
+            extra-trusted-public-keys = veshell.cachix.org-1:C8J71PCJ1Fx4+4shICPNsSOnGgijVEHZCTrWhbYyjOI=
+
+      - name: Build the overlay's package on nixpkgs-unstable
+        run: |
+          set -euo pipefail
+          rev=$(nix flake metadata --json github:NixOS/nixpkgs/nixpkgs-unstable | jq -r .locked.rev)
+          echo "nixpkgs-unstable at $rev" | tee -a "$GITHUB_STEP_SUMMARY"
+          nix build --no-link --print-build-logs --impure --expr "
+            let
+              nixpkgs = builtins.getFlake \"github:NixOS/nixpkgs/$rev\";
+              veshell = builtins.getFlake \"git+file://$PWD\";
+            in
+            (import nixpkgs {
+              system = \"x86_64-linux\";
+              overlays = [ veshell.overlays.default ];
+            }).veshell
+          "
