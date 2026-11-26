@@ -36,13 +36,13 @@ Both parts matter:
 ## Try it
 
 ```sh
-nix run github:free-explorers/veshell
+nix run github:free-explorers/veshell/latest-release
 ```
 
 ## Install it in your profile
 
 ```sh
-nix profile add github:free-explorers/veshell
+nix profile add github:free-explorers/veshell/latest-release
 ```
 
 `nix profile` requires the `nix-command` experimental feature. This puts
@@ -53,7 +53,7 @@ session integration. Use the module below for a complete session.
 
 ```nix
 {
-  inputs.veshell.url = "github:free-explorers/veshell";
+  inputs.veshell.url = "github:free-explorers/veshell/latest-release";
 
   # ... in your nixosSystem modules:
   imports = [ inputs.veshell.nixosModules.default ];
@@ -93,7 +93,7 @@ XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=veshell veshell-session
 For nested testing inside an existing graphical session:
 
 ```sh
-VESHELL_BACKEND=winit RUST_LOG=info nix run github:free-explorers/veshell
+VESHELL_BACKEND=winit RUST_LOG=info nix run github:free-explorers/veshell/latest-release
 ```
 
 ## The Flutter engine
@@ -101,8 +101,14 @@ VESHELL_BACKEND=winit RUST_LOG=info nix run github:free-explorers/veshell
 Veshell builds its matching Flutter engine from source
 ([flutter-engine-nix](https://github.com/free-explorers/flutter-engine-nix), a
 flake input pinned in `flake.lock`). The engine is published to the `veshell`
-Cachix cache, so normal installations substitute it instead of compiling it; the
-SDK, shell and Rust binary build locally in a few minutes.
+Cachix cache, so normal installations substitute it instead of compiling it.
+Each release also publishes the flake's package and the shell bundle, and moves
+the `latest-release` branch to the release commit: `nix run` and
+`nix profile add` from `latest-release` substitute the package, and the module
+and the overlay substitute the bundle and build only the compositor, which
+depends on your nixpkgs, in a few minutes. `nix flake update` follows new
+releases. A reference to `main` (`github:free-explorers/veshell`) gets the
+latest changes instead, and builds them locally.
 
 The flake also advertises the cache through `nixConfig`. Nix only applies that
 for trusted users, and on a stock NixOS every user except `root` is untrusted,
@@ -174,9 +180,13 @@ the revision explicitly when embedding the package elsewhere.
   compositor (`nix/package.nix`) with the consumer's nixpkgs, so it must keep
   building on current nixpkgs-unstable and the latest stable release.
 - The engine closure is published to the `veshell` Cachix cache by
-  `flutter-engine-nix`'s release workflow. Users substitute it; the SDK, shell
-  and package build locally in a few minutes, and a source engine build is only
-  the fallback.
+  `flutter-engine-nix`'s release workflow, and each release's package and shell
+  bundle by the `nix` job of `.github/workflows/release.yml`, which then moves
+  `latest-release` to the release commit. A source engine build is only the
+  fallback.
+- `.github/workflows/update-nixpkgs.yml` opens a pull request every week that
+  moves the `nixpkgs` input. `flutter-engine-nix` is bumped by hand, or by
+  Complete Flutter Bump: its nixpkgs only moves with a new engine build.
 - The Flutter SDK/tooling pins (`nix/flutter-sdk.json`,
   `nix/flutter-tools-lock.json`, the `flutter-engine-nix` node of `flake.lock`,
   `nix/dependencies.nix`) are checked against `veshell-packaging`'s

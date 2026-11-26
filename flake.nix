@@ -11,10 +11,11 @@
   # Veshell's nixpkgs.
   inputs.flutter-engine-nix.url = "github:free-explorers/flutter-engine-nix";
 
-  # Engine, SDK, shell and package closures are published here by the release
-  # workflows, so `nix run` / `nix profile add` substitute instead of compiling
-  # the Flutter engine. Nix applies a flake's substituters only when flake
-  # configuration is accepted; docs/nixos.md shows the manual equivalent.
+  # The engine is published here by flutter-engine-nix's release workflow, and
+  # each release's package and shell bundle by the release workflow, so installs
+  # from latest-release substitute them instead of compiling. Nix applies a
+  # flake's substituters only when flake configuration is accepted;
+  # docs/nixos.md shows the manual equivalent.
   nixConfig = {
     extra-substituters = [ "https://veshell.cachix.org" ];
     extra-trusted-public-keys = [
