@@ -4,10 +4,14 @@ name: Release
 # release pull request (head branch release/v*): it generates and publishes the
 # packaging inputs, syncs the packaging manifest, triggers the distro pipeline
 # (payloads, AUR, COPR, OBS, smoke), then tags the commit and creates the product
-# release. The merged pull request body becomes the release notes.
+# release. The merged pull request body becomes the release notes. The nix job
+# then pushes the release's Nix package and shell bundle to the veshell Cachix
+# cache and moves the latest-release branch to the release commit, which Nix
+# users follow.
 #
 # Requires the PACKAGING_TOKEN secret: a fine-grained token with Contents: write
-# on free-explorers/veshell-packaging.
+# on free-explorers/veshell-packaging, and CACHIX_AUTH_TOKEN: a Cachix auth
+# token with write access to the veshell cache.
 
 on:
   push:
@@ -28,6 +32,9 @@ env:
 jobs:
   release:
     runs-on: ubuntu-24.04
+    outputs:
+      run: ${{ steps.release.outputs.run }}
+      version: ${{ steps.release.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -150,3 +157,54 @@ jobs:
           git tag "v$VERSION"
           git push --quiet origin "v$VERSION"
           gh release create "v$VERSION" --repo "$VESHELL_REPO" --title "v$VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+
+  # A job of its own, so a Nix failure does not hold back the distro release;
+  # latest-release only moves once the cache holds the release.
+  nix:
+    needs: release
+    if: needs.release.outputs.run == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Use the veshell cache
+        uses: cachix/cachix-action@38b082610b782e7e93e209c35fd730d399dee866 # v17
+        with:
+          name: veshell
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          # Only what is built below is pushed, with its closure.
+          skipPush: true
+
+      # The package carries the commit (self.rev), so it is the one a flake
+      # reference to the release tag or to latest-release evaluates. The shell
+      # bundle does not depend on the commit: the module and the overlay
+      # substitute it and build only the compositor, which depends on the
+      # system's nixpkgs. The engine is published by flutter-engine-nix, and the
+      # Flutter SDK only builds the bundle, so neither is pushed here.
+      - name: Build the package and the shell bundle
+        run: |
+          set -euo pipefail
+          nix build --no-link --print-out-paths .#default .#default.shellBundle | tee "$RUNNER_TEMP/paths"
+          echo "built:" >> "$GITHUB_STEP_SUMMARY"
+          sed 's/^/- /' "$RUNNER_TEMP/paths" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push to the cache
+        run: cachix push veshell < "$RUNNER_TEMP/paths"
+
+      # Not forced: releases are merged in order, so the branch only moves
+      # forward, and a push that is not a fast-forward fails instead.
+      - name: Move latest-release to the release
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          git push --quiet origin "$GITHUB_SHA:refs/heads/latest-release"
+          echo "latest-release moved to v$VERSION" | tee -a "$GITHUB_STEP_SUMMARY"

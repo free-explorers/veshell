@@ -1,0 +1,54 @@
+name: Update nixpkgs
+
+# Every week, moves the nixpkgs input to the head of the branch it tracks and
+# opens a pull request. It only rebuilds the Flutter SDK, the shell bundle and
+# the flake's packages: the engine keeps flutter-engine-nix's own nixpkgs. The
+# flutter-engine-nix input is never updated here: a new engine revision has to
+# be built and published to the cache first, and Complete Flutter Bump moves it
+# once it is.
+#
+# Requires PR_TOKEN (see Complete Flutter Bump): Contents and Pull requests,
+# read and write, so the branch is pushed and the pull request opened as a
+# user, and its pull_request runs execute.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          token: ${{ secrets.PR_TOKEN }}
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Update nixpkgs and open a pull request
+        uses: DeterminateSystems/update-flake-lock@da03c0f078bc4b2c37ee4f7e072d34bf8f188bb3 # v29
+        with:
+          inputs: nixpkgs
+          token: ${{ secrets.PR_TOKEN }}
+          branch: update/nixpkgs
+          git-author-name: Veshell release bot
+          git-author-email: releases@veshell.invalid
+          git-committer-name: Veshell release bot
+          git-committer-email: releases@veshell.invalid
+          commit-msg: Update nixpkgs
+          pr-title: Update nixpkgs
+          pr-body: |
+            Moves the `nixpkgs` input to the head of the branch it tracks. The engine keeps flutter-engine-nix's own nixpkgs, so this rebuilds only the Flutter SDK, the shell bundle and the flake's packages.
+
+            ```
+            {{ env.GIT_COMMIT_MESSAGE }}
+            ```

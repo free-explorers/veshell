@@ -66,7 +66,7 @@ Veshell cache), the NixOS module and session setup. With those settings in
 place:
 
 ```sh
-nix run github:free-explorers/veshell
+nix run github:free-explorers/veshell/latest-release
 ```
 
 The project ships no analytics; see
