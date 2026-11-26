@@ -54,7 +54,7 @@ typedef LaunchUnitFollower =
 class LaunchHandle {
   LaunchHandle({
     required this.process,
-    required this.handsOff,
+    this.carriedOutBy,
     LaunchUnitFollower? followUnit,
   }) {
     _tracker = followUnit?.call(
@@ -76,9 +76,13 @@ class LaunchHandle {
   /// without a systemd user manager): its pid keys the execution logs.
   final Process process;
 
-  /// Whether another application carries the launch out (Steam starting a
-  /// game), which may first have to start itself.
-  final bool handsOff;
+  /// Desktop ids of the application that carries the launch out (Steam
+  /// starting a game), or null when the tile's application runs it itself.
+  final Set<String>? carriedOutBy;
+
+  /// Whether another application carries the launch out, which may first
+  /// have to start itself.
+  bool get handsOff => carriedOutBy != null;
 
   LaunchScopeTracker? _tracker;
   final _events = StreamController<LaunchEvent>();

@@ -221,6 +221,11 @@ class PersistentWindowTileable extends Tileable {
           : placeholder,
     );
 
+    final dialogsEnabled = tileShowsDialogs(
+      displayMode: window.displayMode,
+      hasWindow: metaWindowId != null,
+    );
+
     // A floating tile has no dialog panel: every native window — the displayed
     // one and each attached dialog — is an independent floating window in one
     // shared, z-ordered stack. Other display modes keep the dialog area.
@@ -236,7 +241,7 @@ class PersistentWindowTileable extends Tileable {
           )
         : WindowDialogArea(
             parentWindowId: windowId,
-            dialogsEnabled: window.displayMode != DisplayMode.game,
+            dialogsEnabled: dialogsEnabled,
             child: content,
           );
 
@@ -255,7 +260,7 @@ class PersistentWindowTileable extends Tileable {
       ref: ref,
       mainMetaWindowId: metaWindowId,
       dialogWindowIds: dialogWindowIds,
-      dialogsEnabled: window.displayMode != DisplayMode.game,
+      dialogsEnabled: dialogsEnabled,
       allDialogsVisible: window.displayMode == DisplayMode.floating,
       selectedEntry: selectedDialogEntry,
       chooserVisible: chooserVisible,

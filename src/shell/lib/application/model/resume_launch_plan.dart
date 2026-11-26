@@ -4,6 +4,7 @@ import 'package:path/path.dart' as path;
 import 'package:shell/application/model/desktop_exec.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
 import 'package:shell/application/model/launch_scope_tracker.dart';
+import 'package:shell/application/model/steam_game.dart';
 import 'package:shell/application/model/terminal_emulator.dart';
 import 'package:shell/application/model/terminal_program_policy.dart';
 import 'package:shell/shared/util/logger.dart';
@@ -31,9 +32,6 @@ class ResumeLaunchPlan {
   /// since it may start it.
   final Set<String>? carriedOutBy;
 }
-
-/// Desktop ids Steam is installed under (native, Flatpak).
-const steamDesktopIds = {'steam', 'com.valvesoftware.Steam'};
 
 /// Builds the launch configuration for a persistent tile.
 ///
@@ -82,7 +80,11 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
   if (!hasCustomExec && steamAppId != null) {
     return ResumeLaunchPlan(
       config: LaunchConfig(
-        argv: _steamGameCommand(steamAppId, variables, executable),
+        argv: steamGameCommand(
+          steamAppId,
+          environment: variables,
+          isExecutable: executable,
+        ),
         workingDirectory: workingDirectory,
       ),
       context: resolved,
@@ -217,24 +219,6 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
     context: resolved,
     scope: applicationScope,
   );
-}
-
-/// The command that asks Steam to start the game [appId].
-///
-/// `steam` hands the URI to the running client (or starts it). Without one on
-/// `PATH` (Flatpak Steam), the desktop's `steam:` URI handler is used.
-List<String> _steamGameCommand(
-  String appId,
-  Map<String, String> environment,
-  bool Function(String path) isExecutable,
-) {
-  final uri = steamGameUri(appId);
-  final steam = resolveExecutablePath(
-    'steam',
-    environment: environment,
-    isExecutable: isExecutable,
-  );
-  return steam != null ? [steam, uri] : ['xdg-open', uri];
 }
 
 /// The command that runs the captured Windows program through Wine again, or

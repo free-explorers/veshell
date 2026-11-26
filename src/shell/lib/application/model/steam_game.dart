@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:path/path.dart' as p;
+import 'package:shell/application/model/terminal_program_policy.dart';
 
 /// Steam games: their identity in window ids and desktop entries, and the art
 /// Steam caches for them.
@@ -19,6 +21,70 @@ final _windowIdPattern = RegExp(r'^steam_app_(\d+)$');
 String? steamAppIdOfWindow(String? windowId) {
   if (windowId == null) return null;
   return _windowIdPattern.firstMatch(windowId.trim().toLowerCase())?.group(1);
+}
+
+/// Desktop ids Steam is installed under (native, Flatpak).
+const steamDesktopIds = {'steam', 'com.valvesoftware.Steam'};
+
+/// Whether a launch carried out by [desktopIds] (see
+/// `ResumeLaunchPlan.carriedOutBy`) is Steam's.
+bool isCarriedOutBySteam(Set<String>? desktopIds) =>
+    desktopIds != null && desktopIds.any(steamDesktopIds.contains);
+
+/// The Steam URI that starts the game [steamAppId].
+String steamGameUri(String steamAppId) => 'steam://rungameid/$steamAppId';
+
+/// The command that asks Steam to start the game [steamAppId].
+///
+/// `steam` hands the URI to the running client (or starts it). Without one on
+/// `PATH` (Flatpak Steam), the desktop's `steam:` URI handler is used.
+List<String> steamGameCommand(
+  String steamAppId, {
+  required Map<String, String> environment,
+  required bool Function(String path) isExecutable,
+}) {
+  final uri = steamGameUri(steamAppId);
+  final steam = resolveExecutablePath(
+    'steam',
+    environment: environment,
+    isExecutable: isExecutable,
+  );
+  return steam != null ? [steam, uri] : ['xdg-open', uri];
+}
+
+/// The size Steam gives its "Launching..." dialog (its X11 minimum and
+/// maximum size), in logical pixels.
+const steamLaunchingDialogSize = Size(600, 286);
+
+/// Whether a window is one of the Steam client's own (its library, its
+/// dialogs), not a game's: its X11 class is `steam`, whichever helper draws
+/// it (`steamwebhelper` reports itself as the app id).
+bool isSteamClientWindow({String? appId, String? windowClass}) {
+  final id = appId?.trim().toLowerCase();
+  return windowClass?.trim().toLowerCase() == 'steam' ||
+      id == 'steam' ||
+      id == 'steamwebhelper';
+}
+
+/// Whether a window is Steam's "Launching..." dialog, shown while Steam starts
+/// a game.
+///
+/// Its title is translated and Steam sets no other hint of it (its
+/// `STEAM_GAME` is the client's 769, its type `NORMAL`), but its size is
+/// fixed at [steamLaunchingDialogSize]: a Steam client window that is
+/// fixed-size and [size] that size, within a pixel of rounding.
+bool isSteamLaunchingDialog({
+  required bool isFixedSized,
+  String? appId,
+  String? windowClass,
+  Size? size,
+}) {
+  if (!isFixedSized || size == null) return false;
+  if (!isSteamClientWindow(appId: appId, windowClass: windowClass)) {
+    return false;
+  }
+  return (size.width - steamLaunchingDialogSize.width).abs() <= 1 &&
+      (size.height - steamLaunchingDialogSize.height).abs() <= 1;
 }
 
 /// Whether the desktop entry command [exec] starts the Steam game
@@ -55,6 +121,14 @@ List<String> steamRoots({required String home, String? dataHome}) {
       'Steam',
     ),
   ];
+}
+
+/// [steamRoots] for the current user, from `HOME` and `XDG_DATA_HOME` in
+/// [environment]; none without a home directory.
+List<String> steamRootsFromEnvironment(Map<String, String> environment) {
+  final home = environment['HOME'];
+  if (home == null) return const [];
+  return steamRoots(home: home, dataHome: environment['XDG_DATA_HOME']);
 }
 
 /// The art Steam caches for a game in its library cache.

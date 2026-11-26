@@ -190,7 +190,7 @@ class AppLaunch extends _$AppLaunch {
           );
     return LaunchHandle(
       process: process,
-      handsOff: carriedOutBy != null,
+      carriedOutBy: carriedOutBy,
       followUnit: followUnitIn(
         scope == null ? null : appSliceDirectory(),
         scope,

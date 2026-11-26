@@ -65,7 +65,7 @@ class _FakeAppLaunch extends AppLaunch {
     carriers.add(carriedOutBy);
     return LaunchHandle(
       process: process,
-      handsOff: carriedOutBy != null,
+      carriedOutBy: carriedOutBy,
       followUnit: followUnitIn(slice(), scope),
     );
   }

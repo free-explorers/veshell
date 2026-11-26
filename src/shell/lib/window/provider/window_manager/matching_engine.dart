@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/application/model/application_identity.dart';
+import 'package:shell/application/model/steam_game.dart';
 import 'package:shell/application/provider/app_launch.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
 import 'package:shell/dev_tools/provider/matching_logs.dart';
@@ -779,6 +780,54 @@ class MatchingEngine extends _$MatchingEngine {
     }
 
     return false;
+  }
+
+  /// The tile whose launch Steam is carrying out when [metaWindowId] is
+  /// Steam's "Launching..." dialog, or null.
+  ///
+  /// Resuming a Steam game asks Steam to start it, and Steam shows a
+  /// "Launching..." dialog (titled in the user's language) until the game's
+  /// window maps. That dialog is a Steam client window (class `steam`, drawn
+  /// by `steamwebhelper` in Steam's own cgroup): no relation ties it to the
+  /// game's tile, and its class vetoes the tile's `steam_app_<id>`, so it used
+  /// to open a tile of its own. It belongs to the game's tile, shown over its
+  /// placeholder until the game's window takes the tile.
+  ///
+  /// Steam gives the dialog no hint of the game: its `STEAM_GAME` property is
+  /// the client's own 769, its type `NORMAL`, and it shares the group leader
+  /// of every Steam window. What sets it apart is its size, fixed at 600×286
+  /// ([isSteamLaunchingDialog]). It counts only while a tile still waits for
+  /// the first window of a launch Steam carries out
+  /// ([PersistentWindowState.awaitedLaunchCarrier]); of several such tiles,
+  /// the latest launch wins.
+  PersistentWindowId? steamLaunchingDialogTileFor(MetaWindowId metaWindowId) {
+    final metaWindow = ref.readMetaWindow(metaWindowId);
+    if (!isSteamLaunchingDialog(
+      appId: metaWindow.appId,
+      windowClass: metaWindow.windowClass,
+      isFixedSized: metaWindow.isFixedSized,
+      size: metaWindow.geometry?.size,
+    )) {
+      return null;
+    }
+    PersistentWindowId? latest;
+    DateTime? latestSince;
+    for (final windowId in ref.read(windowManagerProvider).windows) {
+      if (windowId is! PersistentWindowId) continue;
+      if (!isCarriedOutBySteam(
+        ref.persistentWindowNotifier(windowId).awaitedLaunchCarrier,
+      )) {
+        continue;
+      }
+      final since = _getWindowMatchingInfo(windowId).waitingForAppSince;
+      if (latest == null ||
+          (since != null &&
+              (latestSince == null || since.isAfter(latestSince)))) {
+        latest = windowId;
+        latestSince = since;
+      }
+    }
+    return latest;
   }
 
   /// Whether [windowId] is a tile currently gathering a launch burst.

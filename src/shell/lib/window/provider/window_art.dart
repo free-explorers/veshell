@@ -114,12 +114,7 @@ Future<WindowArt> _resolve(
   );
 }
 
-List<String> _steamRoots() {
-  final environment = Platform.environment;
-  final home = environment['HOME'];
-  if (home == null) return const [];
-  return steamRoots(home: home, dataHome: environment['XDG_DATA_HOME']);
-}
+List<String> _steamRoots() => steamRootsFromEnvironment(Platform.environment);
 
 SteamLibraryArt _steamLibraryArt(String steamAppId) =>
     findSteamLibraryArt(steamAppId, _steamRoots());

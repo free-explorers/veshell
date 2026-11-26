@@ -355,6 +355,22 @@ a window is instead [extracted to a tile](#extract-to-tile). The client-declared
 still a dialog, and a late activation hint never pulls a fullscreen-like window
 back into its opener's tile.
 
+Steam's **"Launching..." dialog** belongs to the tile whose game it launches.
+Resuming a Steam game asks Steam to start it, and Steam shows that dialog
+(titled in the user's language) until the game's window maps. It is a Steam
+client window (class `steam`, drawn by `steamwebhelper` in Steam's own cgroup):
+no relation ties it to the game's tile, provenance points at Steam's, and its
+class vetoes the tile's `steam_app_<id>`. Steam gives it no hint of the game
+either: its `STEAM_GAME` property is the client's own 769, its type `NORMAL`,
+and it shares the group leader of every Steam window. What sets it apart is its
+size, fixed at 600×286 (its X11 minimum and maximum size); Steam's other
+windows are resizable or sized otherwise ("Sign in to Steam" is 700×440). While
+a tile still waits for the first window of a launch Steam carries out, a Steam
+window of that fixed size is attached as a dialog of that tile, the latest
+launch first when several wait, so it shows over the game's placeholder. The
+game's window then takes the tile through ordinary matching, and a late
+activation hint does not pull the dialog back to Steam's tile.
+
 A tile renders its dialogs through a **dialog area** (`WindowDialogArea`) that
 wraps the tile's content, whether or not it has a main window: when the only
 windows an application opened so far are dialog-like (for example an updater or
@@ -410,8 +426,10 @@ selection falls back to the newest remaining entry. The tile's single focus
 node drives activation of the selected dialog
 (`WindowWidget.activationTarget`), so switching to the tile sends the keyboard
 to the dialog, not to the window behind it; a floating dialog, being on top,
-keeps the keyboard over a selected tab. Game mode keeps ignoring dialogs; the
-chooser still shows.
+keeps the keyboard over a selected tab. Game mode keeps ignoring dialogs over
+its game; the chooser still shows. A game tile without a window shows them over
+its placeholder, where they cover nothing: Steam's "Launching..." dialog shows
+there until the game's window maps.
 
 ### Extract to tile
 

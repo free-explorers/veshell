@@ -247,6 +247,21 @@ class MetaWindowManager extends _$MetaWindowManager {
       }
     }
 
+    // Steam's "Launching..." dialog belongs to the tile of the game it
+    // launches, over its placeholder, rather than to Steam's tile or a tile of
+    // its own. The game's window then takes the tile through ordinary
+    // matching.
+    final steamLaunchingDialogTile = engine.steamLaunchingDialogTileFor(id);
+    if (steamLaunchingDialogTile != null) {
+      _recordRouting(
+        metaWindow,
+        branch: 'steamLaunchingDialog',
+        owner: steamLaunchingDialogTile,
+      );
+      _createDialog(id, steamLaunchingDialogTile);
+      return;
+    }
+
     // A window opened from an owned window once the launch burst has settled
     // (any owner relation: activation, tracked provenance, process sibling)
     // attaches as a dialog of that owner instead of matching an empty same-app
@@ -363,6 +378,14 @@ class MetaWindowManager extends _$MetaWindowManager {
     if (!metaWindow.isModal &&
         metaWindow.parent == null &&
         engine.isFullscreenLike(id)) {
+      return;
+    }
+
+    // Steam's "Launching..." dialog stays on its game's tile: a late
+    // activation hint points at Steam's own window.
+    if (!metaWindow.isModal &&
+        metaWindow.parent == null &&
+        engine.steamLaunchingDialogTileFor(id) != null) {
       return;
     }
 
