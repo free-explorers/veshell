@@ -67,7 +67,7 @@ Service extensions registered by the shell **in debug builds only**
 | `ext.veshell.find` | The widgets matching a type, a key (a `ValueKey`'s value) or a text, each with its global rect, the part ancestor clips leave in view (`visibleRect`), the product of its ancestors' opacities, whether its ancestors paint it at all (`painted`), and whether it is visible. |
 | `ext.veshell.act` | A tap (on a point, or on a found widget's visible center), a key chord delivered through the focus system as a real key press is (Enter in a text field is its input action), or text typed into the focused field. |
 | `ext.veshell.capture` | A PNG of the layer tree a view painted on its last frame (what is on screen, not a fresh paint of a widget), cropped to a region, at a pixel ratio. |
-| `ext.veshell.state` | JSON snapshots of the shell's main stores: screens, workspaces, persistent windows. |
+| `ext.veshell.state` | JSON snapshots of the shell's main stores: screens, workspaces, persistent windows, and their meta windows (the compositor-side state: render and tile origins, geometry, display mode). |
 | `ext.veshell.settled` | Whether the shell is idle: no frame pending, no animation running. Screenshots compared with references wait for it. |
 | `ext.veshell.info` | The embedder's control socket (`VESHELL_PROBE_SOCKET`). |
 | `ext.veshell.clock` | Freezes the animation clock, steps it by an exact duration, resumes it. Frames keep running while frozen; only the time animations see stands still. A frozen clock resumes on its own after 30 s without a call, so a probe that died cannot leave the shell frozen. |
