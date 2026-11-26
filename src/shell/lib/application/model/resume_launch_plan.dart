@@ -39,8 +39,9 @@ const steamDesktopIds = {'steam', 'com.valvesoftware.Steam'};
 ///
 /// Order of resolution:
 ///
-/// 1. a game Steam ran through Proton is started through Steam again, unless
-///    the tile has a custom exec: its captured argv is a Windows command line;
+/// 1. a game Steam launched is started through Steam again, unless the tile
+///    has a custom exec: a Proton game's captured argv is a Windows command
+///    line, and a native game expects Steam's runtime and client;
 /// 2. the tile's custom exec, else the desktop entry's `Exec`, is parsed as
 ///    an `Exec` line and its document field codes are filled from the saved
 ///    context;

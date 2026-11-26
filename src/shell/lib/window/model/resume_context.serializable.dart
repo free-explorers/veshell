@@ -28,11 +28,12 @@ abstract class ResumeContext with _$ResumeContext {
     /// Terminal-only context: the shell and its working directory.
     TerminalResumeContext? terminal,
 
-    /// Steam app id of a game Steam launched through Proton.
+    /// Steam app id of a game Steam launched, native or through Proton.
     ///
-    /// Wine rewrites such a process's argv to its Windows command line
-    /// (`Z:\...\Game.exe`), which no Linux launcher can run: the game is
-    /// relaunched through Steam instead (`steam://rungameid/<id>`).
+    /// The game is relaunched through Steam (`steam://rungameid/<id>`): Wine
+    /// rewrites a Proton game's argv to its Windows command line
+    /// (`Z:\...\Game.exe`), which no Linux launcher can run, and a native
+    /// game expects Steam's runtime and client around it.
     String? steamAppId,
 
     /// How plain Wine (not Proton) ran the program, to run it again.

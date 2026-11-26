@@ -9,24 +9,50 @@ import 'package:shell/window/model/resume_context.serializable.dart';
 
 part 'window_art.g.dart';
 
-/// The art a window's placeholder shows while the application is not running.
+/// Width over height of [WindowArt.portrait]: Steam's library capsule.
+const double portraitArtAspectRatio = 2 / 3;
+
+/// Width over height of [WindowArt.landscape]: Steam's header capsule.
+const double landscapeArtAspectRatio = 460 / 215;
+
+/// The art of the application a window shows: its icon wherever the window
+/// is named, and the artwork and backdrop of its placeholder.
 class WindowArt {
-  const WindowArt({this.iconPath, this.backdrop});
+  const WindowArt({
+    this.iconPath,
+    this.name,
+    this.backdrop,
+    this.portrait,
+    this.landscape,
+  });
 
   /// An icon for `AppIconByPath`: a theme icon name or an absolute path.
   final String? iconPath;
 
+  /// The application's name from its desktop entry, for the icon's letter
+  /// fallback.
+  final String? name;
+
   /// An image of the application, already blurred, to paint behind the
   /// placeholder.
   final File? backdrop;
+
+  /// A cover of the application, [portraitArtAspectRatio], shown in place of
+  /// its icon beside the placeholder's title.
+  final File? portrait;
+
+  /// A banner of the application, [landscapeArtAspectRatio], shown in place
+  /// of its icon above the placeholder's title.
+  final File? landscape;
 }
 
 /// The icon and backdrop of the application a window shows, named by its
 /// [appId] and [windowClass] and by how it was last running
 /// ([resumeContext]), from every source that knows the application:
 /// 1. its desktop entry's icon;
-/// 2. for a Steam game, which often has no desktop entry, Steam's themed icon
-///    or its library cache's, and the cache's blurred banner as backdrop.
+/// 2. for a Steam game, which often has no desktop entry, Steam's themed icon,
+///    client icon or library cache icon, the cache's cover and header as
+///    artwork, and its blurred banner as backdrop.
 ///
 /// Keyed by the fields naming the application only, not the whole window: a
 /// title change must not look the files up again. Not kept alive: Steam fills
@@ -66,27 +92,37 @@ Future<WindowArt> _resolve(
   String? steamAppId,
   Future<File?>? steamThemedIcon,
 ) async {
-  final entryIcon = (await entry)?.entries[DesktopEntryKey.icon.string];
+  final entries = (await entry)?.entries;
+  final entryIcon = entries?[DesktopEntryKey.icon.string];
+  final name = entries?[DesktopEntryKey.name.string];
   if (steamAppId == null) {
-    return WindowArt(iconPath: entryIcon);
+    return WindowArt(iconPath: entryIcon, name: name);
   }
 
   final library = _steamLibraryArt(steamAppId);
+  // The shortcut's themed icon, then the client icon (up to 256 px), then the
+  // library cache's 32 px one.
   final steamIcon = await steamThemedIcon != null
       ? steamIconName(steamAppId)
-      : library.icon?.path;
+      : (await _steamClientIcon(steamAppId))?.path ?? library.icon?.path;
   return WindowArt(
     iconPath: entryIcon ?? steamIcon,
+    name: name,
     backdrop: library.heroBlur,
+    portrait: library.portrait,
+    landscape: library.landscape,
   );
 }
 
-SteamLibraryArt _steamLibraryArt(String steamAppId) {
+List<String> _steamRoots() {
   final environment = Platform.environment;
   final home = environment['HOME'];
-  if (home == null) return const SteamLibraryArt();
-  return findSteamLibraryArt(
-    steamAppId,
-    steamRoots(home: home, dataHome: environment['XDG_DATA_HOME']),
-  );
+  if (home == null) return const [];
+  return steamRoots(home: home, dataHome: environment['XDG_DATA_HOME']);
 }
+
+SteamLibraryArt _steamLibraryArt(String steamAppId) =>
+    findSteamLibraryArt(steamAppId, _steamRoots());
+
+Future<File?> _steamClientIcon(String steamAppId) =>
+    findSteamClientIcon(steamAppId, _steamRoots());

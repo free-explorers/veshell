@@ -7,17 +7,17 @@ void main() {
       'pid': 42,
       'cmdline': [r'Z:\home\user\games\Game.exe'],
       'exe': '/opt/Proton/files/bin/wine64-preloader',
+      'steamAppId': '1091500',
       'wine': {
         'prefix': '/steam/compatdata/1091500/pfx',
-        'steamAppId': '1091500',
         'compatDataPath': '/steam/compatdata/1091500',
         'compatToolPaths': ['/opt/Proton'],
       },
     });
 
+    expect(info.steamAppId, '1091500');
     final wine = info.wine!;
     expect(wine.isProton, isTrue);
-    expect(wine.steamAppId, '1091500');
     expect(wine.compatToolPaths, ['/opt/Proton']);
   });
 

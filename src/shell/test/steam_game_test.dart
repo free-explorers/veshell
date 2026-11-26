@@ -1,10 +1,33 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 import 'package:path/path.dart' as p;
 import 'package:shell/application/model/application_identity.dart';
 import 'package:shell/application/model/steam_game.dart';
+
+/// An `appinfo.vdf` (version 29) holding [records], app id to record body.
+Uint8List _appInfo(Map<int, String> records) {
+  final bytes = BytesBuilder()
+    ..add(_uint32(0x07564429))
+    ..add(_uint32(1))
+    // The string table offset, unused here.
+    ..add(Uint8List(8));
+  for (final MapEntry(key: appId, value: body) in records.entries) {
+    final encoded = latin1.encode(body);
+    bytes
+      ..add(_uint32(appId))
+      ..add(_uint32(encoded.length))
+      ..add(encoded);
+  }
+  bytes.add(_uint32(0));
+  return bytes.toBytes();
+}
+
+Uint8List _uint32(int value) =>
+    (ByteData(4)..setUint32(0, value, Endian.little)).buffer.asUint8List();
 
 LocalizedDesktopEntry _entry({required String id, String? exec}) {
   return LocalizedDesktopEntry(
@@ -75,6 +98,42 @@ void main() {
       expect(art.heroBlur?.path, blur.path);
     });
 
+    test('reads the banner from a hash-named subdirectory', () {
+      final blur = touch(
+        'a/appcache/librarycache/42/e38dad54f59519e592896c889bbfa7c9/'
+        'library_hero_blur.jpg',
+      );
+
+      final art = findSteamLibraryArt('42', [p.join(temp.path, 'a')]);
+
+      expect(art.heroBlur?.path, blur.path);
+    });
+
+    test('reads the cover and the header of each layout', () {
+      final cover = touch('a/appcache/librarycache/42/library_600x900.jpg');
+      final header = touch(
+        'a/appcache/librarycache/42/5ae122faf933516f136578257fe9f6c6/'
+        'library_header.jpg',
+      );
+      final flatCover = touch('b/appcache/librarycache/7_library_600x900.jpg');
+      final flatHeader = touch('b/appcache/librarycache/7_header.jpg');
+      final capsule = touch(
+        'c/appcache/librarycache/9/82061d7868598ec310ee43f38122a5b3/'
+        'library_capsule.jpg',
+      );
+
+      final a = findSteamLibraryArt('42', [p.join(temp.path, 'a')]);
+      final b = findSteamLibraryArt('7', [p.join(temp.path, 'b')]);
+      final c = findSteamLibraryArt('9', [p.join(temp.path, 'c')]);
+
+      expect(a.portrait?.path, cover.path);
+      expect(a.landscape?.path, header.path);
+      expect(b.portrait?.path, flatCover.path);
+      expect(b.landscape?.path, flatHeader.path);
+      expect(c.portrait?.path, capsule.path);
+      expect(c.landscape, isNull);
+    });
+
     test('reads the flat layout of older clients', () {
       final icon = touch('a/appcache/librarycache/42_icon.jpg');
       final blur = touch('a/appcache/librarycache/42_library_hero_blur.jpg');
@@ -135,6 +194,56 @@ void main() {
         ),
         isNull,
       );
+    });
+  });
+
+  group('steamAppInfoHashes', () {
+    const icon = 'd84198725616ae43a74222f559e0fe710c3bb18b';
+    const other = '746ad60be76401ebebf2bbfa485d8934b70c96e6';
+
+    test("reads the hashes of the game's record only", () {
+      final appInfo = _appInfo({
+        7: 'clienticon\x00$other\x00',
+        42:
+            'icon\x00f6da1420a173324d49bcd470fa3eee781ad0fa5e\x00'
+            'clienticon\x00$icon\x00',
+      });
+
+      expect(steamAppInfoHashes(appInfo, '42'), [
+        'f6da1420a173324d49bcd470fa3eee781ad0fa5e',
+        icon,
+      ]);
+      expect(steamAppInfoHashes(appInfo, '7'), [other]);
+      expect(steamAppInfoHashes(appInfo, '8'), isEmpty);
+    });
+
+    test('ignores longer hex runs and unknown files', () {
+      expect(
+        steamAppInfoHashes(_appInfo({42: '${icon}ab\x00'}), '42'),
+        isEmpty,
+      );
+      expect(steamAppInfoHashes(Uint8List.fromList([1, 2, 3]), '42'), isEmpty);
+      expect(steamAppInfoHashes(Uint8List(16), '42'), isEmpty);
+    });
+
+    test('finds the client icon a file exists for', () async {
+      final temp = Directory.systemTemp.createTempSync('steam_icon_');
+      addTearDown(() => temp.deleteSync(recursive: true));
+      File(p.join(temp.path, 'appcache', 'appinfo.vdf'))
+        ..createSync(recursive: true)
+        ..writeAsBytesSync(
+          _appInfo({42: 'icon\x00$other\x00clienticon\x00$icon\x00'}),
+        );
+      final ico = File(p.join(temp.path, 'steam', 'games', '$icon.ico'))
+        ..createSync(recursive: true);
+
+      final found = await findSteamClientIcon('42', [
+        p.join(temp.path, 'missing'),
+        temp.path,
+      ]);
+
+      expect(found?.path, ico.path);
+      expect(await findSteamClientIcon('7', [temp.path]), isNull);
     });
   });
 }

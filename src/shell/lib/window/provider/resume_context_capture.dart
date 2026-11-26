@@ -47,7 +47,7 @@ ResumeContext? captureResumeContextFromProcessInfo(
     workingDirectory: workingDirectory,
     argv: argv,
     executable: executable,
-    steamAppId: wine?.steamAppId,
+    steamAppId: info.steamAppId,
     // A Steam game is relaunched through Steam. Proton is left out of a
     // direct Wine run even outside Steam: its build needs the runtime
     // umu-launcher set up around it.
