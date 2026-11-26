@@ -41,7 +41,8 @@ Commands:
                                   Options: --frames N --track TARGET… --region TARGET
                                   Exact frames with a freezable clock; else --slowdown X.
   clock freeze|step MS|resume|status  Control the animation clock.
-  state [STORE]                   Snapshot the state: all, screens, workspaces, windows.
+  state [STORE]                   Snapshot the state: all, screens, workspaces, windows,
+                                  metaWindows.
   slowdown FACTOR                 Play animations FACTOR times slower (1 restores).
   logs [--seconds S]              What the instance prints over the next S seconds.
   verify [--no-rust] [--no-dart]  The verification gate, with the known failures.
