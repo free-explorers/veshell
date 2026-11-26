@@ -18,6 +18,10 @@
   wayland,
   libinput,
   libdisplay-info,
+  # libdisplay-info-sys 0.3 accepts libdisplay-info < 0.4. nixpkgs keeps 0.3
+  # under this name once its libdisplay-info moves on; before that, the
+  # default one is 0.3.
+  libdisplay-info_0_3 ? libdisplay-info,
   seatd,
   libgbm,
   libGL,
@@ -100,7 +104,7 @@ rustPlatform.buildRustPackage {
   buildInputs = [
     wayland
     libinput
-    libdisplay-info
+    libdisplay-info_0_3
     seatd
     libgbm
     libxkbcommon

@@ -19,27 +19,39 @@
   outputs = { self, nixpkgs }:
     let
       system = "x86_64-linux";
-      pkgs = import nixpkgs { inherit system; };
-      veshell = import ./default.nix {
-        inherit pkgs;
-        buildCommit =
-          if self ? rev then self.rev
-          else if self ? dirtyRev then self.dirtyRev
-          else null;
-      };
+      pkgs = nixpkgs.legacyPackages.${system};
+      buildCommit = self.rev or self.dirtyRev or null;
+
+      # The compositor loads the system's graphics driver (Mesa from
+      # /run/opengl-driver) into its own process, so it must be built with the
+      # system's nixpkgs: a driver built against a newer glibc than the
+      # compositor's fails to load, and EGL then finds no platform at all. The
+      # Flutter SDK and shell bundle stay on this flake's nixpkgs, which their
+      # packaging is verified against; the engine has its own pin.
+      veshellFor =
+        hostPkgs:
+        import ./default.nix {
+          pkgs = hostPkgs;
+          flutterPkgs = pkgs;
+          inherit buildCommit;
+        };
+      veshell = veshellFor pkgs;
 
       # The engine for a runtime mode. release is what the package uses; debug
       # and profile are compiled on demand for development. Nix only builds a
       # mode when something asks for it, so nothing is spent unless it is used.
       enginePackages = mode: pkgs.callPackage ./nix/engine.nix { runtimeMode = mode; };
 
-      # Default the NixOS module to the flake's tested package; an explicit
-      # programs.veshell.package still wins, and the module itself falls back to
-      # the caller's pkgs when it is imported directly by path.
-      module = { lib, ... }: {
-        imports = [ ./nix/module.nix ];
-        programs.veshell.package = lib.mkDefault veshell;
-      };
+      # Default the NixOS module to a compositor built with the system's own
+      # nixpkgs (see veshellFor); an explicit programs.veshell.package still
+      # wins, and the module itself falls back to the caller's pkgs when it is
+      # imported directly by path.
+      module =
+        { lib, pkgs, ... }:
+        {
+          imports = [ ./nix/module.nix ];
+          programs.veshell.package = lib.mkDefault (veshellFor pkgs);
+        };
     in
     {
       packages.${system} = {
@@ -52,8 +64,8 @@
         engine-profile = (enginePackages "profile").engine;
       };
 
-      overlays.default = final: prev: {
-        veshell = import ./default.nix { pkgs = final; };
+      overlays.default = final: _prev: {
+        veshell = veshellFor final;
       };
 
       nixosModules = {

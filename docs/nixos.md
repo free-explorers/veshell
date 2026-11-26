@@ -64,8 +64,17 @@ session integration. Use the module below for a complete session.
 
 The module registers the session and user units and enables what a session needs:
 graphics, D-Bus, polkit with its setuid helper, UPower, PipeWire with
-PulseAudio, and the Veshell portals. It installs the flake's pinned package by
-default; set `programs.veshell.package` to use a different build.
+PulseAudio, and the Veshell portals. By default it builds the compositor with
+your system's nixpkgs, while the Flutter SDK, shell and engine stay on the
+versions Veshell pins; set `programs.veshell.package` to use a different build.
+
+The compositor loads the system's graphics driver from `/run/opengl-driver`
+into its own process, and a driver built against a newer glibc than the
+compositor's fails to load. That is why the module does not install the
+flake's `packages.x86_64-linux.default`, which is built entirely on Veshell's
+pinned nixpkgs: on a system whose nixpkgs is newer, it exits at startup with
+`Egl(DisplayNotSupported)`. The same applies to `nix run` and `nix profile`;
+`overlays.default` builds like the module.
 
 It does not select a display manager, enable automatic login, or change network
 configuration. Build before activating and keep a recovery TTY available:
@@ -126,6 +135,14 @@ the revision explicitly when embedding the package elsewhere.
   to software EGL when no render node exists, but it is slow and clients get
   shared-memory buffers only. Software-only Xvfb is still not a substitute for
   a session.
+- **`Egl(DisplayNotSupported)` at startup:** EGL could not load any driver,
+  so no platform is available. Check that `hardware.graphics.enable` is set
+  (the module sets it) and that
+  `/run/opengl-driver/share/glvnd/egl_vendor.d/` is not empty. If it is not
+  empty, the driver probably failed to load because it was built against a
+  newer glibc than Veshell: use the module or `overlays.default`, which build
+  the compositor with your system's nixpkgs, rather than `nix run` or
+  `nix profile`.
 - **Software rendering is slow:** without a DRM render node Veshell composites
   with software EGL (llvmpipe) and caps the output to 30 fps so the flip-driven
   loop cannot free-run on a virtual display. Set `VESHELL_SOFTWARE_FPS` (for
@@ -149,7 +166,10 @@ the revision explicitly when embedding the package elsewhere.
 
 - `flake.nix` is the single entry point: `packages`, `nixosModules` and
   `overlays`. Its `nixpkgs` input and the engine packaging pin the same nixpkgs
-  revision; keep them in step.
+  revision; keep them in step. The Flutter SDK and shell bundle always build on
+  that input (`flutterPkgs` in `default.nix`); the module and overlay build the
+  compositor (`nix/package.nix`) with the consumer's nixpkgs, so it must keep
+  building on current nixpkgs-unstable and the latest stable release.
 - The engine closure is published to the `veshell` Cachix cache by
   `flutter-engine-nix`'s release workflow. Users substitute it; the SDK, shell
   and package build locally in a few minutes, and a source engine build is only
