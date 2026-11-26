@@ -99,8 +99,8 @@ VESHELL_BACKEND=winit RUST_LOG=info nix run github:free-explorers/veshell
 ## The Flutter engine
 
 Veshell builds its matching Flutter engine from source
-([flutter-engine-nix](https://github.com/free-explorers/flutter-engine-nix),
-pinned in `nix/engine-repository.json`). The engine is published to the `veshell`
+([flutter-engine-nix](https://github.com/free-explorers/flutter-engine-nix), a
+flake input pinned in `flake.lock`). The engine is published to the `veshell`
 Cachix cache, so normal installations substitute it instead of compiling it; the
 SDK, shell and Rust binary build locally in a few minutes.
 
@@ -165,8 +165,11 @@ the revision explicitly when embedding the package elsewhere.
 ## Maintainer notes
 
 - `flake.nix` is the single entry point: `packages`, `nixosModules` and
-  `overlays`. Its `nixpkgs` input and the engine packaging pin the same nixpkgs
-  revision; keep them in step. The Flutter SDK and shell bundle always build on
+  `overlays`. Every pin of the Nix build is in `flake.lock`: `nixpkgs`, and
+  `flutter-engine-nix` with its own `nixpkgs`, which this flake must not make
+  follow its own: the cache holds the engine built from flutter-engine-nix's
+  lock only. `nix/engine-lock.nix` reads the same lock for evaluation without
+  flakes. The Flutter SDK and shell bundle always build on
   that input (`flutterPkgs` in `default.nix`); the module and overlay build the
   compositor (`nix/package.nix`) with the consumer's nixpkgs, so it must keep
   building on current nixpkgs-unstable and the latest stable release.
@@ -175,7 +178,7 @@ the revision explicitly when embedding the package elsewhere.
   and package build locally in a few minutes, and a source engine build is only
   the fallback.
 - The Flutter SDK/tooling pins (`nix/flutter-sdk.json`,
-  `nix/flutter-tools-lock.json`, `nix/engine-repository.json`,
+  `nix/flutter-tools-lock.json`, the `flutter-engine-nix` node of `flake.lock`,
   `nix/dependencies.nix`) are checked against `veshell-packaging`'s
   `release.json` by `scripts/render-recipes.py --check`. Regenerate the shell
   lock JSON with:

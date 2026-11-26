@@ -1,5 +1,23 @@
 {
   "nodes": {
+    "flutter-engine-nix": {
+      "inputs": {
+        "nixpkgs": "nixpkgs"
+      },
+      "locked": {
+        "lastModified": 1795725934,
+        "narHash": "sha256-4wcgMGIUCqXmswvGGUZbbBjmmWa22tMSuanV6jEPiYg=",
+        "owner": "free-explorers",
+        "repo": "flutter-engine-nix",
+        "rev": "9678e40f009dc564516eebe61831e2c9c5f6b4b5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "free-explorers",
+        "repo": "flutter-engine-nix",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1792030654,
@@ -11,14 +29,31 @@
       },
       "original": {
         "owner": "NixOS",
+        "ref": "nixos-26.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1792030654,
+        "narHash": "sha256-OaQwAtPMTjQiY2sT/2/62UbSPhzP/0aDnWzMm/NCiUw=",
+        "owner": "NixOS",
         "repo": "nixpkgs",
         "rev": "26f4107e47e3ad0ffd0db220469ba83b6f6d96e8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-26.05",
+        "repo": "nixpkgs",
         "type": "github"
       }
     },
     "root": {
       "inputs": {
-        "nixpkgs": "nixpkgs"
+        "flutter-engine-nix": "flutter-engine-nix",
+        "nixpkgs": "nixpkgs_2"
       }
     }
   },
