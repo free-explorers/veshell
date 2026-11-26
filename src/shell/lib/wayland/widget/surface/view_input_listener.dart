@@ -101,6 +101,14 @@ class ViewInputListener extends HookConsumerWidget {
           return;
         }
         final offset = globalOffsetForSurface();
+        // An ancestor that does not paint this surface zeroes its paint
+        // transform, so `localToGlobal` is NaN: a workspace page kept alive
+        // off screen, or a FittedBox of empty size. There is no on-screen
+        // origin to report, and the compositor's integer offset cannot carry
+        // NaN; the next build once the surface is painted again publishes it.
+        if (!offset.isFinite) {
+          return;
+        }
         // Keep the focus master's surface-origin registry current. Popup
         // teardown uses it to restore the owner's render-space focus, not the
         // synthetic X11 root position.

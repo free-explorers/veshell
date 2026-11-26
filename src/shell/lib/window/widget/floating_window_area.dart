@@ -157,6 +157,11 @@ class FloatingWindowArea extends HookConsumerWidget {
           return;
         }
         final origin = renderBox.localToGlobal(Offset.zero) + monitorLocation;
+        // An unpainted area (its workspace page kept alive off screen) has a
+        // NaN origin: keep the last finite viewport.
+        if (!origin.isFinite) {
+          return;
+        }
         final next = origin & renderBox.size;
         if (contentRect.value != next) {
           contentRect.value = next;
@@ -192,6 +197,11 @@ class FloatingWindowArea extends HookConsumerWidget {
           return;
         }
         final origin = renderBox.localToGlobal(Offset.zero) + monitorLocation;
+        // An unpainted area (its workspace page kept alive off screen) has a
+        // NaN origin: keep the last finite viewport.
+        if (!origin.isFinite) {
+          return;
+        }
         final next = origin & renderBox.size;
         if (viewportRect.value != next) {
           viewportRect.value = next;
