@@ -9,7 +9,6 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - "nix/engine-repository.json"
       - "flake.nix"
       - "flake.lock"
       - "Cargo.toml"

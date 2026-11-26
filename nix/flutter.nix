@@ -9,13 +9,15 @@
   path,
   runCommand,
   sdkData ? null,
+  # flutter-engine-nix's lib.engineFor; see engine-lock.nix.
+  engineFor ? import ./engine-lock.nix,
 }:
 let
   version = (builtins.fromTOML (builtins.readFile ../Cargo.toml)).package.metadata.flutter_version;
   pins = lib.importJSON ./flutter-sdk.json;
   pin = pins.${version} or (throw "No verified Flutter SDK/engine metadata for Cargo.toml pin ${version}.");
   inherit (pin) engineVersion;
-  enginePackages = callPackage ./engine.nix { };
+  enginePackages = callPackage ./engine.nix { inherit engineFor; };
   sourceBuild = enginePackages.engine;
   flutterPath = path + "/pkgs/development/compilers/flutter";
   flutterPackages = callPackage (flutterPath + "/default.nix") {

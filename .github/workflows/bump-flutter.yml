@@ -5,7 +5,7 @@ name: Bump Flutter Version
 # bump/flutter-v<version> pull request. Merging that PR is what triggers the
 # engine cache (#95) and, later, the release (#99).
 #
-# The prebuilt engine's sha256 and the engine-repository pin cannot exist yet at
+# The prebuilt engine's sha256 and the flutter-engine-nix pin cannot exist yet at
 # this point, so Complete Flutter Bump fills them once those builds land.
 #
 # Requires BUMP_TOKEN: a fine-grained token with Actions: write on
@@ -166,7 +166,7 @@ jobs:
           - [flutter-engine]($ENGINE_RUN) — release/debug/profile prebuilt artifacts
 
           Merging this triggers the engine cache. The prebuilt engine sha256 and the
-          engine-repository pin are filled by Complete Flutter Bump, which each engine
+          flutter-engine-nix pin are filled by Complete Flutter Bump, which each engine
           repository dispatches when its build finishes.
 
           [Bump run]($BUMP_RUN)

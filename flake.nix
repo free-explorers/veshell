@@ -1,9 +1,15 @@
 {
   description = "Veshell — an innovative not-desktop environment built with Flutter and Rust";
 
-  # The Flutter engine packaging (free-explorers/flutter-engine-nix) is evaluated
-  # against this exact nixpkgs revision; its default.nix pins the same one.
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/26f4107e47e3ad0ffd0db220469ba83b6f6d96e8";
+  # The Flutter SDK and shell bundle build on this nixpkgs, and the flake's own
+  # packages entirely; the module and the overlay build the compositor with the
+  # system's (see veshellFor).
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+
+  # The engine keeps the nixpkgs flutter-engine-nix locks: the veshell cache
+  # holds the engine built from that one only, so this input must not follow
+  # Veshell's nixpkgs.
+  inputs.flutter-engine-nix.url = "github:free-explorers/flutter-engine-nix";
 
   # Engine, SDK, shell and package closures are published here by the release
   # workflows, so `nix run` / `nix profile add` substitute instead of compiling
@@ -16,10 +22,11 @@
     ];
   };
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, flutter-engine-nix }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
+      inherit (flutter-engine-nix.lib) engineFor;
       buildCommit = self.rev or self.dirtyRev or null;
 
       # The compositor loads the system's graphics driver (Mesa from
@@ -33,14 +40,17 @@
         import ./default.nix {
           pkgs = hostPkgs;
           flutterPkgs = pkgs;
-          inherit buildCommit;
+          inherit buildCommit engineFor;
         };
       veshell = veshellFor pkgs;
 
       # The engine for a runtime mode. release is what the package uses; debug
       # and profile are compiled on demand for development. Nix only builds a
       # mode when something asks for it, so nothing is spent unless it is used.
-      enginePackages = mode: pkgs.callPackage ./nix/engine.nix { runtimeMode = mode; };
+      enginePackages = mode: pkgs.callPackage ./nix/engine.nix {
+        inherit engineFor;
+        runtimeMode = mode;
+      };
 
       # Default the NixOS module to a compositor built with the system's own
       # nixpkgs (see veshellFor); an explicit programs.veshell.package still
