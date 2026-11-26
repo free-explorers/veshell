@@ -9,7 +9,6 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/icon_background_image.dart';
 import 'package:shell/application/provider/localized_desktop_entries.dart';
-import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/application/widget/logs_viewer.dart';
 import 'package:shell/l10n/l10n.dart';
 import 'package:shell/platform/provider/platform_event_recorder.dart';
@@ -18,8 +17,10 @@ import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
+import 'package:shell/window/provider/window_art.dart';
 import 'package:shell/window/provider/window_preview_image.dart';
 import 'package:shell/window/widget/resume_context_summary.dart';
+import 'package:shell/window/widget/window_icon.dart';
 import 'package:vector_graphics/vector_graphics_compat.dart'
     show RenderingStrategy;
 
@@ -93,7 +94,16 @@ class WindowPlaceholder extends HookConsumerWidget {
 
     final appId = window.properties.appId;
     final entry = ref.watch(localizedDesktopEntryForIdProvider(appId)).value;
-    final iconPath = entry?.entries[DesktopEntryKey.icon.string];
+    final art = ref
+        .watch(
+          windowArtProvider(
+            appId: appId,
+            windowClass: window.properties.windowClass,
+            resumeContext: window.resumeContext,
+          ),
+        )
+        .value;
+    final iconPath = art?.iconPath;
 
     useListenable(focusNode ?? Listenable.merge([]));
     final isFocused = displayFocused ?? focusNode?.hasFocus ?? false;
@@ -184,6 +194,21 @@ class WindowPlaceholder extends HookConsumerWidget {
             6 /
             sqrt(constraints.biggest.shortestSide / 1.2);
 
+        // The application's artwork replaces its icon when it has one: a
+        // cover beside the title keeps the icon's width, a banner above it
+        // keeps the icon's height.
+        final artwork = displayDirection == Axis.horizontal
+            ? art?.portrait
+            : art?.landscape;
+        final artworkAspectRatio = displayDirection == Axis.horizontal
+            ? portraitArtAspectRatio
+            : landscapeArtAspectRatio;
+        final artworkSize = artwork == null
+            ? Size(iconWidth, iconHeight)
+            : displayDirection == Axis.horizontal
+            ? Size(iconWidth, iconWidth / artworkAspectRatio)
+            : Size(iconHeight * artworkAspectRatio, iconHeight);
+
         final magicSpacing =
             constraints.biggest.longestSide *
             6 /
@@ -271,11 +296,15 @@ class WindowPlaceholder extends HookConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   spacing: magicSpacing,
                   children: [
-                    SizedBox(
+                    _PlaceholderArtwork(
                       key: iconKey,
-                      height: iconHeight,
-                      width: iconWidth,
-                      child: hideMorphed(AppIconById(id: appId)),
+                      artwork: artwork,
+                      aspectRatio: artworkAspectRatio,
+                      size: artworkSize,
+                      icon: hideMorphed(
+                        WindowIcon(window: window, title: placeholderTitle),
+                      ),
+                      hide: part == PlaceholderPart.cardContent,
                     ),
                     Flexible(
                       child: Column(
@@ -297,7 +326,7 @@ class WindowPlaceholder extends HookConsumerWidget {
                           const SizedBox(height: 16),
                           ExecCommandEditor(
                             maxWidth: displayDirection == Axis.horizontal
-                                ? constraints.maxWidth / 3 - iconWidth
+                                ? constraints.maxWidth / 3 - artworkSize.width
                                 : constraints.maxWidth / 4,
                             originalExec:
                                 entry?.entries[DesktopEntryKey.exec.string] ??
@@ -368,6 +397,7 @@ class WindowPlaceholder extends HookConsumerWidget {
               Positioned.fill(
                 child: _PlaceholderBackground(
                   iconPath: iconPath,
+                  backdrop: art?.backdrop,
                   windowId: window.windowId,
                 ),
               ),
@@ -695,9 +725,63 @@ class _ResumeActions extends StatelessWidget {
   }
 }
 
+/// The application's artwork in place of its icon, when it has one, at
+/// [size], clamped to the room the card leaves; its [icon] otherwise.
+class _PlaceholderArtwork extends StatelessWidget {
+  const _PlaceholderArtwork({
+    required this.artwork,
+    required this.aspectRatio,
+    required this.size,
+    required this.icon,
+    required this.hide,
+    super.key,
+  });
+
+  final File? artwork;
+  final double aspectRatio;
+  final Size size;
+
+  /// Shown without artwork, or when it fails to load.
+  final Widget icon;
+
+  /// Whether the opening morph paints the icon itself (see `hideMorphed`).
+  final bool hide;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = artwork;
+    if (image == null) {
+      return SizedBox.fromSize(size: size, child: icon);
+    }
+    // The box is clamped to the card's room; the artwork keeps its ratio
+    // inside it.
+    return SizedBox.fromSize(
+      size: size,
+      child: Center(
+        child: AspectRatio(
+          aspectRatio: aspectRatio,
+          child: Opacity(
+            opacity: hide ? 0 : 1,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(size.shortestSide * 0.06),
+              child: Image.file(
+                image,
+                fit: BoxFit.cover,
+                gaplessPlayback: true,
+                errorBuilder: (_, _, _) => icon,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// The ambient wash behind a placeholder: the last window frame when the
 /// compositor persisted one (already blurred for privacy), otherwise the
-/// blurred application icon.
+/// application's own blurred backdrop (see [WindowArt]), otherwise the blurred
+/// application icon.
 ///
 /// The icon is baked once into a small image rather than blurred live: a live
 /// sigma-300 `ImageFiltered` expands its paint bounds by roughly 900 logical
@@ -707,9 +791,13 @@ class _PlaceholderBackground extends ConsumerWidget {
   const _PlaceholderBackground({
     required this.iconPath,
     required this.windowId,
+    this.backdrop,
   });
 
   final String? iconPath;
+
+  /// See [WindowArt.backdrop].
+  final File? backdrop;
   final PersistentWindowId windowId;
 
   @override
@@ -768,6 +856,17 @@ class _PlaceholderBackground extends ConsumerWidget {
         // glass.
         preBlurred: true,
         child: image,
+      );
+    }
+    final image = backdrop;
+    if (image != null) {
+      // Already blurred; cropped to the tile.
+      return Image.file(
+        image,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        // A backdrop removed since it was found falls back to the dark base.
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
       );
     }
     final path = iconPath;

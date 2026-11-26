@@ -1,4 +1,5 @@
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
+import 'package:shell/application/model/steam_game.dart';
 
 /// Application-identity helpers shared by the matcher and the launcher.
 ///
@@ -14,11 +15,14 @@ import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
 /// the system-monitor pair above). The executable is deliberately *not* used:
 /// `Exec`/`TryExec` are shared by unrelated entries (`gnome-control-center`
 /// has 28, `flatpak` 11, `libreoffice` 8), so matching on the basename merges
-/// them.
+/// them. A Steam game URI in `Exec` is the exception: it names one game (see
+/// [resolveLocalizedDesktopEntry]).
 
 /// Resolves the desktop entry for [appId] with the shell's usual rules: an
 /// exact entry id, then the binary name ([binaryToAppId]), then a
-/// case-insensitive `StartupWMClass` scan. Returns null when nothing matches.
+/// case-insensitive `StartupWMClass` scan, then, for a Proton window
+/// (`steam_app_<id>`), the shortcut Steam wrote for that game (its `Exec`
+/// starts `steam://rungameid/<id>`). Returns null when nothing matches.
 LocalizedDesktopEntry? resolveLocalizedDesktopEntry({
   required String appId,
   required Map<String, LocalizedDesktopEntry> entries,
@@ -36,6 +40,15 @@ LocalizedDesktopEntry? resolveLocalizedDesktopEntry({
     final wmClass = _startupWmClass(entry);
     if (wmClass != null && wmClass == normalized) {
       return entry;
+    }
+  }
+  final steamAppId = steamAppIdOfWindow(appId);
+  if (steamAppId != null) {
+    for (final entry in entries.values) {
+      final exec = entry.entries[DesktopEntryKey.exec.string];
+      if (launchesSteamGame(exec, steamAppId)) {
+        return entry;
+      }
     }
   }
   return null;

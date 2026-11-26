@@ -11,16 +11,29 @@ void main() {
         pid: 42,
         cmdline: const [r'Z:\home\user\games\Game.exe'],
         exe: '/opt/Proton/files/bin/wine64-preloader',
-        wine: WineInfoMessage(
-          steamAppId: '1091500',
-          compatDataPath: '/steam/compatdata/1091500',
-        ),
+        steamAppId: '1091500',
+        wine: WineInfoMessage(compatDataPath: '/steam/compatdata/1091500'),
       );
 
       final context = captureResumeContextFromProcessInfo(info)!;
 
       expect(context.steamAppId, '1091500');
       expect(context.displayCommand, 'steam://rungameid/1091500');
+    });
+
+    test('keeps the Steam app id of a native game', () {
+      final info = ProcessInfoMessage(
+        pid: 42,
+        cmdline: const ['./Megabonk.x86_64'],
+        exe: '/steam/steamapps/common/Megabonk/Megabonk.x86_64',
+        steamAppId: '3405340',
+      );
+
+      final context = captureResumeContextFromProcessInfo(info)!;
+
+      expect(context.steamAppId, '3405340');
+      expect(context.wine, isNull);
+      expect(context.displayCommand, 'steam://rungameid/3405340');
     });
 
     test('plain Wine is run again, not sent to Steam', () {
@@ -75,8 +88,8 @@ void main() {
         pid: 42,
         cmdline: const [r'Z:\Game.exe'],
         exe: '/opt/Proton/files/bin/wine',
+        steamAppId: '570',
         wine: WineInfoMessage(
-          steamAppId: '570',
           compatDataPath: '/steam/compatdata/570',
           environment: const {'WINEPREFIX': '/steam/compatdata/570/pfx'},
         ),

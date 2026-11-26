@@ -15,6 +15,7 @@ import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/resume_context.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/model/window_properties.serializable.dart';
+import 'package:shell/window/provider/window_art.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
 
 const _windowId = PersistentWindowId('placeholder-test');
@@ -53,6 +54,7 @@ Future<void> _pumpPlaceholder(
   PersistentWindow window, {
   bool hasDesktopEntry = true,
   List<Override> overrides = const [],
+  Size size = const Size(1280, 800),
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -70,9 +72,8 @@ Future<void> _pumpPlaceholder(
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: Center(
-            child: SizedBox(
-              width: 1280,
-              height: 800,
+            child: SizedBox.fromSize(
+              size: size,
               child: WindowPlaceholder(window: window, isSelected: false),
             ),
           ),
@@ -227,4 +228,67 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  group('artwork', () {
+    final cover = File('/steam/librarycache/42/library_600x900.jpg');
+    final header = File('/steam/librarycache/42/library_header.jpg');
+    final artwork = windowArtProvider.overrideWith(
+      (ref, args) => WindowArt(portrait: cover, landscape: header),
+    );
+
+    Iterable<File> shownFiles(WidgetTester tester) => tester
+        .widgetList<Image>(find.byType(Image))
+        .map((image) => image.image)
+        .whereType<FileImage>()
+        .map((image) => image.file);
+
+    testWidgets('a wide placeholder shows the cover beside the title', (
+      tester,
+    ) async {
+      await _pumpPlaceholder(
+        tester,
+        _window(),
+        hasDesktopEntry: false,
+        overrides: [artwork],
+      );
+      await tester.pump();
+
+      expect(shownFiles(tester), [cover]);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a tall placeholder shows the header above the title', (
+      tester,
+    ) async {
+      tester.view
+        ..physicalSize = const Size(800, 1200)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _pumpPlaceholder(
+        tester,
+        _window(),
+        hasDesktopEntry: false,
+        overrides: [artwork],
+        size: const Size(800, 1200),
+      );
+      await tester.pump();
+
+      expect(shownFiles(tester), [header]);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('without artwork the icon stays', (tester) async {
+      await _pumpPlaceholder(
+        tester,
+        _window(),
+        overrides: [
+          windowArtProvider.overrideWith((ref, args) => const WindowArt()),
+        ],
+      );
+      await tester.pump();
+
+      expect(shownFiles(tester), isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+  });
 }

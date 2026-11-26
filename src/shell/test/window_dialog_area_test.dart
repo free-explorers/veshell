@@ -359,6 +359,20 @@ Widget _areaApp(ProviderContainer container) => UncontrolledProviderScope(
 );
 
 void main() {
+  test('a game tile shows dialogs only while it has no window', () {
+    expect(
+      tileShowsDialogs(displayMode: DisplayMode.game, hasWindow: false),
+      isTrue,
+    );
+    expect(
+      tileShowsDialogs(displayMode: DisplayMode.game, hasWindow: true),
+      isFalse,
+    );
+    for (final mode in [DisplayMode.maximized, DisplayMode.fullscreen]) {
+      expect(tileShowsDialogs(displayMode: mode, hasWindow: true), isTrue);
+    }
+  });
+
   test(
     'dialog display mode keeps the tiled presentation for non-floating tiles',
     () {

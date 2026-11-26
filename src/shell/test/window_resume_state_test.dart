@@ -65,7 +65,7 @@ class _FakeAppLaunch extends AppLaunch {
     carriers.add(carriedOutBy);
     return LaunchHandle(
       process: process,
-      handsOff: carriedOutBy != null,
+      carriedOutBy: carriedOutBy,
       followUnit: followUnitIn(slice(), scope),
     );
   }
@@ -320,10 +320,8 @@ void main() {
           pid: 42,
           cmdline: const [r'Z:\Game.exe'],
           exe: '/opt/Proton/files/bin/wine64-preloader',
-          wine: WineInfoMessage(
-            steamAppId: '570',
-            compatDataPath: '/steam/compatdata/570',
-          ),
+          steamAppId: '570',
+          wine: WineInfoMessage(compatDataPath: '/steam/compatdata/570'),
         ),
       );
       await notifier().launchSelf();
