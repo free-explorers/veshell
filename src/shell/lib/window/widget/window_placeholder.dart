@@ -18,6 +18,7 @@ import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/persistent_window_state.dart';
+import 'package:shell/window/provider/window_art.dart';
 import 'package:shell/window/provider/window_preview_image.dart';
 import 'package:shell/window/widget/resume_context_summary.dart';
 import 'package:vector_graphics/vector_graphics_compat.dart'
@@ -93,7 +94,16 @@ class WindowPlaceholder extends HookConsumerWidget {
 
     final appId = window.properties.appId;
     final entry = ref.watch(localizedDesktopEntryForIdProvider(appId)).value;
-    final iconPath = entry?.entries[DesktopEntryKey.icon.string];
+    final art = ref
+        .watch(
+          windowArtProvider(
+            appId: appId,
+            windowClass: window.properties.windowClass,
+            resumeContext: window.resumeContext,
+          ),
+        )
+        .value;
+    final iconPath = art?.iconPath;
 
     useListenable(focusNode ?? Listenable.merge([]));
     final isFocused = displayFocused ?? focusNode?.hasFocus ?? false;
@@ -275,7 +285,14 @@ class WindowPlaceholder extends HookConsumerWidget {
                       key: iconKey,
                       height: iconHeight,
                       width: iconWidth,
-                      child: hideMorphed(AppIconById(id: appId)),
+                      child: hideMorphed(
+                        iconPath != null
+                            ? AppIconByPath(
+                                path: iconPath,
+                                title: placeholderTitle,
+                              )
+                            : AppIconById(id: appId),
+                      ),
                     ),
                     Flexible(
                       child: Column(
@@ -368,6 +385,7 @@ class WindowPlaceholder extends HookConsumerWidget {
               Positioned.fill(
                 child: _PlaceholderBackground(
                   iconPath: iconPath,
+                  backdrop: art?.backdrop,
                   windowId: window.windowId,
                 ),
               ),
@@ -697,7 +715,8 @@ class _ResumeActions extends StatelessWidget {
 
 /// The ambient wash behind a placeholder: the last window frame when the
 /// compositor persisted one (already blurred for privacy), otherwise the
-/// blurred application icon.
+/// application's own blurred backdrop (see [WindowArt]), otherwise the blurred
+/// application icon.
 ///
 /// The icon is baked once into a small image rather than blurred live: a live
 /// sigma-300 `ImageFiltered` expands its paint bounds by roughly 900 logical
@@ -707,9 +726,13 @@ class _PlaceholderBackground extends ConsumerWidget {
   const _PlaceholderBackground({
     required this.iconPath,
     required this.windowId,
+    this.backdrop,
   });
 
   final String? iconPath;
+
+  /// See [WindowArt.backdrop].
+  final File? backdrop;
   final PersistentWindowId windowId;
 
   @override
@@ -768,6 +791,17 @@ class _PlaceholderBackground extends ConsumerWidget {
         // glass.
         preBlurred: true,
         child: image,
+      );
+    }
+    final image = backdrop;
+    if (image != null) {
+      // Already blurred; cropped to the tile.
+      return Image.file(
+        image,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        // A backdrop removed since it was found falls back to the dark base.
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
       );
     }
     final path = iconPath;
