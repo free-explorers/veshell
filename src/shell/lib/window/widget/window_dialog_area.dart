@@ -19,6 +19,7 @@ import 'package:shell/shared/widget/frosted_surface.dart';
 import 'package:shell/shared/widget/panel_tab.dart';
 import 'package:shell/shared/widget/shell_icon.dart';
 import 'package:shell/window/model/dialog_area_entry.dart';
+import 'package:shell/window/model/persistent_window.serializable.dart';
 import 'package:shell/window/model/window_id.serializable.dart';
 import 'package:shell/window/provider/dialog_set_for_window.dart';
 import 'package:shell/window/provider/dialog_window_state.dart';
@@ -38,6 +39,16 @@ const _panelMarginFactor = 0.06;
 /// button plus 8px of vertical padding on each side. Pre-computed rather than
 /// measured so the content centring lands right on the first frame.
 const _dialogTabBarHeight = 56.0;
+
+/// Whether a tile in [displayMode] shows its native dialogs.
+///
+/// A game tile ignores them over its game, but shows them over its
+/// placeholder while it has no window yet ([hasWindow]), where they cover
+/// nothing: Steam's "Launching..." dialog shows there until the game maps.
+bool tileShowsDialogs({
+  required DisplayMode displayMode,
+  required bool hasWindow,
+}) => displayMode != DisplayMode.game || !hasWindow;
 
 /// The dialog area of a tile: the native windows attached to [parentWindowId]
 /// that are regular top-levels (plus the trusted file chooser) presented as a

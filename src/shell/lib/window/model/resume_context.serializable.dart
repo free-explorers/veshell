@@ -1,5 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:path/path.dart' as path;
+import 'package:shell/application/model/steam_game.dart';
 
 part 'resume_context.serializable.freezed.dart';
 part 'resume_context.serializable.g.dart';
@@ -28,11 +29,12 @@ abstract class ResumeContext with _$ResumeContext {
     /// Terminal-only context: the shell and its working directory.
     TerminalResumeContext? terminal,
 
-    /// Steam app id of a game Steam launched through Proton.
+    /// Steam app id of a game Steam launched, native or through Proton.
     ///
-    /// Wine rewrites such a process's argv to its Windows command line
-    /// (`Z:\...\Game.exe`), which no Linux launcher can run: the game is
-    /// relaunched through Steam instead (`steam://rungameid/<id>`).
+    /// The game is relaunched through Steam (`steam://rungameid/<id>`): Wine
+    /// rewrites a Proton game's argv to its Windows command line
+    /// (`Z:\...\Game.exe`), which no Linux launcher can run, and a native
+    /// game expects Steam's runtime and client around it.
     String? steamAppId,
 
     /// How plain Wine (not Proton) ran the program, to run it again.
@@ -101,9 +103,6 @@ abstract class ResumeContext with _$ResumeContext {
     return program == null || program.isEmpty ? null : program;
   }
 }
-
-/// The Steam URI that starts the game [appId].
-String steamGameUri(String appId) => 'steam://rungameid/$appId';
 
 /// Where programs and their resources are installed, as opposed to where
 /// users keep documents.

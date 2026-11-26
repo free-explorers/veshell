@@ -25,6 +25,11 @@ abstract class ProcessInfoMessage
     String? cwd,
     String? exe,
     TerminalInfoMessage? terminal,
+
+    /// The Steam app id the process was launched as, present only when Steam
+    /// itself launched it: a native game or one run through Proton (not
+    /// Proton run by umu-launcher, which sets the same Steam variables).
+    String? steamAppId,
     WineInfoMessage? wine,
   }) = _ProcessInfoMessage;
 
@@ -70,11 +75,6 @@ abstract class WineInfoMessage with _$WineInfoMessage {
   factory WineInfoMessage({
     /// `WINEPREFIX`, when set.
     String? prefix,
-
-    /// The Steam app id the game was launched as, present only when Steam
-    /// itself launched it (not for Proton run by umu-launcher, which sets the
-    /// same Steam variables).
-    String? steamAppId,
 
     /// `STEAM_COMPAT_DATA_PATH`: set whenever Proton runs, by Steam or by
     /// umu-launcher.

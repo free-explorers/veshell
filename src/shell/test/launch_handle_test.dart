@@ -37,7 +37,7 @@ void main() {
 
   LaunchHandle launch() => LaunchHandle(
     process: process,
-    handsOff: true,
+    carriedOutBy: const {'steam'},
     followUnit: (onStarted, onEnded) => LaunchScopeTracker(
       slicePath: slice,
       identity: const ScopeIdentity.steamGame('570'),

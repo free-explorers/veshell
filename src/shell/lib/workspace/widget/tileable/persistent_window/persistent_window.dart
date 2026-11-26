@@ -7,7 +7,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/application/provider/logs_for_pid.dart';
-import 'package:shell/application/widget/app_icon.dart';
 import 'package:shell/capture/provider/recording_workspaces.dart';
 import 'package:shell/capture/provider/screen_cast_indicator.dart';
 import 'package:shell/file_chooser/provider/file_chooser_for_window.dart';
@@ -32,6 +31,7 @@ import 'package:shell/window/widget/floating_window_area.dart';
 import 'package:shell/window/widget/visible_popup_meta_windows.dart';
 import 'package:shell/window/widget/window.dart';
 import 'package:shell/window/widget/window_dialog_area.dart';
+import 'package:shell/window/widget/window_icon.dart';
 import 'package:shell/window/widget/window_open_transition.dart';
 import 'package:shell/window/widget/window_placeholder.dart';
 import 'package:shell/workspace/provider/launch_morphs.dart';
@@ -221,6 +221,11 @@ class PersistentWindowTileable extends Tileable {
           : placeholder,
     );
 
+    final dialogsEnabled = tileShowsDialogs(
+      displayMode: window.displayMode,
+      hasWindow: metaWindowId != null,
+    );
+
     // A floating tile has no dialog panel: every native window — the displayed
     // one and each attached dialog — is an independent floating window in one
     // shared, z-ordered stack. Other display modes keep the dialog area.
@@ -236,7 +241,7 @@ class PersistentWindowTileable extends Tileable {
           )
         : WindowDialogArea(
             parentWindowId: windowId,
-            dialogsEnabled: window.displayMode != DisplayMode.game,
+            dialogsEnabled: dialogsEnabled,
             child: content,
           );
 
@@ -255,7 +260,7 @@ class PersistentWindowTileable extends Tileable {
       ref: ref,
       mainMetaWindowId: metaWindowId,
       dialogWindowIds: dialogWindowIds,
-      dialogsEnabled: window.displayMode != DisplayMode.game,
+      dialogsEnabled: dialogsEnabled,
       allDialogsVisible: window.displayMode == DisplayMode.floating,
       selectedEntry: selectedDialogEntry,
       chooserVisible: chooserVisible,
@@ -391,7 +396,7 @@ class PersistentWindowTileable extends Tileable {
                         height: 24,
                         width: 24,
                         child: isRunning
-                            ? AppIconById(id: window.properties.appId)
+                            ? WindowIcon(window: window)
                             : ColorFiltered(
                                 colorFilter: const ColorFilter.matrix(<double>[
                                   0.2126, 0.7152, 0.0722, 0, 0, //
@@ -399,7 +404,7 @@ class PersistentWindowTileable extends Tileable {
                                   0.2126, 0.7152, 0.0722, 0, 0,
                                   0, 0, 0, 1, 0,
                                 ]),
-                                child: AppIconById(id: window.properties.appId),
+                                child: WindowIcon(window: window),
                               ),
                       ),
                       const SizedBox(width: 16),

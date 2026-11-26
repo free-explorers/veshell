@@ -77,6 +77,16 @@ class PersistentWindowState extends _$PersistentWindowState
 
   /// Ends everything that follows an in-flight resume: its timeout and its
   /// launch's events. The application itself is left running.
+  /// Desktop ids of the application carrying out the launch this tile still
+  /// waits on for its first window (Steam starting a game), or null.
+  ///
+  /// Steam's "Launching..." dialog shown during the wait belongs to this
+  /// tile, see `MatchingEngine.steamLaunchingDialogTileFor`.
+  Set<String>? get awaitedLaunchCarrier =>
+      state.isWaitingForSurface && state.metaWindowId == null
+      ? _launch?.carriedOutBy
+      : null;
+
   void _stopResumeTracking() {
     _resumeTimeoutTimer?.cancel();
     _resumeTimeoutTimer = null;

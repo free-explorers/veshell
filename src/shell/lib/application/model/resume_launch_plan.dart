@@ -4,6 +4,7 @@ import 'package:path/path.dart' as path;
 import 'package:shell/application/model/desktop_exec.dart';
 import 'package:shell/application/model/launch_config.serializable.dart';
 import 'package:shell/application/model/launch_scope_tracker.dart';
+import 'package:shell/application/model/steam_game.dart';
 import 'package:shell/application/model/terminal_emulator.dart';
 import 'package:shell/application/model/terminal_program_policy.dart';
 import 'package:shell/shared/util/logger.dart';
@@ -32,15 +33,13 @@ class ResumeLaunchPlan {
   final Set<String>? carriedOutBy;
 }
 
-/// Desktop ids Steam is installed under (native, Flatpak).
-const steamDesktopIds = {'steam', 'com.valvesoftware.Steam'};
-
 /// Builds the launch configuration for a persistent tile.
 ///
 /// Order of resolution:
 ///
-/// 1. a game Steam ran through Proton is started through Steam again, unless
-///    the tile has a custom exec: its captured argv is a Windows command line;
+/// 1. a game Steam launched is started through Steam again, unless the tile
+///    has a custom exec: a Proton game's captured argv is a Windows command
+///    line, and a native game expects Steam's runtime and client;
 /// 2. the tile's custom exec, else the desktop entry's `Exec`, is parsed as
 ///    an `Exec` line and its document field codes are filled from the saved
 ///    context;
@@ -81,7 +80,11 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
   if (!hasCustomExec && steamAppId != null) {
     return ResumeLaunchPlan(
       config: LaunchConfig(
-        argv: _steamGameCommand(steamAppId, variables, executable),
+        argv: steamGameCommand(
+          steamAppId,
+          environment: variables,
+          isExecutable: executable,
+        ),
         workingDirectory: workingDirectory,
       ),
       context: resolved,
@@ -216,24 +219,6 @@ ResumeLaunchPlan? buildResumeLaunchPlan({
     context: resolved,
     scope: applicationScope,
   );
-}
-
-/// The command that asks Steam to start the game [appId].
-///
-/// `steam` hands the URI to the running client (or starts it). Without one on
-/// `PATH` (Flatpak Steam), the desktop's `steam:` URI handler is used.
-List<String> _steamGameCommand(
-  String appId,
-  Map<String, String> environment,
-  bool Function(String path) isExecutable,
-) {
-  final uri = steamGameUri(appId);
-  final steam = resolveExecutablePath(
-    'steam',
-    environment: environment,
-    isExecutable: isExecutable,
-  );
-  return steam != null ? [steam, uri] : ['xdg-open', uri];
 }
 
 /// The command that runs the captured Windows program through Wine again, or

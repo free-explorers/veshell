@@ -219,11 +219,11 @@ final List<Map<String, Object?>> probeTools = [
   ),
   _tool(
     'state',
-    "Snapshot the shell's state: screens, workspaces, windows, or all.",
+    "Snapshot the shell's state: screens, workspaces, windows, metaWindows (their compositor-side state, render and tile origins included), or all.",
     {
       'store': {
         'type': 'string',
-        'enum': ['all', 'screens', 'workspaces', 'windows'],
+        'enum': ['all', 'screens', 'workspaces', 'windows', 'metaWindows'],
       },
       ..._url,
     },
