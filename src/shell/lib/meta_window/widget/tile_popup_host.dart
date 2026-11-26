@@ -64,6 +64,12 @@ class TilePopupHost extends HookConsumerWidget {
           return;
         }
         final origin = renderBox.localToGlobal(Offset.zero) + monitorLocation;
+        // An unpainted tile (its workspace page kept alive off screen) has a
+        // NaN origin, which the compositor's integer offset cannot carry:
+        // keep the last one it received until the tile is painted again.
+        if (!origin.isFinite) {
+          return;
+        }
         for (final metaWindowId in metaWindowIds) {
           try {
             unawaited(

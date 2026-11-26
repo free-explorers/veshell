@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/dev_tools/probe/probe_clock.dart';
+import 'package:shell/meta_window/provider/meta_window_state.dart';
 import 'package:shell/monitor/provider/monitor_by_view_id.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/provider/screen_state.dart';
@@ -538,9 +539,10 @@ class VeshellProbe {
   }
 
   /// JSON snapshots of the shell's state: `screens`, `workspaces`,
-  /// `windows`, or `all`.
+  /// `windows`, `metaWindows` (the windows' compositor-side state, origins
+  /// included), or `all`.
   Map<String, Object?> state(String store) {
-    const stores = {'screens', 'workspaces', 'windows'};
+    const stores = {'screens', 'workspaces', 'windows', 'metaWindows'};
     if (store != 'all' && !stores.contains(store)) {
       throw ProbeException('Unknown store "$store": ${stores.join(', ')}, all');
     }
@@ -559,6 +561,10 @@ class VeshellProbe {
       for (final workspace in workspaces.values)
         ...workspace.tileableWindowList,
     ];
+    final metaWindowIds = [
+      for (final id in windowIds)
+        ?container.read(persistentWindowStateProvider(id)).metaWindowId,
+    ];
     Object? json(Object? value) => jsonDecode(jsonEncode(value));
     final snapshot = <String, Object?>{
       'screens': json({
@@ -570,6 +576,12 @@ class VeshellProbe {
       'windows': json({
         for (final id in windowIds)
           id.uuid: container.read(persistentWindowStateProvider(id)).toJson(),
+      }),
+      'metaWindows': json({
+        for (final metaWindowId in metaWindowIds)
+          metaWindowId: container
+              .read(metaWindowStateProvider(metaWindowId))
+              .toJson(),
       }),
     };
     return store == 'all' ? snapshot : {store: snapshot[store]};
