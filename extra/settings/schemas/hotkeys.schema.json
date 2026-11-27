@@ -92,6 +92,23 @@
                     "$ref": "#/$defs/hotkeyList"
                 }
             }
+        },
+        "layout": {
+            "type": "object",
+            "properties": {
+                "increaseVisibleTiles": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "decreaseVisibleTiles": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "increaseScreens": {
+                    "$ref": "#/$defs/hotkeyList"
+                },
+                "decreaseScreens": {
+                    "$ref": "#/$defs/hotkeyList"
+                }
+            }
         }
     },
     "additionalProperties": false

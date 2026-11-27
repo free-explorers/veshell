@@ -10,6 +10,7 @@ import 'package:shell/settings/provider/state/focus_indicator_setting.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/saturation_filter.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
+import 'package:shell/shortcut_manager/model/layout_intents.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/tile_grab/model/tile_drop.dart';
 import 'package:shell/tile_grab/model/tile_grab_marker.dart';
@@ -234,6 +235,15 @@ class WorkspaceWidget extends HookConsumerWidget {
                 return null;
               },
             ),
+            ChangeVisibleTileCountIntent:
+                CallbackAction<ChangeVisibleTileCountIntent>(
+                  onInvoke: (intent) {
+                    ref
+                        .read(workspaceStateProvider(workspaceId).notifier)
+                        .changeVisibleLength(intent.delta);
+                    return null;
+                  },
+                ),
             CloseIntent: CallbackAction<CloseIntent>(
               onInvoke: (_) {
                 final tileable = tileableList[workspaceState.selectedIndex];

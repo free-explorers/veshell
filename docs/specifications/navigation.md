@@ -138,6 +138,8 @@ Shipped defaults:
 | `Super+Shift+W/S/A/D` (+ arrows) | left/right reorder the tileable; up/down send it to the workspace above/below and follow it there |
 | `Enter` / `Numpad Enter` | Activate |
 | `Super+Q` | Close |
+| `Super+=` / `Super+-` (+ numpad `+`/`-`) | Show one tile more or fewer side by side in the focused workspace, down to one (`layout.increaseVisibleTiles`, `layout.decreaseVisibleTiles`) |
+| `Super+Shift+=` / `Super+Shift+-` (+ numpad) | Add a screen to the focused screen's monitor, or remove its last one, down to one (`layout.increaseScreens`, `layout.decreaseScreens`) |
 | `Super+Tab` / `Super+Shift+Tab` | Cycle the overview search mode |
 | `Escape` | Dismiss (overview) |
 

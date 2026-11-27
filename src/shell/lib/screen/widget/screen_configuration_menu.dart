@@ -54,30 +54,15 @@ class ScreenConfigurationMenu extends HookConsumerWidget {
               NumberPicker(
                 allowKeyboardInput: false,
                 value: screenConfiguration.screenList.length,
-                minValue: 0,
+                minValue: 1,
                 onValueChange: (value) {
+                  final notifier = ref.read(
+                    monitorConfigurationStateProvider(monitorName).notifier,
+                  );
                   if (value > screenConfiguration.screenList.length) {
-                    var screenToUse = ref
-                        .read(availableScreenListProvider)
-                        .firstOrNull;
-                    screenToUse ??= ref
-                        .read(screenManagerProvider.notifier)
-                        .createNewScreen();
-                    ref
-                        .read(
-                          monitorConfigurationStateProvider(
-                            monitorName,
-                          ).notifier,
-                        )
-                        .addNewScreenConfiguration(screenToUse);
+                    notifier.addScreen();
                   } else {
-                    ref
-                        .read(
-                          monitorConfigurationStateProvider(
-                            monitorName,
-                          ).notifier,
-                        )
-                        .removeLastScreenConfiguration();
+                    notifier.removeLastScreenConfiguration();
                   }
                 },
               ),

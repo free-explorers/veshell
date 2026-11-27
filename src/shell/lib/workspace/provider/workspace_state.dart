@@ -1,6 +1,8 @@
 // Enum values spell freedesktop menu categories exactly (Game, AudioVideo...).
 // ignore_for_file: constant_identifier_names
 
+import 'dart:math' as math;
+
 import 'package:collection/collection.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:freedesktop_desktop_entry/freedesktop_desktop_entry.dart';
@@ -316,6 +318,12 @@ class WorkspaceState extends _$WorkspaceState {
 
   void setVisibleLength(int length) {
     state = state.copyWith(visibleLength: length);
+  }
+
+  /// Shows [delta] more tiles side by side (fewer when negative), never
+  /// fewer than one.
+  void changeVisibleLength(int delta) {
+    setVisibleLength(math.max(1, state.visibleLength + delta));
   }
 
   Future<WorkspaceCategory?> _determineCategory(

@@ -35,9 +35,12 @@ MonitorConfiguration _configuration(List<ScreenConfiguration> screens) =>
 /// A screen manager without persisted storage; removing a monitor's last
 /// screen asks it to drop that screen.
 class _FakeScreenManager extends ScreenManager {
+  _FakeScreenManager([this.screenIds = const ISetConst({})]);
+
+  final ISet<ScreenId> screenIds;
+
   @override
-  ScreenManagerState build() =>
-      const ScreenManagerState(screenIds: ISetConst({}));
+  ScreenManagerState build() => ScreenManagerState(screenIds: screenIds);
 
   @override
   void removeIfEmpty(ScreenId screenId) {}
@@ -61,10 +64,12 @@ MonitorConfigurationState notifierFor(MonitorConfiguration configuration) {
 /// Two connected monitors, `DP-1` and `HDMI-1`, with the given layouts.
 ProviderContainer twoMonitors(
   MonitorConfiguration dp,
-  MonitorConfiguration hdmi,
-) {
+  MonitorConfiguration hdmi, {
+  ISet<ScreenId> screenIds = const ISetConst({}),
+}) {
   final twoMonitorContainer = ProviderContainer(
     overrides: [
+      screenManagerProvider.overrideWith(() => _FakeScreenManager(screenIds)),
       activeMonitorIdsProvider.overrideWithValue({'DP-1', 'HDMI-1'}.lock),
       monitorConfigurationStateProvider(
         'DP-1',
@@ -276,6 +281,41 @@ void main() {
         jsonDecode(jsonEncode(configuration.toJson())) as Map<String, dynamic>,
       ),
       configuration,
+    );
+  });
+
+  test('adding a screen takes the first one no monitor shows', () {
+    final container = twoMonitors(
+      _configuration([_screen('a', flex: 100)]),
+      _configuration([_screen('c', flex: 100)]),
+      screenIds: {'a', 'c', 'b', 'd'}.lock,
+    );
+
+    container
+        .read(monitorConfigurationStateProvider('DP-1').notifier)
+        .addScreen();
+
+    expect(screenIdsOf(container, 'DP-1'), ['a', 'b']);
+    expect(screenIdsOf(container, 'HDMI-1'), ['c']);
+  });
+
+  test('adding a screen creates one when every screen is shown', () {
+    final container = twoMonitors(
+      _configuration([_screen('a', flex: 100)]),
+      _configuration([_screen('c', flex: 100)]),
+      screenIds: {'a', 'c'}.lock,
+    );
+
+    container
+        .read(monitorConfigurationStateProvider('DP-1').notifier)
+        .addScreen();
+
+    final screenIds = screenIdsOf(container, 'DP-1');
+    expect(screenIds, hasLength(2));
+    expect(screenIds.last, isNot(anyOf('a', 'c')));
+    expect(
+      container.read(screenManagerProvider).screenIds,
+      contains(screenIds.last),
     );
   });
 }

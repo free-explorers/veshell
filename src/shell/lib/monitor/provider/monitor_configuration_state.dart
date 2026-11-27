@@ -63,6 +63,32 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
     );
   }
 
+  /// Adds a screen to this monitor: the first screen no monitor shows, or a
+  /// new one when every screen is shown.
+  void addScreen() {
+    // Not `availableScreenListProvider`: it watches this very provider, so
+    // reading it from here is a dependency cycle.
+    final shownScreenIds = {
+      for (final configuration in state.screenList) configuration.screenId,
+      for (final otherMonitorId in ref.read(activeMonitorIdsProvider))
+        if (otherMonitorId != monitorId)
+          for (final configuration
+              in ref
+                  .read(monitorConfigurationStateProvider(otherMonitorId))
+                  .screenList)
+            configuration.screenId,
+    };
+    final screenId =
+        ref
+            .read(screenManagerProvider)
+            .screenIds
+            .firstWhereOrNull(
+              (screenId) => !shownScreenIds.contains(screenId),
+            ) ??
+        ref.read(screenManagerProvider.notifier).createNewScreen();
+    addNewScreenConfiguration(screenId);
+  }
+
   void removeLastScreenConfiguration() {
     if (state.screenList.isEmpty) {
       return;

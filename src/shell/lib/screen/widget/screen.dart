@@ -3,6 +3,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/dev_tools/provider/dev_tools_enabled.dart';
 import 'package:shell/dev_tools/widget/dev_tools_overview.dart';
+import 'package:shell/monitor/provider/monitor_configuration_state.dart';
+import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/overview.dart';
 import 'package:shell/overview/widget/overview_blur_target.dart';
@@ -14,6 +16,7 @@ import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/screen/widget/screen_panel.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
+import 'package:shell/shortcut_manager/model/layout_intents.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
 import 'package:shell/status_bar/provider/status_bar_settings.dart';
@@ -81,6 +84,21 @@ class ScreenWidget extends HookConsumerWidget {
             onInvoke: (_) {
               print('In DumpDebugFocusTree');
               debugDumpFocusTree();
+              return null;
+            },
+          ),
+          // The screen count belongs to this screen's monitor; it never goes
+          // below one from a hotkey.
+          ChangeScreenCountIntent: CallbackAction<ChangeScreenCountIntent>(
+            onInvoke: (intent) {
+              final provider = monitorConfigurationStateProvider(
+                CurrentMonitorName.of(context),
+              );
+              if (intent.delta > 0) {
+                ref.read(provider.notifier).addScreen();
+              } else if (ref.read(provider).screenList.length > 1) {
+                ref.read(provider.notifier).removeLastScreenConfiguration();
+              }
               return null;
             },
           ),

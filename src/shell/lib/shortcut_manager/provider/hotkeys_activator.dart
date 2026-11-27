@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/settings/provider/state/hotkeys_setting.dart';
+import 'package:shell/shortcut_manager/model/layout_intents.dart';
 import 'package:shell/shortcut_manager/model/media_intents.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
@@ -37,7 +38,11 @@ enum HotkeysAction {
   moveLeft('navigation.moveLeft'),
   moveRight('navigation.moveRight'),
   activate('navigation.activate'),
-  close('navigation.close');
+  close('navigation.close'),
+  increaseVisibleTiles('layout.increaseVisibleTiles'),
+  decreaseVisibleTiles('layout.decreaseVisibleTiles'),
+  increaseScreens('layout.increaseScreens'),
+  decreaseScreens('layout.decreaseScreens');
 
   const HotkeysAction(this.actionId);
   final String actionId;
@@ -68,6 +73,10 @@ Intent getActionIntent(HotkeysAction action) => switch (action) {
   HotkeysAction.moveRight => const MoveIntent(NavigationDirection.right),
   HotkeysAction.activate => const ActivateIntent(),
   HotkeysAction.close => const CloseIntent(),
+  HotkeysAction.increaseVisibleTiles => const ChangeVisibleTileCountIntent(1),
+  HotkeysAction.decreaseVisibleTiles => const ChangeVisibleTileCountIntent(-1),
+  HotkeysAction.increaseScreens => const ChangeScreenCountIntent(1),
+  HotkeysAction.decreaseScreens => const ChangeScreenCountIntent(-1),
 };
 
 @riverpod
