@@ -18,6 +18,12 @@ abstract class MonitorConfiguration with _$MonitorConfiguration {
   factory MonitorConfiguration({
     required IList<ScreenConfiguration> screenList,
     required ScreenDisplayMode displayMode,
+
+    /// The flex of each screen the user last set by dragging a divider, by
+    /// screen count (as a string: JSON object keys are strings). Adding or
+    /// removing a screen restores the split saved for the new count.
+    @Default(IMapConst<String, IList<int>>({}))
+    IMap<String, IList<int>> flexForScreenCount,
   }) = _MonitorConfiguration;
   MonitorConfiguration._();
   factory MonitorConfiguration.fromJson(Map<String, dynamic> json) =>

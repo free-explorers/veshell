@@ -12,7 +12,9 @@ import 'package:shell/monitor/provider/platform_focused_view.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/screen/model/screen_manager_state.serializable.dart';
 import 'package:shell/screen/provider/screen_for_view.dart';
+import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
+import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/settings/provider/state/focus_indicator_setting.dart';
 import 'package:shell/status_bar/provider/status_bar_settings.dart';
@@ -50,6 +52,17 @@ Monitor _monitor(String name, {required int viewId}) => Monitor(
 class _FakeWindowManager extends WindowManager {
   @override
   WindowManagerState build() => WindowManagerState(windows: <WindowId>{}.lock);
+}
+
+/// A screen showing [_workspace], without persisted storage: the workspaces
+/// read their screen (its zen mode).
+class _FixedScreenState extends ScreenState {
+  @override
+  Screen build(ScreenId screenId) => Screen(
+    screenId: screenId,
+    workspaceList: const IListConst([_workspace]),
+    selectedIndex: 0,
+  );
 }
 
 class _FakeWorkspaceState extends WorkspaceState {
@@ -101,6 +114,7 @@ void main() {
         windowManagerProvider.overrideWith(_FakeWindowManager.new),
         focusIndicatorSettingProvider.overrideWithValue(FocusIndicator.border),
         statusBarSettingsProvider.overrideWithValue(statusBarSettingsFallback),
+        screenStateProvider.overrideWith(_FixedScreenState.new),
         workspaceStateProvider(
           _workspace,
         ).overrideWith(_FakeWorkspaceState.new),
@@ -184,6 +198,7 @@ void main() {
         windowManagerProvider.overrideWith(_FakeWindowManager.new),
         focusIndicatorSettingProvider.overrideWithValue(FocusIndicator.border),
         statusBarSettingsProvider.overrideWithValue(statusBarSettingsFallback),
+        screenStateProvider.overrideWith(_FixedScreenState.new),
         workspaceStateProvider(
           _workspace,
         ).overrideWith(_FakeWorkspaceState.new),
@@ -261,6 +276,7 @@ void main() {
         windowManagerProvider.overrideWith(_FakeWindowManager.new),
         focusIndicatorSettingProvider.overrideWithValue(FocusIndicator.border),
         statusBarSettingsProvider.overrideWithValue(statusBarSettingsFallback),
+        screenStateProvider.overrideWith(_FixedScreenState.new),
         workspaceStateProvider(
           workspaceA,
         ).overrideWith(_FakeWorkspaceState.new),
@@ -346,6 +362,7 @@ void main() {
         windowManagerProvider.overrideWith(_FakeWindowManager.new),
         focusIndicatorSettingProvider.overrideWithValue(FocusIndicator.border),
         statusBarSettingsProvider.overrideWithValue(statusBarSettingsFallback),
+        screenStateProvider.overrideWith(_FixedScreenState.new),
         workspaceStateProvider(
           workspaceA,
         ).overrideWith(_FakeWorkspaceState.new),

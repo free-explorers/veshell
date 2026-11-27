@@ -454,6 +454,35 @@ class SettingsProperties extends _$SettingsProperties {
                 description: l10n.closeTileableDescription,
                 converter: const LogicalKeySetListConverter(),
               ),
+              // The focused workspace's visible tiles and the screens of the
+              // focused screen's monitor; neither goes below one.
+              'layout.increaseVisibleTiles':
+                  SettingProperty<List<LogicalKeySet>>(
+                    name: l10n.increaseVisibleTiles,
+                    description: l10n.increaseVisibleTilesDescription,
+                    converter: const LogicalKeySetListConverter(),
+                  ),
+              'layout.decreaseVisibleTiles':
+                  SettingProperty<List<LogicalKeySet>>(
+                    name: l10n.decreaseVisibleTiles,
+                    description: l10n.decreaseVisibleTilesDescription,
+                    converter: const LogicalKeySetListConverter(),
+                  ),
+              'layout.increaseScreens': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.increaseScreens,
+                description: l10n.increaseScreensDescription,
+                converter: const LogicalKeySetListConverter(),
+              ),
+              'layout.decreaseScreens': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.decreaseScreens,
+                description: l10n.decreaseScreensDescription,
+                converter: const LogicalKeySetListConverter(),
+              ),
+              'layout.toggleZenMode': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.zenMode,
+                description: l10n.zenModeDescription,
+                converter: const LogicalKeySetListConverter(),
+              ),
             },
           ),
         },

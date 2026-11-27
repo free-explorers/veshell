@@ -25,6 +25,19 @@ redundant blank); restore normalizes it before the screen builds by appending a
 fresh empty workspace, so the last slot is usable immediately instead of only
 after the next workspace change.
 
+## Zen mode
+
+A screen's `zenMode` (persisted with the screen) hides its panels: the screen
+panel slides out to the left and each workspace's panel slides out to the top,
+both leaving only their 2 px selection line in view (`ZenCollapse`), so the
+selected workspace and tile still show. The Helm button at the top of the
+screen panel and the status bar (top panel or notch) collapse entirely. The space the panels gave up goes to the workspaces, so
+their windows grow. Collapsed panels take no pointer or focus.
+
+It is toggled per screen by the `layout.toggleZenMode` hotkey (`Super+Z` by
+default) on the focused screen, or from a screen's options in the screen menu,
+whose list marks a screen in zen mode next to its monitor.
+
 ## Focused screen
 
 `focusedScreenProvider` holds the screen that currently owns focus, or `null`
@@ -33,9 +46,10 @@ set:
 
 - A still-valid focused screen is preserved when other screens are created or
   removed.
-- If the focused screen is deleted, `ScreenManager.removeScreen` moves focus to
-  the first remaining screen before deleting it; if none remain the value is
-  `null`.
+- If the focused screen is deleted, focus moves to the first remaining
+  screen; if none remain the value is `null`. `FocusedScreen` rebuilds from the
+  screen set it watches, so `ScreenManager.removeScreen` does not touch it
+  (reading it from there would be a dependency cycle).
 - The value never points at a deleted screen and never throws.
 
 Readers treat `null` as "nothing focused": a new window is left unplaced rather

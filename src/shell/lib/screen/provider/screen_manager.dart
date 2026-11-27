@@ -4,7 +4,6 @@ import 'package:riverpod_annotation/experimental/json_persist.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/model/screen_manager_state.serializable.dart';
-import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/shared/provider/persistent_storage_state.dart';
 import 'package:shell/workspace/provider/workspace_state.dart';
@@ -36,15 +35,10 @@ class ScreenManager extends _$ScreenManager {
     return screenId;
   }
 
+  /// Deletes [screenId]. `FocusedScreen` watches [state], so a focused screen
+  /// that is removed hands the focus on by itself; reading it from here would
+  /// be a dependency cycle.
   void removeScreen(ScreenId screenId) {
-    if (ref.read(focusedScreenProvider) == screenId) {
-      final remainingScreenIds = state.screenIds.remove(screenId);
-      ref
-          .read(focusedScreenProvider.notifier)
-          .setFocusedScreen(
-            remainingScreenIds.isEmpty ? null : remainingScreenIds.first,
-          );
-    }
     ref.screenNotifier(screenId).delete();
     state = state.copyWith(screenIds: state.screenIds.remove(screenId));
   }
@@ -54,7 +48,7 @@ class ScreenManager extends _$ScreenManager {
     if (screen.workspaceList.length == 1) {
       final workspace = ref.readWorkspace(screen.workspaceList.first);
       if (workspace.tileableWindowList.isEmpty) {
-        ref.read(screenManagerProvider.notifier).removeScreen(screenId);
+        removeScreen(screenId);
       }
     }
   }

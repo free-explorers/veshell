@@ -18,6 +18,10 @@ abstract class Screen with _$Screen {
     required IList<WorkspaceId> workspaceList,
     required int selectedIndex,
     String? label,
+
+    /// Whether the screen hides its panels, leaving only their selection
+    /// lines in view (see `ZenCollapse`).
+    @Default(false) bool zenMode,
   }) = _Screen;
   Screen._();
   factory Screen.fromJson(Map<String, dynamic> json) => _$ScreenFromJson(json);

@@ -3,6 +3,8 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:shell/dev_tools/provider/dev_tools_enabled.dart';
 import 'package:shell/dev_tools/widget/dev_tools_overview.dart';
+import 'package:shell/monitor/provider/monitor_configuration_state.dart';
+import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/overview/widget/overview.dart';
 import 'package:shell/overview/widget/overview_blur_target.dart';
@@ -12,8 +14,11 @@ import 'package:shell/screen/provider/pointer_screen.dart';
 import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/screen/widget/screen_panel.dart';
+import 'package:shell/screen/widget/zen_collapse.dart';
+import 'package:shell/theme/provider/theme.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/sliding_container.dart';
+import 'package:shell/shortcut_manager/model/layout_intents.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/model/screen_shortcuts.dart';
 import 'package:shell/status_bar/provider/status_bar_settings.dart';
@@ -81,6 +86,27 @@ class ScreenWidget extends HookConsumerWidget {
             onInvoke: (_) {
               print('In DumpDebugFocusTree');
               debugDumpFocusTree();
+              return null;
+            },
+          ),
+          // The screen count belongs to this screen's monitor; it never goes
+          // below one from a hotkey.
+          ChangeScreenCountIntent: CallbackAction<ChangeScreenCountIntent>(
+            onInvoke: (intent) {
+              final provider = monitorConfigurationStateProvider(
+                CurrentMonitorName.of(context),
+              );
+              if (intent.delta > 0) {
+                ref.read(provider.notifier).addScreen();
+              } else if (ref.read(provider).screenList.length > 1) {
+                ref.read(provider.notifier).removeLastScreenConfiguration();
+              }
+              return null;
+            },
+          ),
+          ToggleZenModeIntent: CallbackAction<ToggleZenModeIntent>(
+            onInvoke: (_) {
+              ref.read(screenStateProvider(screenId).notifier).toggleZenMode();
               return null;
             },
           ),
@@ -206,7 +232,14 @@ class ScreenWidget extends HookConsumerWidget {
                                         (settings) => settings.showsTopPanel,
                                       ),
                                     ))
-                                      const StatusTopPanel(),
+                                      ZenCollapse(
+                                        collapsed: screenState.zenMode,
+                                        axis: Axis.vertical,
+                                        extent: StatusTopPanel.height,
+                                        alignment: Alignment.bottomCenter,
+                                        visibleExtent: 0,
+                                        child: const StatusTopPanel(),
+                                      ),
                                     Expanded(
                                       child: Stack(
                                         children: [
@@ -249,9 +282,17 @@ class ScreenWidget extends HookConsumerWidget {
                                   ],
                                 ),
                               ),
-                              const Material(
-                                elevation: 4,
-                                child: ScreenPanel(),
+                              // Its selection line is on its inner, right
+                              // edge, which zen mode leaves in view.
+                              ZenCollapse(
+                                collapsed: screenState.zenMode,
+                                axis: Axis.horizontal,
+                                extent: panelSize,
+                                alignment: Alignment.centerRight,
+                                child: const Material(
+                                  elevation: 4,
+                                  child: ScreenPanel(),
+                                ),
                               ),
                             ],
                           ),
@@ -287,12 +328,24 @@ class _PlacedStatusNotch extends ConsumerWidget {
     if (!ref.watch(statusBarSettingsProvider.select((s) => s.showsNotch))) {
       return const SizedBox.shrink();
     }
+    // It hangs from the workspace panel, which zen mode slides out.
+    final zenMode = ref.watch(
+      screenStateProvider(screenId).select((screen) => screen.zenMode),
+    );
     return PositionedDirectional(
       top: 0,
       end: trailingWidth - StatusNotch.pickerOverlap,
       child: Visibility.maintain(
         visible: trailingWidth > 0,
-        child: const StatusNotch(),
+        child: IgnorePointer(
+          ignoring: zenMode,
+          child: AnimatedSlide(
+            offset: zenMode ? const Offset(0, -1) : Offset.zero,
+            duration: Durations.medium2,
+            curve: Curves.easeInOutCubic,
+            child: const StatusNotch(),
+          ),
+        ),
       ),
     );
   }

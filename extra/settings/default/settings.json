@@ -44,6 +44,13 @@
                 "moveRight": ["super+shift+d", "super+shift+arrowRight"],
                 "activate": ["enter", "numpadEnter"],
                 "close": ["super+q"]
+            },
+            "layout": {
+                "increaseVisibleTiles": ["super+equal", "super+numpadAdd"],
+                "decreaseVisibleTiles": ["super+minus", "super+numpadSubtract"],
+                "increaseScreens": ["super+shift+equal", "super+shift+numpadAdd"],
+                "decreaseScreens": ["super+shift+minus", "super+shift+numpadSubtract"],
+                "toggleZenMode": ["super+z"]
             }
         }
     },

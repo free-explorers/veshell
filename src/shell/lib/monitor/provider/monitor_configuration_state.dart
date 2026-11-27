@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:hooks_riverpod/experimental/persist.dart';
 import 'package:riverpod_annotation/experimental/json_persist.dart';
@@ -5,6 +6,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
+import 'package:shell/monitor/provider/active_monitor_ids.dart';
 import 'package:shell/monitor/provider/monitor_configuration_flex.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
@@ -51,12 +53,40 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
   void addNewScreenConfiguration(ScreenId screenId) {
     _initialized = true;
     state = state.copyWith(
-      screenList: addScreenToLayout(
-        state.screenList,
-        screenId,
-        primaryForMonitor: monitorId,
+      screenList: _withSavedFlex(
+        addScreenToLayout(
+          state.screenList,
+          screenId,
+          primaryForMonitor: monitorId,
+        ),
       ),
     );
+  }
+
+  /// Adds a screen to this monitor: the first screen no monitor shows, or a
+  /// new one when every screen is shown.
+  void addScreen() {
+    // Not `availableScreenListProvider`: it watches this very provider, so
+    // reading it from here is a dependency cycle.
+    final shownScreenIds = {
+      for (final configuration in state.screenList) configuration.screenId,
+      for (final otherMonitorId in ref.read(activeMonitorIdsProvider))
+        if (otherMonitorId != monitorId)
+          for (final configuration
+              in ref
+                  .read(monitorConfigurationStateProvider(otherMonitorId))
+                  .screenList)
+            configuration.screenId,
+    };
+    final screenId =
+        ref
+            .read(screenManagerProvider)
+            .screenIds
+            .firstWhereOrNull(
+              (screenId) => !shownScreenIds.contains(screenId),
+            ) ??
+        ref.read(screenManagerProvider.notifier).createNewScreen();
+    addNewScreenConfiguration(screenId);
   }
 
   void removeLastScreenConfiguration() {
@@ -68,8 +98,23 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
         .read(screenManagerProvider.notifier)
         .removeIfEmpty(configuration.screenId);
     state = state.copyWith(
-      screenList: removeLastScreenFromLayout(state.screenList),
+      screenList: _withSavedFlex(removeLastScreenFromLayout(state.screenList)),
     );
+  }
+
+  /// [screenList] with the split last saved for its screen count, when there
+  /// is one.
+  IList<ScreenConfiguration> _withSavedFlex(
+    IList<ScreenConfiguration> screenList,
+  ) {
+    final savedFlex = state.flexForScreenCount['${screenList.length}'];
+    if (savedFlex == null || savedFlex.length != screenList.length) {
+      return screenList;
+    }
+    return [
+      for (var i = 0; i < screenList.length; i++)
+        screenList[i].copyWith(flex: savedFlex[i]),
+    ].lock;
   }
 
   /// Removes the configuration for [screenId] without reflowing the remaining
@@ -110,6 +155,39 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
     );
   }
 
+  /// Shows [newScreenId] where this monitor shows [screenId].
+  ///
+  /// A screen is laid out on one monitor at a time: when another monitor
+  /// shows [newScreenId], that monitor takes [screenId] in exchange, so the
+  /// two screens trade monitors instead of [newScreenId] appearing on both.
+  void showScreenInPlaceOf(ScreenId screenId, ScreenId newScreenId) {
+    if (screenId == newScreenId) {
+      return;
+    }
+    bool shows(MonitorConfiguration configuration) => configuration.screenList
+        .any((configuration) => configuration.screenId == newScreenId);
+    if (shows(state)) {
+      swapScreenIds(screenId, newScreenId);
+      return;
+    }
+    // Not `monitorForScreenProvider`: it watches this very provider, so
+    // reading it from here is a dependency cycle.
+    final ownerOfNewScreen = ref
+        .read(activeMonitorIdsProvider)
+        .where((otherMonitorId) => otherMonitorId != monitorId)
+        .firstWhereOrNull(
+          (otherMonitorId) => shows(
+            ref.read(monitorConfigurationStateProvider(otherMonitorId)),
+          ),
+        );
+    if (ownerOfNewScreen != null) {
+      ref
+          .read(monitorConfigurationStateProvider(ownerOfNewScreen).notifier)
+          .replaceScreenIdByScreenId(newScreenId, screenId);
+    }
+    replaceScreenIdByScreenId(screenId, newScreenId);
+  }
+
   void updateFlexForConfiguration(
     ScreenConfiguration screenConfiguration,
     int flex,
@@ -123,6 +201,14 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
                 : aScreenConfiguration,
           )
           .toIList(),
+    );
+    // Saved so the monitor gets this split back the next time it shows this
+    // many screens.
+    state = state.copyWith(
+      flexForScreenCount: state.flexForScreenCount.add(
+        '${state.screenList.length}',
+        state.screenList.map((configuration) => configuration.flex).toIList(),
+      ),
     );
   }
 

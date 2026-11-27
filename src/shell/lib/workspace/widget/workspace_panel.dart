@@ -63,7 +63,7 @@ class WorkspacePanel extends HookConsumerWidget implements PreferredSizeWidget {
                   NumberPicker(
                     allowKeyboardInput: false,
                     value: visibleLength,
-                    minValue: 0,
+                    minValue: 1,
                     onValueChange: onVisibleLengthChange,
                   ),
                   const SizedBox(width: 8),

@@ -1,8 +1,13 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/settings/provider/state/hotkeys_setting.dart';
+import 'package:shell/shared/util/json_converter/logical_key_set.dart';
+import 'package:shell/shortcut_manager/model/layout_intents.dart';
 import 'package:shell/shortcut_manager/model/media_intents.dart';
 import 'package:shell/shortcut_manager/model/navigation_intents.dart';
 import 'package:shell/shortcut_manager/provider/hotkeys_activator.dart';
@@ -89,5 +94,52 @@ void main() {
         ),
       );
     }
+  });
+
+  test('the layout actions change the counts by one', () {
+    expect(
+      getActionIntent(HotkeysAction.increaseVisibleTiles),
+      isA<ChangeVisibleTileCountIntent>().having((i) => i.delta, 'delta', 1),
+    );
+    expect(
+      getActionIntent(HotkeysAction.decreaseVisibleTiles),
+      isA<ChangeVisibleTileCountIntent>().having((i) => i.delta, 'delta', -1),
+    );
+    expect(
+      getActionIntent(HotkeysAction.increaseScreens),
+      isA<ChangeScreenCountIntent>().having((i) => i.delta, 'delta', 1),
+    );
+    expect(
+      getActionIntent(HotkeysAction.decreaseScreens),
+      isA<ChangeScreenCountIntent>().having((i) => i.delta, 'delta', -1),
+    );
+  });
+
+  test('the shipped layout bindings parse to their keys', () {
+    final defaults =
+        jsonDecode(
+              File(
+                '../../extra/settings/default/settings.json',
+              ).readAsStringSync(),
+            )
+            as Map<String, dynamic>;
+    final layout =
+        ((defaults['keyboard'] as Map)['hotkeys'] as Map)['layout'] as Map;
+    const converter = LogicalKeySetListConverter();
+
+    for (final action in [
+      HotkeysAction.increaseVisibleTiles,
+      HotkeysAction.decreaseVisibleTiles,
+      HotkeysAction.increaseScreens,
+      HotkeysAction.decreaseScreens,
+    ]) {
+      final name = action.actionId.split('.').last;
+      final bindings = converter.fromJson(layout[name]);
+      expect(bindings, hasLength(2), reason: name);
+    }
+    expect(converter.fromJson(layout['increaseVisibleTiles']).first.keys, {
+      LogicalKeyboardKey.superKey,
+      LogicalKeyboardKey.equal,
+    });
   });
 }
