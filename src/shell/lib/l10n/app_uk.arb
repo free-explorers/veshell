@@ -307,6 +307,7 @@
   "screens": "Екрани",
   "windows": "Вікна",
   "createNewScreen": "Створити новий екран",
+  "openApplicationCount": "{count, plural, one{{count} відкрита програма} few{{count} відкриті програми} many{{count} відкритих програм} other{{count} відкритої програми}}",
   "renameScreen": "Перейменувати екран",
   "noScreensOnMonitor": "На цьому моніторі немає екранів",
   "createOrMoveScreen": "Створіть екран або перемістіть сюди невикористаний.",

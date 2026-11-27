@@ -9,6 +9,7 @@ import 'package:shell/monitor/widget/current_screen_id.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/available_screen_list.dart';
 import 'package:shell/screen/provider/monitor_for_screen.dart';
+import 'package:shell/screen/provider/open_application_count.dart';
 import 'package:shell/screen/provider/screen_label.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
 import 'package:shell/screen/provider/screen_state.dart';
@@ -28,6 +29,12 @@ class ScreenConfigurationMenu extends HookConsumerWidget {
     final screenConfiguration = ref.watch(
       monitorConfigurationStateProvider(monitorName),
     );
+    // Applications running on screens no monitor shows, which would otherwise
+    // go unnoticed.
+    final hiddenOpenApplicationCount = ref.watch(
+      hiddenOpenApplicationCountProvider,
+    );
+    final colorScheme = Theme.of(context).colorScheme;
     return MenuAnchor(
       controller: menuController,
       style: const MenuStyle(alignment: AlignmentDirectional.bottomEnd),
@@ -105,22 +112,9 @@ class ScreenConfigurationMenu extends HookConsumerWidget {
           child: ScreenPicker(
             currentScreenId: screenId,
             onScreenSelected: (newScreenId) {
-              final currentMonitorForScreen = ref.read(
-                monitorForScreenProvider(newScreenId),
-              );
-              if (currentMonitorForScreen != null) {
-                ref
-                    .read(
-                      monitorConfigurationStateProvider(monitorName).notifier,
-                    )
-                    .swapScreenIds(screenId, newScreenId);
-              } else {
-                ref
-                    .read(
-                      monitorConfigurationStateProvider(monitorName).notifier,
-                    )
-                    .replaceScreenIdByScreenId(screenId, newScreenId);
-              }
+              ref
+                  .read(monitorConfigurationStateProvider(monitorName).notifier)
+                  .showScreenInPlaceOf(screenId, newScreenId);
               menuController.close();
             },
           ),
@@ -139,7 +133,13 @@ class ScreenConfigurationMenu extends HookConsumerWidget {
         onPressed: () => menuController.isOpen
             ? menuController.close()
             : menuController.open(),
-        icon: const ShellIcon(MdiIcons.monitorDashboard),
+        icon: Badge(
+          isLabelVisible: hiddenOpenApplicationCount > 0,
+          label: Text('$hiddenOpenApplicationCount'),
+          backgroundColor: colorScheme.primary,
+          textColor: colorScheme.onPrimary,
+          child: const ShellIcon(MdiIcons.monitorDashboard),
+        ),
       ),
     );
   }
@@ -198,6 +198,10 @@ class ScreenListTile extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final screenLabel = ref.watch(screenLabelProvider(screenId));
     final monitorIdForScreen = ref.watch(monitorForScreenProvider(screenId));
+    final openApplicationCount = ref.watch(
+      openApplicationCountForScreenProvider(screenId),
+    );
+    final colorScheme = Theme.of(context).colorScheme;
     return ListTile(
       leading: selected
           ? const ShellIcon(MdiIcons.check)
@@ -205,11 +209,28 @@ class ScreenListTile extends HookConsumerWidget {
           ? const ShellIcon(MdiIcons.swapVertical)
           : const ShellIcon(MdiIcons.radioboxBlank),
       title: Text(screenLabel.value ?? ''),
-      subtitle: monitorIdForScreen != null
-          ? Text(
-              monitorIdForScreen,
+      subtitle: monitorIdForScreen != null || openApplicationCount > 0
+          ? Text.rich(
+              TextSpan(
+                children: [
+                  if (monitorIdForScreen != null)
+                    TextSpan(text: monitorIdForScreen),
+                  if (monitorIdForScreen != null && openApplicationCount > 0)
+                    const TextSpan(text: ' · '),
+                  if (openApplicationCount > 0)
+                    TextSpan(
+                      text: context.l10n.openApplicationCount(
+                        openApplicationCount,
+                      ),
+                      // Applications running where no monitor shows them.
+                      style: monitorIdForScreen == null
+                          ? TextStyle(color: colorScheme.primary)
+                          : null,
+                    ),
+                ],
+              ),
               style: Theme.of(context).textTheme.labelSmall!.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                color: colorScheme.onSurfaceVariant,
               ),
             )
           : null,

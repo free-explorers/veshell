@@ -307,6 +307,7 @@
   "screens": "Telas",
   "windows": "Janelas",
   "createNewScreen": "Criar nova tela",
+  "openApplicationCount": "{count, plural, one{1 aplicativo aberto} other{{count} aplicativos abertos}}",
   "renameScreen": "Renomear tela",
   "noScreensOnMonitor": "Nenhuma tela neste monitor",
   "createOrMoveScreen": "Crie uma tela ou mova uma que não esteja em uso para cá.",

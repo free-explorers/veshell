@@ -4,6 +4,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
+import 'package:shell/monitor/provider/active_monitor_ids.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
 
 /// A [MonitorConfigurationState] with a fixed starting value and no persisted
@@ -39,6 +40,33 @@ MonitorConfigurationState notifierFor(MonitorConfiguration configuration) {
   addTearDown(container.dispose);
   return container.read(monitorConfigurationStateProvider('DP-1').notifier);
 }
+
+/// Two connected monitors, `DP-1` and `HDMI-1`, with the given layouts.
+ProviderContainer twoMonitors(
+  MonitorConfiguration dp,
+  MonitorConfiguration hdmi,
+) {
+  final twoMonitorContainer = ProviderContainer(
+    overrides: [
+      activeMonitorIdsProvider.overrideWithValue({'DP-1', 'HDMI-1'}.lock),
+      monitorConfigurationStateProvider(
+        'DP-1',
+      ).overrideWith(() => _FakeMonitorConfigurationState(dp)),
+      monitorConfigurationStateProvider(
+        'HDMI-1',
+      ).overrideWith(() => _FakeMonitorConfigurationState(hdmi)),
+    ],
+  );
+  addTearDown(twoMonitorContainer.dispose);
+  return twoMonitorContainer;
+}
+
+List<String> screenIdsOf(ProviderContainer container, MonitorId monitorId) =>
+    container
+        .read(monitorConfigurationStateProvider(monitorId))
+        .screenList
+        .map((screen) => screen.screenId)
+        .toList();
 
 void main() {
   test('a fresh configuration is empty and not initialized', () {
@@ -114,5 +142,54 @@ void main() {
     notifier.updateFlexForConfiguration(notifier.state.screenList.first, 80);
 
     expect(notifier.state.screenList.map((screen) => screen.flex), [80, 50]);
+  });
+
+  test('showing a screen of another monitor trades the two screens', () {
+    final container = twoMonitors(
+      _configuration([_screen('a', flex: 70), _screen('b', flex: 30)]),
+      _configuration([_screen('c', flex: 100)]),
+    );
+
+    container
+        .read(monitorConfigurationStateProvider('HDMI-1').notifier)
+        .showScreenInPlaceOf('c', 'b');
+
+    expect(screenIdsOf(container, 'DP-1'), ['a', 'c']);
+    expect(screenIdsOf(container, 'HDMI-1'), ['b']);
+    expect(
+      container
+          .read(monitorConfigurationStateProvider('DP-1'))
+          .screenList
+          .map((screen) => screen.flex),
+      [70, 30],
+    );
+  });
+
+  test('showing a screen of the same monitor swaps it in place', () {
+    final container = twoMonitors(
+      _configuration([_screen('a'), _screen('b')]),
+      _configuration([_screen('c')]),
+    );
+
+    container
+        .read(monitorConfigurationStateProvider('DP-1').notifier)
+        .showScreenInPlaceOf('a', 'b');
+
+    expect(screenIdsOf(container, 'DP-1'), ['b', 'a']);
+    expect(screenIdsOf(container, 'HDMI-1'), ['c']);
+  });
+
+  test('showing a screen no monitor shows replaces the current one', () {
+    final container = twoMonitors(
+      _configuration([_screen('a'), _screen('b')]),
+      _configuration([_screen('c')]),
+    );
+
+    container
+        .read(monitorConfigurationStateProvider('HDMI-1').notifier)
+        .showScreenInPlaceOf('c', 'd');
+
+    expect(screenIdsOf(container, 'DP-1'), ['a', 'b']);
+    expect(screenIdsOf(container, 'HDMI-1'), ['d']);
   });
 }

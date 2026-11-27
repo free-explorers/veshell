@@ -307,6 +307,7 @@
   "screens": "Màn hình",
   "windows": "Cửa sổ",
   "createNewScreen": "Tạo màn hình mới",
+  "openApplicationCount": "{count, plural, other{{count} ứng dụng đang mở}}",
   "renameScreen": "Đổi tên màn hình",
   "noScreensOnMonitor": "Không có màn hình trên thiết bị hiển thị này",
   "createOrMoveScreen": "Tạo một màn hình hoặc di chuyển màn hình chưa dùng đến đây.",

@@ -307,6 +307,7 @@
   "screens": "الشاشات",
   "windows": "النوافذ",
   "createNewScreen": "إنشاء شاشة جديدة",
+  "openApplicationCount": "{count, plural, zero{لا توجد تطبيقات مفتوحة} one{تطبيق مفتوح واحد} two{تطبيقان مفتوحان} few{{count} تطبيقات مفتوحة} many{{count} تطبيقًا مفتوحًا} other{{count} تطبيق مفتوح}}",
   "renameScreen": "إعادة تسمية الشاشة",
   "noScreensOnMonitor": "لا توجد شاشات على جهاز العرض هذا",
   "createOrMoveScreen": "أنشئ شاشة أو انقل شاشة غير مستخدمة إلى هنا.",

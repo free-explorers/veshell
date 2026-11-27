@@ -307,6 +307,7 @@
   "screens": "화면",
   "windows": "창",
   "createNewScreen": "새 화면 만들기",
+  "openApplicationCount": "{count, plural, other{열린 애플리케이션 {count}개}}",
   "renameScreen": "화면 이름 바꾸기",
   "noScreensOnMonitor": "이 모니터에는 화면이 없습니다",
   "createOrMoveScreen": "화면을 만들거나 사용하지 않는 화면을 여기로 이동하세요.",

@@ -307,6 +307,7 @@
   "screens": "螢幕",
   "windows": "視窗",
   "createNewScreen": "建立新螢幕",
+  "openApplicationCount": "{count, plural, other{{count} 個已開啟的應用程式}}",
   "renameScreen": "重新命名螢幕",
   "noScreensOnMonitor": "此顯示器上沒有螢幕",
   "createOrMoveScreen": "建立螢幕，或將未使用的螢幕移至此處。",

@@ -307,6 +307,7 @@
   "screens": "Ekranlar",
   "windows": "Pencereler",
   "createNewScreen": "Yeni ekran oluştur",
+  "openApplicationCount": "{count, plural, other{{count} açık uygulama}}",
   "renameScreen": "Ekranı yeniden adlandır",
   "noScreensOnMonitor": "Bu monitörde ekran yok",
   "createOrMoveScreen": "Bir ekran oluşturun veya kullanılmayan bir ekranı buraya taşıyın.",

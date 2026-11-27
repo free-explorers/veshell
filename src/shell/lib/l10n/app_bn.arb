@@ -307,6 +307,7 @@
   "screens": "স্ক্রিন",
   "windows": "উইন্ডো",
   "createNewScreen": "নতুন স্ক্রিন তৈরি করুন",
+  "openApplicationCount": "{count, plural, one{{count}টি খোলা অ্যাপ্লিকেশন} other{{count}টি খোলা অ্যাপ্লিকেশন}}",
   "renameScreen": "স্ক্রিনের নাম বদলান",
   "noScreensOnMonitor": "এই মনিটরে কোনো স্ক্রিন নেই",
   "createOrMoveScreen": "একটি স্ক্রিন তৈরি করুন বা অব্যবহৃত স্ক্রিন এখানে আনুন।",

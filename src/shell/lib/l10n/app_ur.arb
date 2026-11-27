@@ -307,6 +307,7 @@
   "screens": "اسکرینیں",
   "windows": "ونڈوز",
   "createNewScreen": "نئی اسکرین بنائیں",
+  "openApplicationCount": "{count, plural, one{{count} کھلی ایپلیکیشن} other{{count} کھلی ایپلیکیشنز}}",
   "renameScreen": "اسکرین کا نام بدلیں",
   "noScreensOnMonitor": "اس مانیٹر پر کوئی اسکرین نہیں",
   "createOrMoveScreen": "اسکرین بنائیں یا غیر استعمال شدہ اسکرین یہاں منتقل کریں۔",

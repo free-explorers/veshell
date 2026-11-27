@@ -307,6 +307,7 @@
   "screens": "स्क्रीन",
   "windows": "विंडो",
   "createNewScreen": "नई स्क्रीन बनाएँ",
+  "openApplicationCount": "{count, plural, one{1 खुला ऐप्लिकेशन} other{{count} खुले ऐप्लिकेशन}}",
   "renameScreen": "स्क्रीन का नाम बदलें",
   "noScreensOnMonitor": "इस मॉनिटर पर कोई स्क्रीन नहीं है",
   "createOrMoveScreen": "एक स्क्रीन बनाएँ या किसी अनुपयोगी स्क्रीन को यहाँ ले आएँ।",

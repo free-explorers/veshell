@@ -307,6 +307,7 @@
   "screens": "Écrans",
   "windows": "Fenêtres",
   "createNewScreen": "Créer un nouvel écran",
+  "openApplicationCount": "{count, plural, one{1 application ouverte} other{{count} applications ouvertes}}",
   "renameScreen": "Renommer l’écran",
   "noScreensOnMonitor": "Aucun écran sur ce moniteur",
   "createOrMoveScreen": "Créez un écran ou déplacez-en un inutilisé ici.",

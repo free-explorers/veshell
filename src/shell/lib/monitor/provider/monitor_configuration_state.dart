@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart';
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:hooks_riverpod/experimental/persist.dart';
 import 'package:riverpod_annotation/experimental/json_persist.dart';
@@ -5,6 +6,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/monitor/model/monitor.serializable.dart';
 import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
+import 'package:shell/monitor/provider/active_monitor_ids.dart';
 import 'package:shell/monitor/provider/monitor_configuration_flex.dart';
 import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
@@ -108,6 +110,39 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
           )
           .toIList(),
     );
+  }
+
+  /// Shows [newScreenId] where this monitor shows [screenId].
+  ///
+  /// A screen is laid out on one monitor at a time: when another monitor
+  /// shows [newScreenId], that monitor takes [screenId] in exchange, so the
+  /// two screens trade monitors instead of [newScreenId] appearing on both.
+  void showScreenInPlaceOf(ScreenId screenId, ScreenId newScreenId) {
+    if (screenId == newScreenId) {
+      return;
+    }
+    bool shows(MonitorConfiguration configuration) => configuration.screenList
+        .any((configuration) => configuration.screenId == newScreenId);
+    if (shows(state)) {
+      swapScreenIds(screenId, newScreenId);
+      return;
+    }
+    // Not `monitorForScreenProvider`: it watches this very provider, so
+    // reading it from here is a dependency cycle.
+    final ownerOfNewScreen = ref
+        .read(activeMonitorIdsProvider)
+        .where((otherMonitorId) => otherMonitorId != monitorId)
+        .firstWhereOrNull(
+          (otherMonitorId) => shows(
+            ref.read(monitorConfigurationStateProvider(otherMonitorId)),
+          ),
+        );
+    if (ownerOfNewScreen != null) {
+      ref
+          .read(monitorConfigurationStateProvider(ownerOfNewScreen).notifier)
+          .replaceScreenIdByScreenId(newScreenId, screenId);
+    }
+    replaceScreenIdByScreenId(screenId, newScreenId);
   }
 
   void updateFlexForConfiguration(

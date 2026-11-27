@@ -307,6 +307,7 @@
   "screens": "Layar",
   "windows": "Jendela",
   "createNewScreen": "Buat layar baru",
+  "openApplicationCount": "{count, plural, other{{count} aplikasi terbuka}}",
   "renameScreen": "Ganti nama layar",
   "noScreensOnMonitor": "Tidak ada layar pada monitor ini",
   "createOrMoveScreen": "Buat layar, atau pindahkan layar yang tidak digunakan ke sini.",

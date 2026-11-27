@@ -307,6 +307,7 @@
   "screens": "Pantallas",
   "windows": "Ventanas",
   "createNewScreen": "Crear nueva pantalla",
+  "openApplicationCount": "{count, plural, one{1 aplicación abierta} other{{count} aplicaciones abiertas}}",
   "renameScreen": "Renombrar pantalla",
   "noScreensOnMonitor": "No hay pantallas en este monitor",
   "createOrMoveScreen": "Crea una pantalla o mueve aquí una que no esté en uso.",

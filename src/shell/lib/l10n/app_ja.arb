@@ -307,6 +307,7 @@
   "screens": "画面",
   "windows": "ウィンドウ",
   "createNewScreen": "新しい画面を作成",
+  "openApplicationCount": "{count, plural, other{開いているアプリケーション {count} 個}}",
   "renameScreen": "画面の名前を変更",
   "noScreensOnMonitor": "このモニターに画面はありません",
   "createOrMoveScreen": "画面を作成するか、未使用の画面をここに移動してください。",
