@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:fast_immutable_collections/fast_immutable_collections.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -6,6 +8,9 @@ import 'package:shell/monitor/model/monitor_configuration.serializable.dart';
 import 'package:shell/monitor/model/screen_configuration.serializable.dart';
 import 'package:shell/monitor/provider/active_monitor_ids.dart';
 import 'package:shell/monitor/provider/monitor_configuration_state.dart';
+import 'package:shell/screen/model/screen.serializable.dart';
+import 'package:shell/screen/model/screen_manager_state.serializable.dart';
+import 'package:shell/screen/provider/screen_manager.dart';
 
 /// A [MonitorConfigurationState] with a fixed starting value and no persisted
 /// storage, so the notifier's in-memory layout operations can be tested.
@@ -27,11 +32,23 @@ MonitorConfiguration _configuration(List<ScreenConfiguration> screens) =>
       displayMode: ScreenDisplayMode.splitHorizontal,
     );
 
+/// A screen manager without persisted storage; removing a monitor's last
+/// screen asks it to drop that screen.
+class _FakeScreenManager extends ScreenManager {
+  @override
+  ScreenManagerState build() =>
+      const ScreenManagerState(screenIds: ISetConst({}));
+
+  @override
+  void removeIfEmpty(ScreenId screenId) {}
+}
+
 late ProviderContainer container;
 
 MonitorConfigurationState notifierFor(MonitorConfiguration configuration) {
   container = ProviderContainer(
     overrides: [
+      screenManagerProvider.overrideWith(_FakeScreenManager.new),
       monitorConfigurationStateProvider(
         'DP-1',
       ).overrideWith(() => _FakeMonitorConfigurationState(configuration)),
@@ -165,6 +182,20 @@ void main() {
     );
   });
 
+  test('a split screen trades places with another monitor\'s screen', () {
+    final container = twoMonitors(
+      _configuration([_screen('a', flex: 70), _screen('b', flex: 30)]),
+      _configuration([_screen('c', flex: 100)]),
+    );
+
+    container
+        .read(monitorConfigurationStateProvider('DP-1').notifier)
+        .showScreenInPlaceOf('b', 'c');
+
+    expect(screenIdsOf(container, 'DP-1'), ['a', 'c']);
+    expect(screenIdsOf(container, 'HDMI-1'), ['b']);
+  });
+
   test('showing a screen of the same monitor swaps it in place', () {
     final container = twoMonitors(
       _configuration([_screen('a'), _screen('b')]),
@@ -191,5 +222,60 @@ void main() {
 
     expect(screenIdsOf(container, 'DP-1'), ['a', 'b']);
     expect(screenIdsOf(container, 'HDMI-1'), ['d']);
+  });
+
+  test('a dragged split comes back when the screen count does', () {
+    final notifier = notifierFor(_configuration([]))
+      ..addNewScreenConfiguration('a')
+      ..addNewScreenConfiguration('b');
+    notifier
+      ..updateFlexForConfiguration(notifier.state.screenList.first, 80)
+      ..updateFlexForConfiguration(notifier.state.screenList.last, 20)
+      ..removeLastScreenConfiguration();
+
+    expect(notifier.state.screenList.single.flex, 100);
+
+    notifier.addNewScreenConfiguration('c');
+
+    expect(notifier.state.screenList.map((screen) => screen.flex), [80, 20]);
+  });
+
+  test('each screen count keeps its own split', () {
+    List<int> flexOf(MonitorConfigurationState notifier) =>
+        notifier.state.screenList.map((screen) => screen.flex).toList();
+
+    final notifier = notifierFor(_configuration([]))
+      ..addNewScreenConfiguration('a')
+      ..addNewScreenConfiguration('b');
+    notifier
+      ..updateFlexForConfiguration(notifier.state.screenList.first, 70)
+      ..updateFlexForConfiguration(notifier.state.screenList.last, 30)
+      ..addNewScreenConfiguration('c');
+    notifier
+      ..updateFlexForConfiguration(notifier.state.screenList[1], 10)
+      ..updateFlexForConfiguration(notifier.state.screenList.last, 50);
+    final threeScreenSplit = flexOf(notifier);
+    notifier.removeLastScreenConfiguration();
+
+    expect(flexOf(notifier), [70, 30]);
+
+    notifier.addNewScreenConfiguration('d');
+
+    expect(flexOf(notifier), threeScreenSplit);
+  });
+
+  test('the saved splits survive a JSON round trip', () {
+    final configuration = _configuration([_screen('a')]).copyWith(
+      flexForScreenCount: {
+        '2': [80, 20].lock,
+      }.lock,
+    );
+
+    expect(
+      MonitorConfiguration.fromJson(
+        jsonDecode(jsonEncode(configuration.toJson())) as Map<String, dynamic>,
+      ),
+      configuration,
+    );
   });
 }

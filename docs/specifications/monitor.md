@@ -53,7 +53,9 @@ Rules:
   direction. It is the authoritative shell layout, keyed by the same connector
   name (persist key `MonitorConfigurationState(<connector>)`). Its `screenList`
   is kept summing to a fixed total; screens are redistributed proportionally
-  when one is added or removed, so repeated edits do not drift.
+  when one is added or removed, so repeated edits do not drift. The split the
+  user drags is saved per screen count (`flexForScreenCount`) and restored
+  whenever the monitor shows that many screens again.
 - The Dart `Monitor` model is a read-only projection of Rust's `Output`. It is
   not persisted and Flutter never writes it. Its live fields are kept alongside
   `MonitorSetting` because the settings UI needs data the desired-geometry file

@@ -53,10 +53,12 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
   void addNewScreenConfiguration(ScreenId screenId) {
     _initialized = true;
     state = state.copyWith(
-      screenList: addScreenToLayout(
-        state.screenList,
-        screenId,
-        primaryForMonitor: monitorId,
+      screenList: _withSavedFlex(
+        addScreenToLayout(
+          state.screenList,
+          screenId,
+          primaryForMonitor: monitorId,
+        ),
       ),
     );
   }
@@ -70,8 +72,23 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
         .read(screenManagerProvider.notifier)
         .removeIfEmpty(configuration.screenId);
     state = state.copyWith(
-      screenList: removeLastScreenFromLayout(state.screenList),
+      screenList: _withSavedFlex(removeLastScreenFromLayout(state.screenList)),
     );
+  }
+
+  /// [screenList] with the split last saved for its screen count, when there
+  /// is one.
+  IList<ScreenConfiguration> _withSavedFlex(
+    IList<ScreenConfiguration> screenList,
+  ) {
+    final savedFlex = state.flexForScreenCount['${screenList.length}'];
+    if (savedFlex == null || savedFlex.length != screenList.length) {
+      return screenList;
+    }
+    return [
+      for (var i = 0; i < screenList.length; i++)
+        screenList[i].copyWith(flex: savedFlex[i]),
+    ].lock;
   }
 
   /// Removes the configuration for [screenId] without reflowing the remaining
@@ -158,6 +175,14 @@ class MonitorConfigurationState extends _$MonitorConfigurationState {
                 : aScreenConfiguration,
           )
           .toIList(),
+    );
+    // Saved so the monitor gets this split back the next time it shows this
+    // many screens.
+    state = state.copyWith(
+      flexForScreenCount: state.flexForScreenCount.add(
+        '${state.screenList.length}',
+        state.screenList.map((configuration) => configuration.flex).toIList(),
+      ),
     );
   }
 
