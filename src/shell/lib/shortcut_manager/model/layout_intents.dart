@@ -19,3 +19,10 @@ class ChangeScreenCountIntent extends Intent {
   /// How many screens to add to the monitor; negative to remove.
   final int delta;
 }
+
+/// An intent to toggle zen mode on the focused screen: its panels slide out,
+/// leaving their selection lines in view.
+class ToggleZenModeIntent extends Intent {
+  ///
+  const ToggleZenModeIntent();
+}

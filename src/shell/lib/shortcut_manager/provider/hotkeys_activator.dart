@@ -42,7 +42,8 @@ enum HotkeysAction {
   increaseVisibleTiles('layout.increaseVisibleTiles'),
   decreaseVisibleTiles('layout.decreaseVisibleTiles'),
   increaseScreens('layout.increaseScreens'),
-  decreaseScreens('layout.decreaseScreens');
+  decreaseScreens('layout.decreaseScreens'),
+  toggleZenMode('layout.toggleZenMode');
 
   const HotkeysAction(this.actionId);
   final String actionId;
@@ -77,6 +78,7 @@ Intent getActionIntent(HotkeysAction action) => switch (action) {
   HotkeysAction.decreaseVisibleTiles => const ChangeVisibleTileCountIntent(-1),
   HotkeysAction.increaseScreens => const ChangeScreenCountIntent(1),
   HotkeysAction.decreaseScreens => const ChangeScreenCountIntent(-1),
+  HotkeysAction.toggleZenMode => const ToggleZenModeIntent(),
 };
 
 @riverpod

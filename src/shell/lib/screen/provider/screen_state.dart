@@ -294,6 +294,10 @@ class ScreenState extends _$ScreenState {
   void setCustomLabel(String? label) {
     state = state.copyWith(label: label);
   }
+
+  void toggleZenMode() {
+    state = state.copyWith(zenMode: !state.zenMode);
+  }
 }
 
 /// Access to [ScreenState] for keepAlive providers.

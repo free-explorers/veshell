@@ -5,7 +5,10 @@ import 'package:material_ui/material_ui.dart';
 import 'package:shell/overview/provider/overview_state.dart';
 import 'package:shell/screen/provider/focused_screen.dart';
 import 'package:shell/screen/provider/pointer_screen.dart';
+import 'package:shell/screen/provider/screen_state.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
+import 'package:shell/screen/widget/zen_collapse.dart';
+import 'package:shell/theme/provider/theme.dart';
 import 'package:shell/settings/provider/state/focus_indicator_setting.dart';
 import 'package:shell/shared/util/logger.dart';
 import 'package:shell/shared/widget/saturation_filter.dart';
@@ -44,6 +47,11 @@ class WorkspaceWidget extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final windowManager = ref.watch(windowManagerProvider.notifier);
     final workspaceState = ref.watch(workspaceStateProvider(workspaceId));
+    final zenMode = ref.watch(
+      screenStateProvider(
+        CurrentScreenId.of(context),
+      ).select((screen) => screen.zenMode),
+    );
     final overviewDisplayed = ref.watch(
       overviewStateProvider(
         CurrentScreenId.of(context),
@@ -286,17 +294,27 @@ class WorkspaceWidget extends HookConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  FocusScope(
-                    canRequestFocus: false,
-                    descendantsAreFocusable: false,
-                    child: WorkspacePanel(
-                      tileableList: tileableList,
-                      visibleLength: workspaceState.visibleLength,
-                      onVisibleLengthChange: (value) {
-                        ref
-                            .read(workspaceStateProvider(workspaceId).notifier)
-                            .setVisibleLength(value);
-                      },
+                  // Its selection line is on its bottom edge, which zen
+                  // mode leaves in view.
+                  ZenCollapse(
+                    collapsed: zenMode,
+                    axis: Axis.vertical,
+                    extent: panelSize,
+                    alignment: Alignment.bottomCenter,
+                    child: FocusScope(
+                      canRequestFocus: false,
+                      descendantsAreFocusable: false,
+                      child: WorkspacePanel(
+                        tileableList: tileableList,
+                        visibleLength: workspaceState.visibleLength,
+                        onVisibleLengthChange: (value) {
+                          ref
+                              .read(
+                                workspaceStateProvider(workspaceId).notifier,
+                              )
+                              .setVisibleLength(value);
+                        },
+                      ),
                     ),
                   ),
                   Expanded(

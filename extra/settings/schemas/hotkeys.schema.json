@@ -107,6 +107,9 @@
                 },
                 "decreaseScreens": {
                     "$ref": "#/$defs/hotkeyList"
+                },
+                "toggleZenMode": {
+                    "$ref": "#/$defs/hotkeyList"
                 }
             }
         }

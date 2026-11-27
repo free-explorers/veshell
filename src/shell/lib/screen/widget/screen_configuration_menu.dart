@@ -186,7 +186,24 @@ class ScreenListTile extends HookConsumerWidget {
     final openApplicationCount = ref.watch(
       openApplicationCountForScreenProvider(screenId),
     );
+    final zenMode = ref.watch(
+      screenStateProvider(screenId).select((screen) => screen.zenMode),
+    );
     final colorScheme = Theme.of(context).colorScheme;
+    // What the screen's line under its label says: its monitor, its zen mode
+    // and its open applications.
+    final annotations = [
+      if (monitorIdForScreen != null) TextSpan(text: monitorIdForScreen),
+      if (zenMode) TextSpan(text: context.l10n.zen),
+      if (openApplicationCount > 0)
+        TextSpan(
+          text: context.l10n.openApplicationCount(openApplicationCount),
+          // Applications running where no monitor shows them.
+          style: monitorIdForScreen == null
+              ? TextStyle(color: colorScheme.primary)
+              : null,
+        ),
+    ];
     return ListTile(
       leading: selected
           ? const ShellIcon(MdiIcons.check)
@@ -194,31 +211,21 @@ class ScreenListTile extends HookConsumerWidget {
           ? const ShellIcon(MdiIcons.swapVertical)
           : const ShellIcon(MdiIcons.radioboxBlank),
       title: Text(screenLabel.value ?? ''),
-      subtitle: monitorIdForScreen != null || openApplicationCount > 0
-          ? Text.rich(
+      subtitle: annotations.isEmpty
+          ? null
+          : Text.rich(
               TextSpan(
                 children: [
-                  if (monitorIdForScreen != null)
-                    TextSpan(text: monitorIdForScreen),
-                  if (monitorIdForScreen != null && openApplicationCount > 0)
-                    const TextSpan(text: ' · '),
-                  if (openApplicationCount > 0)
-                    TextSpan(
-                      text: context.l10n.openApplicationCount(
-                        openApplicationCount,
-                      ),
-                      // Applications running where no monitor shows them.
-                      style: monitorIdForScreen == null
-                          ? TextStyle(color: colorScheme.primary)
-                          : null,
-                    ),
+                  for (final (index, annotation) in annotations.indexed) ...[
+                    if (index > 0) const TextSpan(text: ' · '),
+                    annotation,
+                  ],
                 ],
               ),
               style: Theme.of(context).textTheme.labelSmall!.copyWith(
                 color: colorScheme.onSurfaceVariant,
               ),
-            )
-          : null,
+            ),
       selected: selected,
       onTap: onTap,
       trailing: PopupMenuButton(
@@ -237,6 +244,18 @@ class ScreenListTile extends HookConsumerWidget {
                 ref
                     .read(screenStateProvider(screenId).notifier)
                     .setCustomLabel(newLabel);
+              },
+            ),
+            PopupMenuItem<void>(
+              child: ListTile(
+                leading: const ShellIcon(MdiIcons.meditation),
+                title: Text(context.l10n.zen),
+                trailing: zenMode ? const ShellIcon(MdiIcons.check) : null,
+              ),
+              onTap: () {
+                ref
+                    .read(screenStateProvider(screenId).notifier)
+                    .toggleZenMode();
               },
             ),
             PopupMenuItem<void>(

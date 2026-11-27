@@ -15,6 +15,8 @@ import 'package:shell/monitor/widget/current_screen_id.dart' as monitor;
 import 'package:shell/screen/model/screen_manager_state.serializable.dart';
 import 'package:shell/screen/provider/screen_for_view.dart';
 import 'package:shell/screen/provider/screen_manager.dart';
+import 'package:shell/screen/provider/screen_state.dart';
+import 'package:shell/screen/model/screen.serializable.dart';
 import 'package:shell/screen/widget/current_screen_id.dart';
 import 'package:shell/settings/provider/state/focus_indicator_setting.dart';
 import 'package:shell/status_bar/provider/status_bar_settings.dart';
@@ -57,6 +59,17 @@ class _FakeWindowState extends PersistentWindowState {
 }
 
 /// Inserts like the real one: after an `await` (its category lookup).
+/// A screen showing [_workspace], without persisted storage: the workspace
+/// reads its screen (its zen mode).
+class _FixedScreenState extends ScreenState {
+  @override
+  Screen build(ScreenId screenId) => Screen(
+    screenId: screenId,
+    workspaceList: const IListConst([_workspace]),
+    selectedIndex: 0,
+  );
+}
+
 class _FakeWorkspaceState extends WorkspaceState {
   @override
   Workspace build(WorkspaceId workspaceId) {
@@ -106,6 +119,7 @@ void main() {
         windowManagerProvider.overrideWith(_FakeWindowManager.new),
         focusIndicatorSettingProvider.overrideWithValue(FocusIndicator.none),
         statusBarSettingsProvider.overrideWithValue(statusBarSettingsFallback),
+        screenStateProvider.overrideWith(_FixedScreenState.new),
         persistentWindowStateProvider.overrideWith2((_) => _FakeWindowState()),
         workspaceStateProvider(
           _workspace,

@@ -478,6 +478,11 @@ class SettingsProperties extends _$SettingsProperties {
                 description: l10n.decreaseScreensDescription,
                 converter: const LogicalKeySetListConverter(),
               ),
+              'layout.toggleZenMode': SettingProperty<List<LogicalKeySet>>(
+                name: l10n.zenMode,
+                description: l10n.zenModeDescription,
+                converter: const LogicalKeySetListConverter(),
+              ),
             },
           ),
         },

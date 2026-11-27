@@ -49,7 +49,8 @@
                 "increaseVisibleTiles": ["super+equal", "super+numpadAdd"],
                 "decreaseVisibleTiles": ["super+minus", "super+numpadSubtract"],
                 "increaseScreens": ["super+shift+equal", "super+shift+numpadAdd"],
-                "decreaseScreens": ["super+shift+minus", "super+shift+numpadSubtract"]
+                "decreaseScreens": ["super+shift+minus", "super+shift+numpadSubtract"],
+                "toggleZenMode": ["super+z"]
             }
         }
     },

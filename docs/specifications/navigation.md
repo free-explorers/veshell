@@ -140,6 +140,7 @@ Shipped defaults:
 | `Super+Q` | Close |
 | `Super+=` / `Super+-` (+ numpad `+`/`-`) | Show one tile more or fewer side by side in the focused workspace, down to one (`layout.increaseVisibleTiles`, `layout.decreaseVisibleTiles`) |
 | `Super+Shift+=` / `Super+Shift+-` (+ numpad) | Add a screen to the focused screen's monitor, or remove its last one, down to one (`layout.increaseScreens`, `layout.decreaseScreens`) |
+| `Super+Z` | Toggle zen mode on the focused screen: its panels slide out, leaving their selection lines in view (`layout.toggleZenMode`) |
 | `Super+Tab` / `Super+Shift+Tab` | Cycle the overview search mode |
 | `Escape` | Dismiss (overview) |
 
