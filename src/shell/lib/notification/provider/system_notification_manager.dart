@@ -5,6 +5,7 @@ import 'package:shell/notification/model/notification.serializable.dart';
 import 'package:shell/notification/model/notification_hints.serializable.dart';
 import 'package:shell/notification/model/system_notification_category.dart';
 import 'package:shell/notification/provider/notification_channel.dart';
+import 'package:shell/platform/model/event/brightness_changed/brightness_changed.serializable.dart';
 import 'package:shell/platform/model/event/platform_event.serializable.dart';
 import 'package:shell/platform/provider/platform_manager.dart';
 import 'package:shell/screen/provider/pointer_screen.dart';
@@ -51,7 +52,10 @@ class SystemNotificationManager extends _$SystemNotificationManager {
 
   void _onEvent(PlatformEvent event) {
     switch (event) {
-      case BrightnessChangedEvent(:final message):
+      // The Helm slider shows the level itself, and the startup sync is not
+      // a change: only the brightness keys pop the OSD up.
+      case BrightnessChangedEvent(:final message)
+          when message.source == BrightnessChangeSource.keys:
         showBrightness(message.fraction);
       default:
         break;

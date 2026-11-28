@@ -75,8 +75,10 @@ these keys must ship a migration or a version bump.
 ## Arrangement
 
 Monitors are positioned relative to each other through the **Arrange Monitors**
-entry in the Monitors settings group. Expanding it (`ExpandableSearchResult`)
-shows the inline `MonitorArrangementEditor`: a canvas of draggable monitor
+entry in the **Display** settings group. The group also holds one group per
+monitor (addressed `display.<connector>.<property>`, stored in
+`monitor/<connector>.json`), antialiasing and Night Light. Expanding the
+arrange entry (`ExpandableSearchResult`) shows the inline `MonitorArrangementEditor`: a canvas of draggable monitor
 rectangles plus `Reset to default` / `Apply` actions.
 
 - The editor reads the live `Monitor` projection plus the desired geometry file
@@ -292,6 +294,14 @@ the desired-geometry store: brightness is live state, not persisted.
   that sends the `adjust_brightness` platform request, for binding brightness to
   other keys; the compositor clamps to `[1%, 100%]` so a key can never turn the
   panel off.
+- **Helm slider.** The Helm's Display card sets the level directly with the
+  `set_brightness { fraction }` platform request, clamped like the keys.
+- **Reports.** Every change is reported to the shell as
+  `brightness_changed { fraction, available, source }`; `source` is `keys`
+  (function keys and `adjust_brightness`, which raise the OSD), `helm` (the
+  slider, which shows the level itself) or `sync` (sent when the shell starts,
+  the only report with `available: false` when there is no backlight, so the
+  Helm hides the slider).
 - **Suspend.** logind's `PrepareForSleep` is watched: the user level is restored
   before the system sleeps and the resume is treated as activity, so a panel
   switched off for the screensaver does not come back dark after a suspend (the

@@ -224,6 +224,62 @@ void main() {
     });
   });
 
+  group('brightness OSD', () {
+    late StreamController<PlatformEvent> events;
+    late ProviderContainer container;
+
+    setUp(() {
+      events = StreamController<PlatformEvent>.broadcast();
+      addTearDown(events.close);
+      container = ProviderContainer(
+        overrides: [
+          platformManagerProvider.overrideWithValue(events.stream),
+          focusedScreenProvider.overrideWithValue(_screenId),
+        ],
+      );
+      addTearDown(container.dispose);
+      final managerSub = container.listen(
+        systemNotificationManagerProvider,
+        (_, _) {},
+      );
+      addTearDown(managerSub.close);
+      final channelSub = container.listen(
+        notificationChannelProvider(_screenId),
+        (_, _) {},
+      );
+      addTearDown(channelSub.close);
+    });
+
+    Future<void> report(BrightnessChangeSource source) async {
+      events.add(
+        PlatformEvent.brightnessChanged(
+          method: 'brightness_changed',
+          message: BrightnessChangedMessage(fraction: 0.3, source: source),
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    test('the Helm slider and the startup sync show no OSD', () async {
+      await report(BrightnessChangeSource.helm);
+      await report(BrightnessChangeSource.sync);
+      expect(container.read(notificationChannelProvider(_screenId)), isEmpty);
+    });
+
+    test('the brightness keys show it', () async {
+      await report(BrightnessChangeSource.keys);
+      expect(
+        container
+            .read(notificationChannelProvider(_screenId))
+            .single
+            .dbusNotification
+            .hints
+            .category,
+        systemBrightnessCategory,
+      );
+    });
+  });
+
   testWidgets('dismissing a system popup removes it from its channel', (
     tester,
   ) async {

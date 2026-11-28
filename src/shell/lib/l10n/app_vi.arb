@@ -489,5 +489,21 @@
   "mouseSpeed": "Chuột: tốc độ con trỏ",
   "mouseSpeedDescription": "Tốc độ con trỏ từ -1.0 (chậm) đến 1.0 (nhanh); 0.0 là mặc định",
   "touchpadSpeed": "Bàn di chuột: tốc độ con trỏ",
-  "touchpadSpeedDescription": "Tốc độ con trỏ từ -1.0 (chậm) đến 1.0 (nhanh); 0.0 là mặc định"
+  "touchpadSpeedDescription": "Tốc độ con trỏ từ -1.0 (chậm) đến 1.0 (nhanh); 0.0 là mặc định",
+  "display": "Màn hình",
+  "nightLight": "Ánh sáng ban đêm",
+  "nightLightDescription": "Làm ấm màu màn hình vào ban đêm để giảm ánh sáng xanh",
+  "nightLightSchedule": "Lịch",
+  "nightLightScheduleDescription": "Tự động bật và tắt Ánh sáng ban đêm mỗi ngày",
+  "nightLightScheduleOff": "Tắt (chỉ dùng công tắc trong Helm)",
+  "nightLightScheduleManual": "Mỗi ngày vào giờ đã đặt",
+  "nightLightFrom": "Bật lúc",
+  "nightLightFromDescription": "Thời điểm lịch bật Ánh sáng ban đêm",
+  "nightLightTo": "Tắt lúc",
+  "nightLightToDescription": "Thời điểm lịch tắt Ánh sáng ban đêm",
+  "nightLightTemperature": "Nhiệt độ màu",
+  "nightLightTemperatureDescription": "Nhiệt độ càng ấm càng giảm nhiều ánh sáng xanh; 6500 K giữ nguyên màu",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "Bật đến {time}",
+  "nightLightOffUntil": "Tắt đến {time}"
 }

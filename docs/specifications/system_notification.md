@@ -18,7 +18,7 @@ involved. The popup always lands on the focused screen.
 | Alert | Source | Transport |
 |---|---|---|
 | Volume / mute | Shell hotkeys (`system.increaseVolume`, `system.decreaseVolume`, `system.muteVolume`) | In-process: the handler calls `SystemNotificationManager` directly |
-| Brightness | The compositor's brightness authority, on both the hardware function keys and the shell's `adjust_brightness` request | `brightness_changed { fraction }` platform event |
+| Brightness | The compositor's brightness authority, on both the hardware function keys and the shell's `adjust_brightness` request | `brightness_changed { fraction, source: keys }` platform event |
 | Battery low / critical | UPower system battery | In-process: `BatteryNotification` watches the device |
 
 Only the volume/brightness **keys** raise an OSD. A change made by another
@@ -30,7 +30,8 @@ Brightness is owned by the compositor (see [Monitor](monitor.md) and
 `src/embedder/brightness/`): the function keys are swallowed there so they keep
 working while the shell is unfocused and while the panel is idle-dimmed. The
 compositor therefore reports the level it settled on rather than letting the
-shell guess it.
+shell guess it. It also reports the Helm slider's changes (`source: helm`) and
+the level at shell startup (`source: sync`); neither raises an OSD.
 
 ## Presentation
 

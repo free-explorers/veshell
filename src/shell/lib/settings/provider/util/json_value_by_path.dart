@@ -1,18 +1,21 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shell/settings/provider/util/merged_settings_json.dart';
 import 'package:shell/settings/provider/util/monitor_setting_json.dart';
+import 'package:shell/settings/provider/util/monitor_setting_path.dart';
 
 part 'json_value_by_path.g.dart';
 
 @Riverpod(keepAlive: true)
 dynamic jsonValueByPath(Ref ref, String path) {
-  final pathParts = path.split('.');
+  final monitorPath = parseMonitorSettingPath(path);
+  final List<String> pathParts;
   dynamic value;
-  if (pathParts.first == 'monitors' && pathParts.length >= 3) {
-    value = ref.watch(monitorSettingJsonProvider(pathParts[1]));
-    pathParts.removeRange(0, 2);
+  if (monitorPath != null) {
+    value = ref.watch(monitorSettingJsonProvider(monitorPath.monitor));
+    pathParts = monitorPath.property.split('.');
   } else {
     value = ref.watch(mergedSettingsJsonProvider);
+    pathParts = path.split('.');
   }
   for (final part in pathParts) {
     if (value is Map) {

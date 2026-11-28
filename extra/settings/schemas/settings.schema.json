@@ -430,16 +430,6 @@
                     "type": "boolean",
                     "description": "Keep the open overview from repainting the screen behind it: the blurred backdrop is a still image and the monitoring graphs step instead of sliding. Off for a live backdrop and smooth graphs, at a higher GPU cost."
                 },
-                "antialiasing": {
-                    "type": "string",
-                    "enum": [
-                        "auto",
-                        "off",
-                        "2x",
-                        "4x"
-                    ],
-                    "description": "Multisampling of the shell's rendering. auto: 4x on a dedicated GPU, 2x on an integrated one, off in software rendering."
-                },
                 "statusBar": {
                     "type": "string",
                     "enum": [
@@ -476,6 +466,48 @@
                         },
                         "showBatteryPercentage": {
                             "type": "boolean"
+                        }
+                    },
+                    "additionalProperties": false
+                }
+            },
+            "additionalProperties": false
+        },
+        "display": {
+            "type": "object",
+            "properties": {
+                "antialiasing": {
+                    "type": "string",
+                    "enum": [
+                        "auto",
+                        "off",
+                        "2x",
+                        "4x"
+                    ],
+                    "description": "Multisampling of the shell's rendering. auto: 4x on a dedicated GPU, 2x on an integrated one, off in software rendering."
+                },
+                "nightLight": {
+                    "type": "object",
+                    "properties": {
+                        "schedule": {
+                            "type": "string",
+                            "enum": [
+                                "off",
+                                "manual"
+                            ]
+                        },
+                        "from": {
+                            "type": "string",
+                            "pattern": "^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
+                        },
+                        "to": {
+                            "type": "string",
+                            "pattern": "^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
+                        },
+                        "temperature": {
+                            "type": "integer",
+                            "minimum": 1700,
+                            "maximum": 6500
                         }
                     },
                     "additionalProperties": false

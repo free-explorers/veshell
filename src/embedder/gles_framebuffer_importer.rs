@@ -22,7 +22,7 @@
 //!   (`GL_EXT_multisampled_render_to_texture`), which desktop Mesa does not.
 //!   The view's render target is multisampled instead, and resolved on
 //!   present, as Flutter's own GTK embedder does. The sample count follows
-//!   the `theme.antialiasing` setting ([`set_antialiasing`]); `auto` weighs the
+//!   the `display.antialiasing` setting ([`set_antialiasing`]); `auto` weighs the
 //!   GPU (see [`GpuKind`]). Skia (`VESHELL_RENDERER=skia`) antialiases
 //!   analytically: its targets keep a single sample, whatever the setting.
 //! * Partial repaint. The view's target also keeps its last complete frame,
@@ -59,11 +59,11 @@ use tracing::{info, trace};
 
 use crate::settings::Antialiasing;
 
-/// The `theme.antialiasing` setting, written by the settings on the main
+/// The `display.antialiasing` setting, written by the settings on the main
 /// thread and read by the importer on the raster thread.
 static ANTIALIASING: AtomicU8 = AtomicU8::new(0);
 
-/// Records the `theme.antialiasing` setting; the next frame renders with it.
+/// Records the `display.antialiasing` setting; the next frame renders with it.
 /// Returns whether it changed.
 pub fn set_antialiasing(antialiasing: Antialiasing) -> bool {
     let value = match antialiasing {

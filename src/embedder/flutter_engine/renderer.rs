@@ -47,7 +47,7 @@ impl Renderer {
             // SDFs give rectangles, rounded rectangles, circles and lines
             // analytic antialiasing, whatever the multisampling of the
             // framebuffers Veshell hands the engine (the
-            // `theme.antialiasing` setting, which may be off).
+            // `display.antialiasing` setting, which may be off).
             Self::Impeller => &["--enable-impeller", "--impeller-use-sdfs"],
             // The engine renders with Skia unless told otherwise.
             Self::Skia => &[],

@@ -20,6 +20,8 @@ import 'package:shell/monitor/widget/monitor.dart';
 import 'package:shell/notification/provider/notification_manager.dart';
 import 'package:shell/notification/provider/notification_read_tracker.dart';
 import 'package:shell/notification/provider/system_notification_manager.dart';
+import 'package:shell/overview/helm/control_panel/display/provider/display_brightness.dart';
+import 'package:shell/overview/helm/control_panel/display/provider/night_light_state.dart';
 import 'package:shell/overview/helm/monitoring_panel/cpu_monitoring/provider/cpu_stats.dart';
 import 'package:shell/overview/helm/monitoring_panel/gpu_monitoring/provider/gpu_stats.dart';
 import 'package:shell/overview/helm/monitoring_panel/memory_monitoring/provider/memory_stats.dart';
@@ -121,9 +123,13 @@ class _VeshellState extends ConsumerState<Veshell> with WidgetsBindingObserver {
     // builds.
     registerProbeExtensions(ProviderScope.containerOf(context, listen: false));
 
-    // Listens before the compositor, told the shell is ready, reports the
-    // active keyboard layout.
-    ref.read(activeKeyboardLayoutProvider);
+    // Listen before the compositor, told the shell is ready, reports the
+    // active keyboard layout, the brightness and Night Light (the Helm's
+    // Display card is built long after).
+    ref
+      ..read(activeKeyboardLayoutProvider)
+      ..read(displayBrightnessProvider)
+      ..read(nightLightStateProvider);
 
     ref.read(platformManagerProvider.notifier)
       ..request(

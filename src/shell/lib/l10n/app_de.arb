@@ -489,5 +489,21 @@
   "mouseSpeed": "Maus: Zeigergeschwindigkeit",
   "mouseSpeedDescription": "Zeigergeschwindigkeit von -1.0 (langsam) bis 1.0 (schnell); 0.0 ist der Standard",
   "touchpadSpeed": "Touchpad: Zeigergeschwindigkeit",
-  "touchpadSpeedDescription": "Zeigergeschwindigkeit von -1.0 (langsam) bis 1.0 (schnell); 0.0 ist der Standard"
+  "touchpadSpeedDescription": "Zeigergeschwindigkeit von -1.0 (langsam) bis 1.0 (schnell); 0.0 ist der Standard",
+  "display": "Anzeige",
+  "nightLight": "Nachtlicht",
+  "nightLightDescription": "Bildschirmfarben nachts wärmer machen, um blaues Licht zu reduzieren",
+  "nightLightSchedule": "Zeitplan",
+  "nightLightScheduleDescription": "Nachtlicht jeden Tag automatisch ein- und ausschalten",
+  "nightLightScheduleOff": "Aus (nur Schalter im Helm)",
+  "nightLightScheduleManual": "Täglich zu festen Zeiten",
+  "nightLightFrom": "Einschalten um",
+  "nightLightFromDescription": "Wann der Zeitplan das Nachtlicht einschaltet",
+  "nightLightTo": "Ausschalten um",
+  "nightLightToDescription": "Wann der Zeitplan das Nachtlicht ausschaltet",
+  "nightLightTemperature": "Farbtemperatur",
+  "nightLightTemperatureDescription": "Wärmere Temperaturen entfernen mehr blaues Licht; 6500 K lässt die Farben unverändert",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "An bis {time}",
+  "nightLightOffUntil": "Aus bis {time}"
 }

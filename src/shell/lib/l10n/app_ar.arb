@@ -489,5 +489,21 @@
   "mouseSpeed": "الفأرة: سرعة المؤشر",
   "mouseSpeedDescription": "سرعة المؤشر من -1.0 (بطيء) إلى 1.0 (سريع)؛ 0.0 هو الافتراضي",
   "touchpadSpeed": "لوحة اللمس: سرعة المؤشر",
-  "touchpadSpeedDescription": "سرعة المؤشر من -1.0 (بطيء) إلى 1.0 (سريع)؛ 0.0 هو الافتراضي"
+  "touchpadSpeedDescription": "سرعة المؤشر من -1.0 (بطيء) إلى 1.0 (سريع)؛ 0.0 هو الافتراضي",
+  "display": "الشاشة",
+  "nightLight": "الإضاءة الليلية",
+  "nightLightDescription": "تدفئة ألوان الشاشة ليلًا لتقليل الضوء الأزرق",
+  "nightLightSchedule": "الجدولة",
+  "nightLightScheduleDescription": "تشغيل الإضاءة الليلية وإيقافها تلقائيًا كل يوم",
+  "nightLightScheduleOff": "متوقفة (مفتاح Helm فقط)",
+  "nightLightScheduleManual": "كل يوم في أوقات محددة",
+  "nightLightFrom": "تعمل عند",
+  "nightLightFromDescription": "الوقت الذي تشغّل فيه الجدولة الإضاءة الليلية",
+  "nightLightTo": "تتوقف عند",
+  "nightLightToDescription": "الوقت الذي توقف فيه الجدولة الإضاءة الليلية",
+  "nightLightTemperature": "درجة حرارة اللون",
+  "nightLightTemperatureDescription": "كلما كانت الحرارة أدفأ قلّ الضوء الأزرق؛ 6500 K تُبقي الألوان دون تغيير",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "تعمل حتى {time}",
+  "nightLightOffUntil": "متوقفة حتى {time}"
 }

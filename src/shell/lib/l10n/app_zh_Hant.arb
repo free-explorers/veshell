@@ -489,5 +489,21 @@
   "mouseSpeed": "滑鼠：指標速度",
   "mouseSpeedDescription": "指標速度從 -1.0（慢）到 1.0（快）；0.0 為預設值",
   "touchpadSpeed": "觸控板：指標速度",
-  "touchpadSpeedDescription": "指標速度從 -1.0（慢）到 1.0（快）；0.0 為預設值"
+  "touchpadSpeedDescription": "指標速度從 -1.0（慢）到 1.0（快）；0.0 為預設值",
+  "display": "顯示",
+  "nightLight": "夜間模式",
+  "nightLightDescription": "夜間讓螢幕顏色更暖，減少藍光",
+  "nightLightSchedule": "排程",
+  "nightLightScheduleDescription": "每天自動開啟和關閉夜間模式",
+  "nightLightScheduleOff": "關閉（僅 Helm 開關）",
+  "nightLightScheduleManual": "每天在設定時間",
+  "nightLightFrom": "開啟時間",
+  "nightLightFromDescription": "排程開啟夜間模式的時間",
+  "nightLightTo": "關閉時間",
+  "nightLightToDescription": "排程關閉夜間模式的時間",
+  "nightLightTemperature": "色溫",
+  "nightLightTemperatureDescription": "色溫越暖，藍光越少；6500 K 不改變顏色",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "開啟至 {time}",
+  "nightLightOffUntil": "關閉至 {time}"
 }

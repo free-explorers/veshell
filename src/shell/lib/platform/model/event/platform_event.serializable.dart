@@ -30,6 +30,7 @@ import 'package:shell/platform/model/event/meta_window_removed/meta_window_remov
 import 'package:shell/platform/model/event/monitor_layout_changed/monitor_layout_changed.serializable.dart';
 import 'package:shell/platform/model/event/new_subsurface/new_subsurface.serializable.dart';
 import 'package:shell/platform/model/event/new_surface/new_surface.serializable.dart';
+import 'package:shell/platform/model/event/night_light_changed/night_light_changed.serializable.dart';
 import 'package:shell/platform/model/event/process_info/process_info.serializable.dart';
 import 'package:shell/platform/model/event/set_environment_variables/set_environment_variables.serializable.dart';
 import 'package:shell/platform/model/event/window_attention_released/window_attention_released.serializable.dart';
@@ -243,6 +244,13 @@ sealed class PlatformEvent with _$PlatformEvent implements PlatformInteraction {
     required String method,
     required BrightnessChangedMessage message,
   }) = BrightnessChangedEvent;
+
+  /// Night Light turned on or off, or whether any output can show it changed.
+  /// The Helm's toggle follows it.
+  const factory PlatformEvent.nightLightChanged({
+    required String method,
+    required NightLightChangedMessage message,
+  }) = NightLightChangedEvent;
 
   /// The compositor locked or unlocked the session; the shell draws the lock
   /// screen while it is locked.

@@ -489,5 +489,21 @@
   "mouseSpeed": "Mouse: Kecepatan Penunjuk",
   "mouseSpeedDescription": "Kecepatan penunjuk dari -1.0 (lambat) hingga 1.0 (cepat); 0.0 adalah bawaan",
   "touchpadSpeed": "Touchpad: Kecepatan Penunjuk",
-  "touchpadSpeedDescription": "Kecepatan penunjuk dari -1.0 (lambat) hingga 1.0 (cepat); 0.0 adalah bawaan"
+  "touchpadSpeedDescription": "Kecepatan penunjuk dari -1.0 (lambat) hingga 1.0 (cepat); 0.0 adalah bawaan",
+  "display": "Layar",
+  "nightLight": "Lampu Malam",
+  "nightLightDescription": "Menghangatkan warna layar di malam hari untuk mengurangi cahaya biru",
+  "nightLightSchedule": "Jadwal",
+  "nightLightScheduleDescription": "Nyalakan dan matikan Lampu Malam secara otomatis setiap hari",
+  "nightLightScheduleOff": "Mati (hanya tombol Helm)",
+  "nightLightScheduleManual": "Setiap hari pada jam tertentu",
+  "nightLightFrom": "Menyala pada",
+  "nightLightFromDescription": "Kapan jadwal menyalakan Lampu Malam",
+  "nightLightTo": "Mati pada",
+  "nightLightToDescription": "Kapan jadwal mematikan Lampu Malam",
+  "nightLightTemperature": "Suhu Warna",
+  "nightLightTemperatureDescription": "Suhu yang lebih hangat mengurangi lebih banyak cahaya biru; 6500 K tidak mengubah warna",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "Menyala sampai {time}",
+  "nightLightOffUntil": "Mati sampai {time}"
 }

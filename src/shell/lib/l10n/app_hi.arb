@@ -489,5 +489,21 @@
   "mouseSpeed": "माउस: पॉइंटर गति",
   "mouseSpeedDescription": "पॉइंटर गति -1.0 (धीमी) से 1.0 (तेज़); 0.0 डिफ़ॉल्ट है",
   "touchpadSpeed": "टचपैड: पॉइंटर गति",
-  "touchpadSpeedDescription": "पॉइंटर गति -1.0 (धीमी) से 1.0 (तेज़); 0.0 डिफ़ॉल्ट है"
+  "touchpadSpeedDescription": "पॉइंटर गति -1.0 (धीमी) से 1.0 (तेज़); 0.0 डिफ़ॉल्ट है",
+  "display": "डिस्प्ले",
+  "nightLight": "नाइट लाइट",
+  "nightLightDescription": "नीली रोशनी कम करने के लिए रात में स्क्रीन के रंग गर्म करें",
+  "nightLightSchedule": "शेड्यूल",
+  "nightLightScheduleDescription": "नाइट लाइट को हर दिन अपने आप चालू और बंद करें",
+  "nightLightScheduleOff": "बंद (केवल Helm स्विच)",
+  "nightLightScheduleManual": "हर दिन तय समय पर",
+  "nightLightFrom": "चालू होने का समय",
+  "nightLightFromDescription": "शेड्यूल नाइट लाइट कब चालू करता है",
+  "nightLightTo": "बंद होने का समय",
+  "nightLightToDescription": "शेड्यूल नाइट लाइट कब बंद करता है",
+  "nightLightTemperature": "रंग तापमान",
+  "nightLightTemperatureDescription": "गर्म तापमान अधिक नीली रोशनी हटाता है; 6500 K रंग नहीं बदलता",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "{time} तक चालू",
+  "nightLightOffUntil": "{time} तक बंद"
 }

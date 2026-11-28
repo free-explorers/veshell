@@ -446,9 +446,18 @@ pub struct ThemeSettings {
     /// `XCURSOR_SIZE`.
     #[serde(default, deserialize_with = "deserialize_u32_saturating")]
     pub cursor_size: u32,
+}
+
+/// The `display` settings: what applies to every output. Each monitor's own
+/// geometry lives in `monitor/<connector>.json` (see
+/// [`SettingsManager::get_monitor_configuration`]).
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct DisplaySettings {
     /// Multisampling of the shell's rendering.
-    #[serde(default, deserialize_with = "deserialize_antialiasing")]
+    #[serde(deserialize_with = "deserialize_antialiasing")]
     pub antialiasing: Antialiasing,
+    pub night_light: NightLightSettings,
 }
 
 /// How much the shell's rendering is multisampled: what smooths the edges
@@ -663,6 +672,214 @@ pub struct VeshellSettings {
     pub idle: IdleSettings,
     #[serde(default)]
     pub environment: EnvironmentSettings,
+    #[serde(default)]
+    pub display: DisplaySettings,
+}
+
+/// Settings that moved, as `(old path, new path)`: a user `settings.json`
+/// written before the move still applies (see [`migrate_legacy_settings`]).
+const MOVED_SETTINGS: &[(&[&str], &[&str])] = &[
+    (&["theme", "antialiasing"], &["display", "antialiasing"]),
+    (&["nightLight"], &["display", "nightLight"]),
+];
+
+/// Moves the settings of [`MOVED_SETTINGS`] in a user `settings.json` to their
+/// new path. A value already at the new path wins over the old one, which is
+/// dropped either way; a parent object left empty is removed, since the file
+/// only stores overrides. Returns whether anything changed.
+fn migrate_legacy_settings(settings: &mut Value) -> bool {
+    let mut changed = false;
+    for (old_path, new_path) in MOVED_SETTINGS {
+        let Some(value) = take_path(settings, old_path) else {
+            continue;
+        };
+        changed = true;
+        insert_path(settings, new_path, value);
+    }
+    changed
+}
+
+/// Puts `value` at `path`, creating the parent objects, unless a value is
+/// already there.
+fn insert_path(target: &mut Value, path: &[&str], value: Value) {
+    let Some((first, rest)) = path.split_first() else {
+        return;
+    };
+    let Some(object) = target.as_object_mut() else {
+        return;
+    };
+    if rest.is_empty() {
+        object.entry(first.to_string()).or_insert(value);
+        return;
+    }
+    let child = object
+        .entry(first.to_string())
+        .or_insert_with(|| Value::Object(Default::default()));
+    insert_path(child, rest, value);
+}
+
+/// Removes the value at `path`, and its parent objects left empty.
+fn take_path(value: &mut Value, path: &[&str]) -> Option<Value> {
+    let (first, rest) = path.split_first()?;
+    let object = value.as_object_mut()?;
+    if rest.is_empty() {
+        return object.remove(*first);
+    }
+    let child = object.get_mut(*first)?;
+    let taken = take_path(child, rest)?;
+    if child.as_object().is_some_and(|child| child.is_empty()) {
+        object.remove(*first);
+    }
+    Some(taken)
+}
+
+/// Rewrites the user's `settings.json` with [`migrate_legacy_settings`]
+/// applied, so the shell, which reads the file itself, finds the moved
+/// settings at their new path. Written atomically; a file that cannot be read
+/// or parsed is left alone (loading it reports the problem).
+fn migrate_settings_file(path: &Path) {
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return;
+    };
+    let Ok(mut settings) = serde_json::from_str::<Value>(&contents) else {
+        return;
+    };
+    if !migrate_legacy_settings(&mut settings) {
+        return;
+    }
+    let Ok(migrated) = serde_json::to_string_pretty(&settings) else {
+        return;
+    };
+    let temporary = path.with_extension("json.migrating");
+    let written = std::fs::write(&temporary, migrated + "\n")
+        .and_then(|()| std::fs::rename(&temporary, path));
+    match written {
+        Ok(()) => info!("Moved settings to their new paths in {}", path.display()),
+        Err(err) => {
+            tracing::warn!(
+                "Failed to rewrite {} with moved settings: {err}",
+                path.display()
+            );
+            let _ = std::fs::remove_file(&temporary);
+        }
+    }
+}
+
+/// When Night Light turns on by itself.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum NightLightSchedule {
+    /// Only the Helm toggle turns it on.
+    #[default]
+    Off,
+    /// Every day from [`NightLightSettings::from`] to [`NightLightSettings::to`].
+    Manual,
+}
+
+/// Night Light: warms the outputs' colour temperature, on a daily schedule or
+/// from the Helm toggle. See `docs/specifications/night_light.md`.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct NightLightSettings {
+    #[serde(deserialize_with = "deserialize_night_light_schedule")]
+    pub schedule: NightLightSchedule,
+    /// Start of the daily window, in minutes after midnight (`HH:MM` on disk).
+    #[serde(
+        serialize_with = "serialize_time_of_day",
+        deserialize_with = "deserialize_night_light_from"
+    )]
+    pub from: u16,
+    /// End of the daily window, in minutes after midnight (`HH:MM` on disk).
+    #[serde(
+        serialize_with = "serialize_time_of_day",
+        deserialize_with = "deserialize_night_light_to"
+    )]
+    pub to: u16,
+    /// The warm colour temperature, in kelvin.
+    #[serde(deserialize_with = "deserialize_night_light_temperature")]
+    pub temperature: u32,
+}
+
+const NIGHT_LIGHT_DEFAULT_FROM: u16 = 20 * 60;
+const NIGHT_LIGHT_DEFAULT_TO: u16 = 6 * 60;
+const NIGHT_LIGHT_DEFAULT_TEMPERATURE: u32 = 2700;
+
+impl Default for NightLightSettings {
+    fn default() -> Self {
+        Self {
+            schedule: NightLightSchedule::default(),
+            from: NIGHT_LIGHT_DEFAULT_FROM,
+            to: NIGHT_LIGHT_DEFAULT_TO,
+            temperature: NIGHT_LIGHT_DEFAULT_TEMPERATURE,
+        }
+    }
+}
+
+fn serialize_time_of_day<S>(minutes: &u16, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_str(&crate::night_light::schedule::format_time(*minutes))
+}
+
+/// Reads a `HH:MM` time, falling back to `fallback` for a malformed value so a
+/// hand-edited `settings.json` cannot take the settings load down.
+fn deserialize_time_of_day<'de, D>(deserializer: D, fallback: u16) -> Result<u16, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    Ok(value
+        .as_ref()
+        .and_then(Value::as_str)
+        .and_then(crate::night_light::schedule::parse_time)
+        .unwrap_or(fallback))
+}
+
+fn deserialize_night_light_from<'de, D>(deserializer: D) -> Result<u16, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_time_of_day(deserializer, NIGHT_LIGHT_DEFAULT_FROM)
+}
+
+fn deserialize_night_light_to<'de, D>(deserializer: D) -> Result<u16, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    deserialize_time_of_day(deserializer, NIGHT_LIGHT_DEFAULT_TO)
+}
+
+/// Reads the schedule, falling back to off for an unknown value.
+fn deserialize_night_light_schedule<'de, D>(deserializer: D) -> Result<NightLightSchedule, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    Ok(match value.as_ref().and_then(Value::as_str) {
+        Some("manual") => NightLightSchedule::Manual,
+        _ => NightLightSchedule::Off,
+    })
+}
+
+/// Reads the temperature, clamped to what the conversion supports; a
+/// malformed value falls back to the default.
+fn deserialize_night_light_temperature<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    Ok(value
+        .as_ref()
+        .and_then(Value::as_f64)
+        .filter(|kelvin| kelvin.is_finite())
+        .map(|kelvin| {
+            kelvin.clamp(
+                crate::night_light::temperature::MIN_KELVIN,
+                crate::night_light::temperature::NEUTRAL_KELVIN,
+            ) as u32
+        })
+        .unwrap_or(NIGHT_LIGHT_DEFAULT_TEMPERATURE))
 }
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -874,6 +1091,8 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         if !config_folder.exists() {
             std::fs::create_dir_all(config_folder).expect("Unable to create user settings folder");
         }
+        // Before anything reads it: the shell reads the file itself.
+        migrate_settings_file(&config_folder.join("settings.json"));
 
         let mut config_source = NotifySource::new().unwrap();
         config_source
@@ -934,8 +1153,10 @@ impl<BackendData: Backend + 'static> SettingsManager<BackendData> {
         if configured_settings_path.exists() {
             let configured_settings_file =
                 File::open(configured_settings_path).expect("Unable to open file");
-            let configured_settings_json: Value =
+            let mut configured_settings_json: Value =
                 serde_json::from_reader(configured_settings_file).expect("Unable to parse JSON");
+            // A file edited back to an old path still applies.
+            migrate_legacy_settings(&mut configured_settings_json);
 
             merge_json(&mut settings_json, configured_settings_json);
         }
@@ -1018,6 +1239,78 @@ fn watch_monitors_changes<BackendData: Backend + 'static>(
                 _ => {}
             })
             .unwrap();
+    }
+}
+
+#[cfg(test)]
+mod moved_settings_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn old_paths_move_to_display() {
+        let mut settings = json!({
+            "theme": {"antialiasing": "4x", "color": "0xFF000000"},
+            "nightLight": {"schedule": "manual", "from": "21:00"},
+        });
+        assert!(migrate_legacy_settings(&mut settings));
+        assert_eq!(
+            settings,
+            json!({
+                "theme": {"color": "0xFF000000"},
+                "display": {
+                    "antialiasing": "4x",
+                    "nightLight": {"schedule": "manual", "from": "21:00"},
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn emptied_parents_are_dropped_and_new_values_win() {
+        let mut settings = json!({
+            "theme": {"antialiasing": "off"},
+            "display": {"antialiasing": "2x"},
+        });
+        assert!(migrate_legacy_settings(&mut settings));
+        assert_eq!(settings, json!({"display": {"antialiasing": "2x"}}));
+    }
+
+    #[test]
+    fn current_files_are_untouched() {
+        let mut settings = json!({"display": {"antialiasing": "2x"}, "theme": {"color": "x"}});
+        let before = settings.clone();
+        assert!(!migrate_legacy_settings(&mut settings));
+        assert_eq!(settings, before);
+    }
+
+    #[test]
+    fn display_settings_read_their_new_paths() {
+        let display: DisplaySettings = serde_json::from_value(json!({
+            "antialiasing": "off",
+            "nightLight": {"schedule": "manual", "temperature": 3000},
+        }))
+        .unwrap();
+        assert_eq!(display.antialiasing, Antialiasing::Off);
+        assert_eq!(display.night_light.schedule, NightLightSchedule::Manual);
+        assert_eq!(display.night_light.temperature, 3000);
+        let missing: DisplaySettings = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(missing, DisplaySettings::default());
+    }
+
+    #[test]
+    fn the_settings_file_is_rewritten_once() {
+        let directory =
+            std::env::temp_dir().join(format!("veshell-moved-settings-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("settings.json");
+        std::fs::write(&path, r#"{"theme": {"antialiasing": "off"}}"#).unwrap();
+        migrate_settings_file(&path);
+        let migrated: Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(migrated, json!({"display": {"antialiasing": "off"}}));
+        assert!(!directory.join("settings.json.migrating").exists());
+        std::fs::remove_dir_all(&directory).unwrap();
     }
 }
 

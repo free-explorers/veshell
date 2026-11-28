@@ -489,5 +489,21 @@
   "mouseSpeed": "마우스: 포인터 속도",
   "mouseSpeedDescription": "포인터 속도는 -1.0(느림)에서 1.0(빠름)까지이며 0.0이 기본값입니다",
   "touchpadSpeed": "터치패드: 포인터 속도",
-  "touchpadSpeedDescription": "포인터 속도는 -1.0(느림)에서 1.0(빠름)까지이며 0.0이 기본값입니다"
+  "touchpadSpeedDescription": "포인터 속도는 -1.0(느림)에서 1.0(빠름)까지이며 0.0이 기본값입니다",
+  "display": "디스플레이",
+  "nightLight": "야간 모드",
+  "nightLightDescription": "밤에 화면 색을 따뜻하게 하여 청색광을 줄입니다",
+  "nightLightSchedule": "일정",
+  "nightLightScheduleDescription": "매일 자동으로 야간 모드를 켜고 끕니다",
+  "nightLightScheduleOff": "끔 (Helm 스위치만)",
+  "nightLightScheduleManual": "매일 정해진 시간",
+  "nightLightFrom": "켜는 시간",
+  "nightLightFromDescription": "일정이 야간 모드를 켜는 시간",
+  "nightLightTo": "끄는 시간",
+  "nightLightToDescription": "일정이 야간 모드를 끄는 시간",
+  "nightLightTemperature": "색 온도",
+  "nightLightTemperatureDescription": "따뜻한 온도일수록 청색광을 더 줄입니다. 6500 K는 색을 바꾸지 않습니다",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "{time}까지 켜짐",
+  "nightLightOffUntil": "{time}까지 꺼짐"
 }

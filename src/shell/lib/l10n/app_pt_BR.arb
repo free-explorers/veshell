@@ -489,5 +489,21 @@
   "mouseSpeed": "Mouse: velocidade do ponteiro",
   "mouseSpeedDescription": "Velocidade do ponteiro de -1.0 (lento) a 1.0 (rápido); 0.0 é o padrão",
   "touchpadSpeed": "Touchpad: velocidade do ponteiro",
-  "touchpadSpeedDescription": "Velocidade do ponteiro de -1.0 (lento) a 1.0 (rápido); 0.0 é o padrão"
+  "touchpadSpeedDescription": "Velocidade do ponteiro de -1.0 (lento) a 1.0 (rápido); 0.0 é o padrão",
+  "display": "Tela",
+  "nightLight": "Luz noturna",
+  "nightLightDescription": "Deixar as cores da tela mais quentes à noite para reduzir a luz azul",
+  "nightLightSchedule": "Agendamento",
+  "nightLightScheduleDescription": "Ligar e desligar a luz noturna automaticamente todos os dias",
+  "nightLightScheduleOff": "Desligado (apenas o botão do Helm)",
+  "nightLightScheduleManual": "Todos os dias em horários definidos",
+  "nightLightFrom": "Liga às",
+  "nightLightFromDescription": "Quando o agendamento liga a luz noturna",
+  "nightLightTo": "Desliga às",
+  "nightLightToDescription": "Quando o agendamento desliga a luz noturna",
+  "nightLightTemperature": "Temperatura de cor",
+  "nightLightTemperatureDescription": "Temperaturas mais quentes removem mais luz azul; 6500 K mantém as cores inalteradas",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "Ligada até {time}",
+  "nightLightOffUntil": "Desligada até {time}"
 }

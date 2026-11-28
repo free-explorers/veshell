@@ -489,5 +489,21 @@
   "mouseSpeed": "Мышь: скорость указателя",
   "mouseSpeedDescription": "Скорость указателя от -1.0 (медленно) до 1.0 (быстро); 0.0 — по умолчанию",
   "touchpadSpeed": "Тачпад: скорость указателя",
-  "touchpadSpeedDescription": "Скорость указателя от -1.0 (медленно) до 1.0 (быстро); 0.0 — по умолчанию"
+  "touchpadSpeedDescription": "Скорость указателя от -1.0 (медленно) до 1.0 (быстро); 0.0 — по умолчанию",
+  "display": "Экран",
+  "nightLight": "Ночной свет",
+  "nightLightDescription": "Делать цвета экрана теплее ночью, чтобы уменьшить синий свет",
+  "nightLightSchedule": "Расписание",
+  "nightLightScheduleDescription": "Включать и выключать ночной свет автоматически каждый день",
+  "nightLightScheduleOff": "Выключено (только переключатель в Helm)",
+  "nightLightScheduleManual": "Каждый день в заданное время",
+  "nightLightFrom": "Включается в",
+  "nightLightFromDescription": "Когда расписание включает ночной свет",
+  "nightLightTo": "Выключается в",
+  "nightLightToDescription": "Когда расписание выключает ночной свет",
+  "nightLightTemperature": "Цветовая температура",
+  "nightLightTemperatureDescription": "Чем теплее температура, тем меньше синего света; 6500 K оставляет цвета без изменений",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "Включён до {time}",
+  "nightLightOffUntil": "Выключен до {time}"
 }

@@ -489,5 +489,21 @@
   "mouseSpeed": "Ratón: velocidad del puntero",
   "mouseSpeedDescription": "Velocidad del puntero de -1.0 (lento) a 1.0 (rápido); 0.0 es el valor predeterminado",
   "touchpadSpeed": "Panel táctil: velocidad del puntero",
-  "touchpadSpeedDescription": "Velocidad del puntero de -1.0 (lento) a 1.0 (rápido); 0.0 es el valor predeterminado"
+  "touchpadSpeedDescription": "Velocidad del puntero de -1.0 (lento) a 1.0 (rápido); 0.0 es el valor predeterminado",
+  "display": "Pantalla",
+  "nightLight": "Luz nocturna",
+  "nightLightDescription": "Calienta los colores de la pantalla por la noche para reducir la luz azul",
+  "nightLightSchedule": "Programación",
+  "nightLightScheduleDescription": "Activar y desactivar la luz nocturna automáticamente cada día",
+  "nightLightScheduleOff": "Desactivada (solo interruptor del Helm)",
+  "nightLightScheduleManual": "Cada día a horas fijas",
+  "nightLightFrom": "Se activa a las",
+  "nightLightFromDescription": "Cuándo la programación activa la luz nocturna",
+  "nightLightTo": "Se desactiva a las",
+  "nightLightToDescription": "Cuándo la programación desactiva la luz nocturna",
+  "nightLightTemperature": "Temperatura de color",
+  "nightLightTemperatureDescription": "Las temperaturas más cálidas eliminan más luz azul; 6500 K deja los colores sin cambios",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "Activada hasta las {time}",
+  "nightLightOffUntil": "Desactivada hasta las {time}"
 }

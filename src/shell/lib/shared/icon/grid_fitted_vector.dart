@@ -99,7 +99,7 @@ class _GridFitPainter extends CustomPainter {
 /// offscreen pass, once; every frame after that draws a plain image, which is
 /// far cheaper than replaying the paths (Impeller has no raster cache). It
 /// also keeps icons antialiased when the compositor's own multisampling is
-/// off (`theme.antialiasing`): Impeller antialiases paths only by sampling.
+/// off (`display.antialiasing`): Impeller antialiases paths only by sampling.
 ///
 /// Least-recently-used, bounded by bytes: an icon animated through many sizes
 /// leaves one image per size. Evicted images are disposed; a frame that

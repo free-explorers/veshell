@@ -489,5 +489,21 @@
   "mouseSpeed": "মাউস: পয়েন্টার গতি",
   "mouseSpeedDescription": "পয়েন্টার গতি -1.0 (ধীর) থেকে 1.0 (দ্রুত); 0.0 ডিফল্ট",
   "touchpadSpeed": "টাচপ্যাড: পয়েন্টার গতি",
-  "touchpadSpeedDescription": "পয়েন্টার গতি -1.0 (ধীর) থেকে 1.0 (দ্রুত); 0.0 ডিফল্ট"
+  "touchpadSpeedDescription": "পয়েন্টার গতি -1.0 (ধীর) থেকে 1.0 (দ্রুত); 0.0 ডিফল্ট",
+  "display": "ডিসপ্লে",
+  "nightLight": "নাইট লাইট",
+  "nightLightDescription": "নীল আলো কমাতে রাতে স্ক্রিনের রং উষ্ণ করুন",
+  "nightLightSchedule": "সময়সূচি",
+  "nightLightScheduleDescription": "প্রতিদিন নিজে থেকে নাইট লাইট চালু ও বন্ধ করুন",
+  "nightLightScheduleOff": "বন্ধ (শুধু Helm সুইচ)",
+  "nightLightScheduleManual": "প্রতিদিন নির্দিষ্ট সময়ে",
+  "nightLightFrom": "চালু হওয়ার সময়",
+  "nightLightFromDescription": "সময়সূচি কখন নাইট লাইট চালু করে",
+  "nightLightTo": "বন্ধ হওয়ার সময়",
+  "nightLightToDescription": "সময়সূচি কখন নাইট লাইট বন্ধ করে",
+  "nightLightTemperature": "রঙের তাপমাত্রা",
+  "nightLightTemperatureDescription": "উষ্ণ তাপমাত্রা বেশি নীল আলো সরায়; 6500 K রং অপরিবর্তিত রাখে",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "{time} পর্যন্ত চালু",
+  "nightLightOffUntil": "{time} পর্যন্ত বন্ধ"
 }

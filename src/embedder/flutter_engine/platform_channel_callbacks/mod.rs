@@ -35,6 +35,8 @@ mod release_texture;
 mod screen_cast_consent_decision;
 mod screen_cast_stop;
 mod screenshot_prompt_decision;
+mod set_brightness;
+mod set_night_light;
 mod start_move_window;
 mod start_resize_window;
 mod surface_visibility;
@@ -85,6 +87,8 @@ pub fn platform_channel_method_handler<BackendData: Backend + 'static>(
             }
             "window_preview" => self::window_preview::window_preview(method_call, result, data),
             "adjust_brightness" => adjust_brightness(method_call, result, data),
+            "set_brightness" => self::set_brightness::set_brightness(method_call, result, data),
+            "set_night_light" => self::set_night_light::set_night_light(method_call, result, data),
             "switch_keyboard_layout" => switch_keyboard_layout(method_call, result, data),
             "get_monitor_layout" => get_monitor_layout(method_call, result, data),
             "get_environment_variables" => get_environment_variables(method_call, result, data),
