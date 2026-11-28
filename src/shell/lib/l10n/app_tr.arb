@@ -489,5 +489,21 @@
   "mouseSpeed": "Fare: işaretçi hızı",
   "mouseSpeedDescription": "İşaretçi hızı -1.0 (yavaş) ile 1.0 (hızlı) arasında; 0.0 varsayılandır",
   "touchpadSpeed": "Dokunmatik yüzey: işaretçi hızı",
-  "touchpadSpeedDescription": "İşaretçi hızı -1.0 (yavaş) ile 1.0 (hızlı) arasında; 0.0 varsayılandır"
+  "touchpadSpeedDescription": "İşaretçi hızı -1.0 (yavaş) ile 1.0 (hızlı) arasında; 0.0 varsayılandır",
+  "display": "Ekran",
+  "nightLight": "Gece Işığı",
+  "nightLightDescription": "Mavi ışığı azaltmak için geceleri ekran renklerini ısıtır",
+  "nightLightSchedule": "Zamanlama",
+  "nightLightScheduleDescription": "Gece Işığını her gün otomatik olarak aç ve kapat",
+  "nightLightScheduleOff": "Kapalı (yalnızca Helm düğmesi)",
+  "nightLightScheduleManual": "Her gün belirlenen saatlerde",
+  "nightLightFrom": "Açılma saati",
+  "nightLightFromDescription": "Zamanlamanın Gece Işığını açtığı saat",
+  "nightLightTo": "Kapanma saati",
+  "nightLightToDescription": "Zamanlamanın Gece Işığını kapattığı saat",
+  "nightLightTemperature": "Renk Sıcaklığı",
+  "nightLightTemperatureDescription": "Daha sıcak değerler daha fazla mavi ışığı giderir; 6500 K renkleri değiştirmez",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "{time} saatine kadar açık",
+  "nightLightOffUntil": "{time} saatine kadar kapalı"
 }

@@ -80,6 +80,8 @@ use tracing::{debug, error, info, warn};
 use smithay_drm_extras::display_info;
 use smithay_drm_extras::drm_scanner::{DrmScanEvent, DrmScanner};
 
+use super::gamma::{CommitMode, Committed};
+
 use crate::flutter_engine::view::{view_id_for_output, OutputViewIdWrapper, ViewSwapchain};
 use crate::flutter_engine::wayland_messages::{
     GestureSwipeBeginEventMessage, GestureSwipeEndEventMessage, GestureSwipeUpdateEventMessage,
@@ -221,6 +223,9 @@ pub struct DrmBackend {
     /// publishes its environment to the user's shared systemd and D-Bus
     /// activation environments (see [`run_drm_backend`]).
     real_session: bool,
+    /// Night Light's per-channel gains, which every output's lookup table
+    /// shows (see [`Backend::set_color_gains`]).
+    color_gains: [f64; 3],
 }
 
 /// Screensaver wake hook: re-insert every blanked output into the render loop.
@@ -263,6 +268,39 @@ fn idle_apply_blank(state: &mut State<DrmBackend>) {
     }
 }
 
+/// Writes Night Light's `gains` to `surface`'s lookup table when it does not
+/// show them yet. Deferred while a flip is in flight: the flip's vblank calls
+/// this again. A [`CommitMode::Flip`] commit is itself a flip in flight, which
+/// holds rendering on the output until its vblank.
+fn flush_gamma(surface: &mut SurfaceData, gains: [f64; 3], mode: CommitMode) {
+    if surface.frame_pending {
+        return;
+    }
+    let Some(table) = surface.gamma.as_mut() else {
+        return;
+    };
+    if !table.needs(gains) {
+        return;
+    }
+    match table.commit(surface.compositor.surface(), gains, mode) {
+        Ok(Committed::AtNextVblank) => surface.frame_pending = true,
+        Ok(Committed::Shown) => {}
+        Err(err) => warn!(output = %surface.name, "Failed to write the Night Light table: {err}"),
+    }
+}
+
+/// Puts `surface`'s lookup table back to neutral before the device is handed
+/// over (VT switch, exit), and forgets it so the session writes it again.
+fn restore_gamma(surface: &mut SurfaceData) {
+    let Some(table) = surface.gamma.as_mut() else {
+        return;
+    };
+    if let Err(err) = table.commit(surface.compositor.surface(), [1.0; 3], CommitMode::Blocking) {
+        warn!(output = %surface.name, "Failed to restore the colour lookup table: {err}");
+    }
+    table.invalidate();
+}
+
 impl Backend for DrmBackend {
     const HAS_RELATIVE_MOTION: bool = true;
     const FLIP_FLUTTER_TEXTURE: bool = true;
@@ -275,6 +313,26 @@ impl Backend for DrmBackend {
 
     fn seat_name(&self) -> String {
         self.session.seat()
+    }
+
+    fn set_color_gains(&mut self, gains: [f64; 3]) {
+        self.color_gains = gains;
+        // Away from the VT the device is not ours: activation writes them.
+        if !self.session.is_active() {
+            return;
+        }
+        for gpu in self.gpus.values_mut() {
+            for surface in gpu.surfaces.values_mut() {
+                flush_gamma(surface, gains, CommitMode::Flip);
+            }
+        }
+    }
+
+    fn color_gains_supported(&self) -> bool {
+        self.gpus
+            .values()
+            .flat_map(|gpu| gpu.surfaces.values())
+            .any(|surface| surface.gamma.is_some())
     }
 
     fn get_session(&self) -> LibSeatSession {
@@ -699,6 +757,7 @@ pub fn run_drm_backend(real_session: bool) {
             shell_paused_for_games: false,
             presentation: None,
             real_session,
+            color_gains: [1.0; 3],
         },
         None,
         settings_manager,
@@ -735,6 +794,8 @@ pub fn run_drm_backend(real_session: bool) {
                             warn!("Failed to clear drm surface on session pause: {err:?}");
                         }
                         surface.frame_pending = false;
+                        // The next session must not inherit Night Light's tint.
+                        restore_gamma(surface);
                     }
                     backend.drm_device.pause();
                     backend.active_leases.clear();
@@ -745,6 +806,7 @@ pub fn run_drm_backend(real_session: bool) {
             }
             SessionEvent::ActivateSession => {
                 info!("resuming session");
+                let color_gains = data.backend_data.color_gains;
                 // Switching back counts as activity; clear any dim/blank and
                 // restart the idle countdown.
                 crate::idle::on_session_activated(data);
@@ -785,6 +847,11 @@ pub fn run_drm_backend(real_session: bool) {
                         // Any flip queued before the pause is gone; do not let
                         // it keep rendering blocked.
                         surface.frame_pending = false;
+                        // Another session may have written its own table.
+                        if let Some(table) = surface.gamma.as_mut() {
+                            table.invalidate();
+                        }
+                        flush_gamma(surface, color_gains, CommitMode::Blocking);
                     }
                     if data.idle.is_blank() {
                         // Activation may restore connector power behind our
@@ -1116,12 +1183,26 @@ pub fn run_drm_backend(real_session: bool) {
         let _ = environment_imported.send(());
     }
 
+    // Logging out sends SIGTERM: leave through the exit below, which hands
+    // the outputs over neutral, instead of dying on the spot.
+    crate::termination::install(&event_loop.handle());
+
     while state.running.load(Ordering::SeqCst) {
         let result = event_loop.dispatch(None, &mut state);
         if result.is_err() {
             state.running.store(false, Ordering::SeqCst);
         } else {
             display_handle.flush_clients().unwrap();
+        }
+    }
+
+    // Whatever takes the outputs over next (a greeter, the console) must not
+    // inherit Night Light's tint.
+    if state.backend_data.session.is_active() {
+        for gpu in state.backend_data.gpus.values_mut() {
+            for surface in gpu.surfaces.values_mut() {
+                restore_gamma(surface);
+            }
         }
     }
 
@@ -1369,6 +1450,7 @@ impl State<DrmBackend> {
         // Computed before borrowing the GPU state so it can read the space.
         let default_position = self.default_output_position();
         let layout_origin = self.output_layout_origin;
+        let color_gains = self.backend_data.color_gains;
 
         // The swapchain is allocated and scanned out on this GPU, so it takes
         // the formats this GPU renders to, as in a single-GPU setup: the
@@ -1614,6 +1696,12 @@ impl State<DrmBackend> {
             }
         };
 
+        let gamma =
+            super::gamma::GammaTable::probe(compositor.surface(), device.drm_device.is_atomic());
+        if gamma.is_none() {
+            info!(output = %output_name, "No colour lookup table: Night Light cannot show here");
+        }
+
         // A display connected while the screensaver is already blank must
         // not remain powered until the next user activity.
         if self.idle.is_blank() {
@@ -1641,9 +1729,15 @@ impl State<DrmBackend> {
             game_feedback,
             scanout_feedback_surfaces: Vec::new(),
             queued_presentation: Vec::new(),
+            gamma,
         };
 
         device.surfaces.insert(crtc, surface);
+        // A new output starts with Night Light's table, which also clears one
+        // left behind by an earlier DRM master.
+        if let Some(surface) = device.surfaces.get_mut(&crtc) {
+            flush_gamma(surface, color_gains, CommitMode::Blocking);
+        }
 
         self.map_output(&output, position);
         if matches!(updates, OutputUpdates::Immediate) {
@@ -1933,11 +2027,15 @@ impl State<DrmBackend> {
 
         // Acknowledge the frame submitted on the CRTC that fired, even when we
         // don't render it (e.g. the slower CRTC of a node).
+        let color_gains = self.backend_data.color_gains;
         if let Some(gpu_data) = self.backend_data.gpus.get_mut(&node) {
             if let Some(surface) = gpu_data.surfaces.get_mut(&crtc) {
                 let _ = surface.compositor.frame_submitted();
                 // The flip completed: the output may render again.
                 surface.frame_pending = false;
+                // A Night Light table held back by the flip goes in now; the
+                // frame waiting for this vblank follows at the next one.
+                flush_gamma(surface, color_gains, CommitMode::Flip);
                 surface.last_vblank = Some(Instant::now());
                 // Instrumentation: a completed flip is a presented frame. When
                 // it carried a game surface, report how long it took to present
@@ -2881,6 +2979,9 @@ struct SurfaceData {
     /// Presentation feedback of the game surfaces whose content rides the
     /// flip in flight; answered with that flip's vblank timestamp.
     queued_presentation: Vec<(PresentationFeedbackCallback, wp_presentation_feedback::Kind)>,
+    /// Night Light's colour lookup table on this CRTC; `None` when the CRTC
+    /// has none.
+    gamma: Option<super::gamma::GammaTable>,
 }
 
 impl Drop for SurfaceData {

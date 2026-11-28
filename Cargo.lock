@@ -3709,6 +3709,7 @@ dependencies = [
  "bytes",
  "cargo_metadata",
  "chrono",
+ "drm-ffi",
  "flate2",
  "fontdue",
  "futures-util",

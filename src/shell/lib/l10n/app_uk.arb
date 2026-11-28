@@ -488,5 +488,21 @@
   "mouseSpeed": "Миша: швидкість вказівника",
   "mouseSpeedDescription": "Швидкість вказівника від -1.0 (повільно) до 1.0 (швидко); 0.0 — типово",
   "touchpadSpeed": "Сенсорна панель: швидкість вказівника",
-  "touchpadSpeedDescription": "Швидкість вказівника від -1.0 (повільно) до 1.0 (швидко); 0.0 — типово"
+  "touchpadSpeedDescription": "Швидкість вказівника від -1.0 (повільно) до 1.0 (швидко); 0.0 — типово",
+  "display": "Екран",
+  "nightLight": "Нічне світло",
+  "nightLightDescription": "Робити кольори екрана теплішими вночі, щоб зменшити синє світло",
+  "nightLightSchedule": "Розклад",
+  "nightLightScheduleDescription": "Вмикати й вимикати нічне світло автоматично щодня",
+  "nightLightScheduleOff": "Вимкнено (лише перемикач у Helm)",
+  "nightLightScheduleManual": "Щодня у визначений час",
+  "nightLightFrom": "Вмикається о",
+  "nightLightFromDescription": "Коли розклад вмикає нічне світло",
+  "nightLightTo": "Вимикається о",
+  "nightLightToDescription": "Коли розклад вимикає нічне світло",
+  "nightLightTemperature": "Колірна температура",
+  "nightLightTemperatureDescription": "Тепліші температури прибирають більше синього світла; 6500 K залишає кольори без змін",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "Увімкнено до {time}",
+  "nightLightOffUntil": "Вимкнено до {time}"
 }

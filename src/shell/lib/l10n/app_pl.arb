@@ -489,5 +489,21 @@
   "mouseSpeed": "Mysz: szybkość wskaźnika",
   "mouseSpeedDescription": "Szybkość wskaźnika od -1.0 (wolno) do 1.0 (szybko); 0.0 to wartość domyślna",
   "touchpadSpeed": "Touchpad: szybkość wskaźnika",
-  "touchpadSpeedDescription": "Szybkość wskaźnika od -1.0 (wolno) do 1.0 (szybko); 0.0 to wartość domyślna"
+  "touchpadSpeedDescription": "Szybkość wskaźnika od -1.0 (wolno) do 1.0 (szybko); 0.0 to wartość domyślna",
+  "display": "Ekran",
+  "nightLight": "Światło nocne",
+  "nightLightDescription": "Ociepla kolory ekranu w nocy, aby ograniczyć światło niebieskie",
+  "nightLightSchedule": "Harmonogram",
+  "nightLightScheduleDescription": "Codziennie automatycznie włączaj i wyłączaj światło nocne",
+  "nightLightScheduleOff": "Wyłączony (tylko przełącznik w Helm)",
+  "nightLightScheduleManual": "Codziennie o ustalonych godzinach",
+  "nightLightFrom": "Włącza się o",
+  "nightLightFromDescription": "Kiedy harmonogram włącza światło nocne",
+  "nightLightTo": "Wyłącza się o",
+  "nightLightToDescription": "Kiedy harmonogram wyłącza światło nocne",
+  "nightLightTemperature": "Temperatura barwowa",
+  "nightLightTemperatureDescription": "Cieplejsze temperatury usuwają więcej światła niebieskiego; 6500 K pozostawia kolory bez zmian",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "Włączone do {time}",
+  "nightLightOffUntil": "Wyłączone do {time}"
 }

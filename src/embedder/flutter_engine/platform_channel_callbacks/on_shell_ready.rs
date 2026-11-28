@@ -78,6 +78,9 @@ pub fn on_shell_ready<BackendData: Backend + 'static>(
     crate::lock::replay_to_shell(data);
     // Its status bar shows the active keyboard layout.
     super::switch_keyboard_layout::notify_keyboard_layout(data);
+    // Its Helm shows the brightness and Night Light.
+    data.notify_brightness_changed(crate::state::BrightnessChangeSource::Sync);
+    crate::night_light::notify(data);
 
     result.success(None);
 }

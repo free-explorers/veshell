@@ -96,6 +96,15 @@ impl Brightness {
         self.apply();
     }
 
+    /// Set the user level to `fraction`, clamped so the panel never turns off.
+    pub fn set(&mut self, fraction: f32) {
+        if !fraction.is_finite() {
+            return;
+        }
+        self.user_fraction = fraction.clamp(MIN_USER_FRACTION, 1.0);
+        self.apply();
+    }
+
     /// The level the user chose, in `[MIN_USER_FRACTION, 1]`. Reported to the
     /// shell so the brightness OSD shows the value the compositor settled on.
     pub fn user_fraction(&self) -> f32 {

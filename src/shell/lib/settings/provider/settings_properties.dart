@@ -15,6 +15,7 @@ import 'package:shell/screen/provider/workspace_display_mode.dart';
 import 'package:shell/settings/model/antialiasing_choices.dart';
 import 'package:shell/settings/model/keyboard_choices.dart';
 import 'package:shell/settings/model/keyboard_option.dart';
+import 'package:shell/settings/model/night_light_choices.dart';
 import 'package:shell/settings/model/pointer_choices.dart';
 import 'package:shell/settings/model/power_choices.dart';
 import 'package:shell/settings/model/setting_group.dart';
@@ -24,6 +25,7 @@ import 'package:shell/settings/provider/state/monitor_setting_state.dart';
 import 'package:shell/settings/provider/util/config_directory.dart';
 import 'package:shell/settings/provider/util/configured_settings_json.dart';
 import 'package:shell/settings/provider/util/default_settings_json.dart';
+import 'package:shell/settings/provider/util/monitor_setting_path.dart';
 import 'package:shell/settings/widget/environment/environment_variables_editor.dart';
 import 'package:shell/settings/widget/expandable_search_result.dart';
 import 'package:shell/settings/widget/keyboard/keyboard_layouts_editor.dart';
@@ -38,6 +40,7 @@ import 'package:shell/settings/widget/monitor/monitor_resolution_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_resolution_value.dart';
 import 'package:shell/settings/widget/monitor/monitor_transform_editor.dart';
 import 'package:shell/settings/widget/monitor/monitor_transform_value.dart';
+import 'package:shell/settings/widget/night_light/night_light_temperature_editor.dart';
 import 'package:shell/settings/widget/primitive/setting_property_choice_editor.dart';
 import 'package:shell/settings/widget/theme/cursor_theme_editor.dart';
 import 'package:shell/settings/widget/theme/focus_indicator_editor.dart';
@@ -114,8 +117,8 @@ class SettingsProperties extends _$SettingsProperties {
           ),
         },
       ),
-      'monitors': SettingGroup(
-        name: l10n.monitors,
+      'display': SettingGroup(
+        name: l10n.display,
         description: null,
         icon: MdiIcons.monitor,
         children: {
@@ -210,6 +213,125 @@ class SettingsProperties extends _$SettingsProperties {
                 ),
               },
             ),
+          'antialiasing': SettingProperty<String>(
+            name: l10n.antialiasing,
+            description: l10n.antialiasingDescription,
+            buildSearchResult: (context, path, property) =>
+                ExpandableSearchResult<String>(
+                  path: path,
+                  property: property,
+                  buildValue: (context, value, {required isExpanded}) =>
+                      SettingPropertyChoiceValue(
+                        path: path,
+                        choices: antialiasingChoices,
+                        defaultValue: antialiasingFallback,
+                        label: antialiasingLabel,
+                      ),
+                  buildEditor: (context, {required isExpanded}) =>
+                      SettingPropertyChoiceEditor(
+                        path: path,
+                        property: property,
+                        choices: antialiasingChoices,
+                        defaultValue: antialiasingFallback,
+                        label: antialiasingLabel,
+                      ),
+                ),
+          ),
+          'nightLight': SettingGroup(
+            name: l10n.nightLight,
+            description: l10n.nightLightDescription,
+            icon: MdiIcons.weatherNight,
+            children: {
+              'schedule': SettingProperty<String>(
+                name: l10n.nightLightSchedule,
+                description: l10n.nightLightScheduleDescription,
+                buildSearchResult: (context, path, property) =>
+                    ExpandableSearchResult<String>(
+                      path: path,
+                      property: property,
+                      buildValue: (context, value, {required isExpanded}) =>
+                          SettingPropertyChoiceValue(
+                            path: path,
+                            choices: nightLightSchedules,
+                            defaultValue: 'off',
+                            label: nightLightScheduleLabel,
+                          ),
+                      buildEditor: (context, {required isExpanded}) =>
+                          SettingPropertyChoiceEditor(
+                            path: path,
+                            property: property,
+                            choices: nightLightSchedules,
+                            defaultValue: 'off',
+                            label: nightLightScheduleLabel,
+                          ),
+                    ),
+              ),
+              'from': SettingProperty<String>(
+                name: l10n.nightLightFrom,
+                description: l10n.nightLightFromDescription,
+                buildSearchResult: (context, path, property) =>
+                    ExpandableSearchResult<String>(
+                      path: path,
+                      property: property,
+                      buildValue: (context, value, {required isExpanded}) =>
+                          SettingPropertyChoiceValue(
+                            path: path,
+                            choices: nightLightTimes,
+                            defaultValue: '20:00',
+                            label: nightLightTimeLabel,
+                          ),
+                      buildEditor: (context, {required isExpanded}) =>
+                          SettingPropertyChoiceEditor(
+                            path: path,
+                            property: property,
+                            choices: nightLightTimes,
+                            defaultValue: '20:00',
+                            label: nightLightTimeLabel,
+                          ),
+                    ),
+              ),
+              'to': SettingProperty<String>(
+                name: l10n.nightLightTo,
+                description: l10n.nightLightToDescription,
+                buildSearchResult: (context, path, property) =>
+                    ExpandableSearchResult<String>(
+                      path: path,
+                      property: property,
+                      buildValue: (context, value, {required isExpanded}) =>
+                          SettingPropertyChoiceValue(
+                            path: path,
+                            choices: nightLightTimes,
+                            defaultValue: '06:00',
+                            label: nightLightTimeLabel,
+                          ),
+                      buildEditor: (context, {required isExpanded}) =>
+                          SettingPropertyChoiceEditor(
+                            path: path,
+                            property: property,
+                            choices: nightLightTimes,
+                            defaultValue: '06:00',
+                            label: nightLightTimeLabel,
+                          ),
+                    ),
+              ),
+              'temperature': SettingProperty<int>(
+                name: l10n.nightLightTemperature,
+                description: l10n.nightLightTemperatureDescription,
+                buildSearchResult: (context, path, property) =>
+                    ExpandableSearchResult<int>(
+                      path: path,
+                      property: property,
+                      buildValue: (context, value, {required isExpanded}) =>
+                          NightLightTemperatureValue(path: path),
+                      buildEditor: (context, {required isExpanded}) =>
+                          NightLightTemperatureEditor(
+                            path: path,
+                            property: property,
+                          ),
+                    ),
+              ),
+            },
+          ),
         },
       ),
       'keyboard': SettingGroup(
@@ -693,30 +815,6 @@ class SettingsProperties extends _$SettingsProperties {
             name: l10n.optimizedOverview,
             description: l10n.optimizedOverviewDescription,
           ),
-          'antialiasing': SettingProperty<String>(
-            name: l10n.antialiasing,
-            description: l10n.antialiasingDescription,
-            buildSearchResult: (context, path, property) =>
-                ExpandableSearchResult<String>(
-                  path: path,
-                  property: property,
-                  buildValue: (context, value, {required isExpanded}) =>
-                      SettingPropertyChoiceValue(
-                        path: path,
-                        choices: antialiasingChoices,
-                        defaultValue: antialiasingFallback,
-                        label: antialiasingLabel,
-                      ),
-                  buildEditor: (context, {required isExpanded}) =>
-                      SettingPropertyChoiceEditor(
-                        path: path,
-                        property: property,
-                        choices: antialiasingChoices,
-                        defaultValue: antialiasingFallback,
-                        label: antialiasingLabel,
-                      ),
-                ),
-          ),
           'statusBar': SettingProperty<String>(
             name: l10n.statusBar,
             description: l10n.statusBarDescription,
@@ -797,12 +895,13 @@ class SettingsProperties extends _$SettingsProperties {
   }
 
   void updateProperty(String path, dynamic newValue) {
-    final parts = path.split('.');
-    if (parts.first == 'monitors') {
+    final monitorPath = parseMonitorSettingPath(path);
+    if (monitorPath != null) {
       return ref
-          .read(monitorSettingStateProvider(parts[1]).notifier)
-          .updateByPath(parts.sublist(2).join('.'), newValue);
+          .read(monitorSettingStateProvider(monitorPath.monitor).notifier)
+          .updateByPath(monitorPath.property, newValue);
     }
+    final parts = path.split('.');
 
     final defaultJson = ref.read(defaultSettingsJsonProvider);
     final json = ref.read(configuredSettingsJsonProvider);

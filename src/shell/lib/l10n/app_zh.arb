@@ -489,5 +489,21 @@
   "mouseSpeed": "鼠标：指针速度",
   "mouseSpeedDescription": "指针速度从 -1.0（慢）到 1.0（快）；0.0 为默认值",
   "touchpadSpeed": "触摸板：指针速度",
-  "touchpadSpeedDescription": "指针速度从 -1.0（慢）到 1.0（快）；0.0 为默认值"
+  "touchpadSpeedDescription": "指针速度从 -1.0（慢）到 1.0（快）；0.0 为默认值",
+  "display": "显示",
+  "nightLight": "夜间模式",
+  "nightLightDescription": "夜间让屏幕颜色更暖，减少蓝光",
+  "nightLightSchedule": "计划",
+  "nightLightScheduleDescription": "每天自动开启和关闭夜间模式",
+  "nightLightScheduleOff": "关闭（仅 Helm 开关）",
+  "nightLightScheduleManual": "每天在设定时间",
+  "nightLightFrom": "开启时间",
+  "nightLightFromDescription": "计划开启夜间模式的时间",
+  "nightLightTo": "关闭时间",
+  "nightLightToDescription": "计划关闭夜间模式的时间",
+  "nightLightTemperature": "色温",
+  "nightLightTemperatureDescription": "色温越暖，蓝光越少；6500 K 不改变颜色",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "开启至 {time}",
+  "nightLightOffUntil": "关闭至 {time}"
 }

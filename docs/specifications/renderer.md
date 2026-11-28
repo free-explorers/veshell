@@ -25,7 +25,7 @@ environment variables in Settings are applied only once the shell runs.
 
 - **Antialiasing.** Impeller antialiases paths and clips through
   multisampling: the view's render target takes the samples the
-  `theme.antialiasing` setting asks for. Skia antialiases analytically: its
+  `display.antialiasing` setting asks for. Skia antialiases analytically: its
   render target keeps a single sample and the setting has no effect.
 - Everything else is shared: the view targets and their partial repaint,
   client windows handed to the engine as GL textures, and the compositing of

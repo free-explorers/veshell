@@ -489,5 +489,21 @@
   "mouseSpeed": "ماؤس: پوائنٹر کی رفتار",
   "mouseSpeedDescription": "پوائنٹر کی رفتار -1.0 (آہستہ) سے 1.0 (تیز)؛ 0.0 ڈیفالٹ ہے",
   "touchpadSpeed": "ٹچ پیڈ: پوائنٹر کی رفتار",
-  "touchpadSpeedDescription": "پوائنٹر کی رفتار -1.0 (آہستہ) سے 1.0 (تیز)؛ 0.0 ڈیفالٹ ہے"
+  "touchpadSpeedDescription": "پوائنٹر کی رفتار -1.0 (آہستہ) سے 1.0 (تیز)؛ 0.0 ڈیفالٹ ہے",
+  "display": "ڈسپلے",
+  "nightLight": "نائٹ لائٹ",
+  "nightLightDescription": "نیلی روشنی کم کرنے کے لیے رات کو اسکرین کے رنگ گرم کریں",
+  "nightLightSchedule": "شیڈول",
+  "nightLightScheduleDescription": "نائٹ لائٹ کو ہر روز خود بخود آن اور آف کریں",
+  "nightLightScheduleOff": "آف (صرف Helm سوئچ)",
+  "nightLightScheduleManual": "ہر روز مقررہ اوقات پر",
+  "nightLightFrom": "آن ہونے کا وقت",
+  "nightLightFromDescription": "جب شیڈول نائٹ لائٹ آن کرتا ہے",
+  "nightLightTo": "آف ہونے کا وقت",
+  "nightLightToDescription": "جب شیڈول نائٹ لائٹ آف کرتا ہے",
+  "nightLightTemperature": "رنگ کا درجہ حرارت",
+  "nightLightTemperatureDescription": "گرم درجہ حرارت زیادہ نیلی روشنی ہٹاتا ہے؛ 6500 K رنگوں کو تبدیل نہیں کرتا",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "{time} تک آن",
+  "nightLightOffUntil": "{time} تک آف"
 }

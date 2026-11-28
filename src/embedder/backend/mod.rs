@@ -54,6 +54,7 @@ pub struct CaptureDmabufSetup {
 }
 
 pub mod drm_backend;
+pub mod gamma;
 pub mod render;
 pub mod vsync_clock;
 pub mod winit;
@@ -100,6 +101,20 @@ pub trait Backend {
     const SUPPORTS_OUTPUT_TRANSFORM: bool = false;
 
     fn seat_name(&self) -> String;
+
+    /// Night Light: scale each output's red, green and blue by `gains` (each
+    /// in `[0, 1]`, `[1, 1, 1]` restores the output) in its colour lookup
+    /// table, so every plane, the cursor and directly scanned-out buffers are
+    /// covered at no per-frame cost. Only the DRM backend owns the outputs'
+    /// tables; a nested backend must never tint its host, so the default does
+    /// nothing.
+    fn set_color_gains(&mut self, _gains: [f64; 3]) {}
+
+    /// Whether any output can show [`Self::set_color_gains`]. The shell hides
+    /// Night Light when none can.
+    fn color_gains_supported(&self) -> bool {
+        false
+    }
 
     fn get_session(&self) -> LibSeatSession;
 

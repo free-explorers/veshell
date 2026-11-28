@@ -39,6 +39,7 @@ mod keyboard;
 mod lock;
 mod meta_window_state;
 mod mouse_button_tracker;
+mod night_light;
 mod notification;
 mod output_layout;
 mod pointer_constraints;
@@ -50,6 +51,7 @@ mod settings;
 mod state;
 mod surface_pacing;
 mod system_tray;
+mod termination;
 mod texture_swap_chain;
 mod wayland;
 

@@ -17,6 +17,7 @@ answer. Each service specification records its exact split.
 - [Display](/specifications/display.md)
   - [Renderer](/specifications/renderer.md)
   - [Multi-GPU](/specifications/multi_gpu.md)
+  - [Night Light](/specifications/night_light.md)
   - [Monitor](/specifications/monitor.md)
     - [Screen](/specifications/screen.md)
       - [ScreenPanel](/specifications/screen_panel.md)

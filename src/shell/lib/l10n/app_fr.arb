@@ -489,5 +489,21 @@
   "mouseSpeed": "Souris : vitesse du pointeur",
   "mouseSpeedDescription": "Vitesse du pointeur de -1.0 (lent) à 1.0 (rapide) ; 0.0 par défaut",
   "touchpadSpeed": "Pavé tactile : vitesse du pointeur",
-  "touchpadSpeedDescription": "Vitesse du pointeur de -1.0 (lent) à 1.0 (rapide) ; 0.0 par défaut"
+  "touchpadSpeedDescription": "Vitesse du pointeur de -1.0 (lent) à 1.0 (rapide) ; 0.0 par défaut",
+  "display": "Affichage",
+  "nightLight": "Éclairage nocturne",
+  "nightLightDescription": "Réchauffer les couleurs de l’écran la nuit pour réduire la lumière bleue",
+  "nightLightSchedule": "Planification",
+  "nightLightScheduleDescription": "Activer et désactiver l’éclairage nocturne automatiquement chaque jour",
+  "nightLightScheduleOff": "Désactivée (bouton du Helm uniquement)",
+  "nightLightScheduleManual": "Chaque jour à heures fixes",
+  "nightLightFrom": "S’active à",
+  "nightLightFromDescription": "Heure à laquelle la planification active l’éclairage nocturne",
+  "nightLightTo": "Se désactive à",
+  "nightLightToDescription": "Heure à laquelle la planification désactive l’éclairage nocturne",
+  "nightLightTemperature": "Température de couleur",
+  "nightLightTemperatureDescription": "Plus la température est chaude, plus la lumière bleue est réduite ; 6500 K laisse les couleurs inchangées",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "Activé jusqu’à {time}",
+  "nightLightOffUntil": "Désactivé jusqu’à {time}"
 }

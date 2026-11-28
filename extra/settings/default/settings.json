@@ -104,7 +104,6 @@
         "workspaceIcon": "hybrid",
         "animationSpeed": 1,
         "optimizedOverview": true,
-        "antialiasing": "auto",
         "statusBar": "none",
         "statusBarContent": {
             "showClock": true,
@@ -115,6 +114,15 @@
             "showVolume": true,
             "showBattery": true,
             "showBatteryPercentage": true
+        }
+    },
+    "display": {
+        "antialiasing": "auto",
+        "nightLight": {
+            "schedule": "off",
+            "from": "20:00",
+            "to": "06:00",
+            "temperature": 2700
         }
     },
     "idle": {

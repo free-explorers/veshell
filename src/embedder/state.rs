@@ -241,6 +241,9 @@ pub struct State<BackendData: Backend + 'static> {
     /// brightness keys drive. Unavailable when no controllable panel exists, in
     /// which case the screensaver keeps the black overlay.
     pub brightness: crate::brightness::Brightness,
+    /// Night Light: the outputs' colour temperature, on its schedule or the
+    /// Helm toggle. See `crate::night_light`.
+    pub night_light: crate::night_light::NightLight,
     /// Gamepads the compositor reads itself (libinput ignores them) and the
     /// buttons it reported to the shell. See `crate::gamepad`.
     pub gamepads: crate::gamepad::GamepadState,
@@ -387,24 +390,42 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         request(self);
     }
 
-    /// Tells the shell the display brightness changed so it can show the
-    /// brightness OSD. Called after every user-driven [`crate::brightness::Brightness::adjust`]
-    /// (the hardware function keys handled in the compositor, and the shell's
-    /// own `adjust_brightness` request). A no-op when no controllable backlight
-    /// exists: there is nothing to report, and the shell should not show an OSD
-    /// for a panel it cannot dim.
-    pub fn notify_brightness_changed(&mut self) {
-        if !self.brightness.is_available() {
+    /// Tells the shell the display brightness changed: the Helm's slider
+    /// follows it, and a change from the brightness keys (the hardware keys
+    /// owned by the compositor, or the shell's own `adjust_brightness`
+    /// request) shows the brightness OSD. Without a controllable backlight
+    /// only the shell's startup sync is answered, with `available: false`, so
+    /// the Helm hides the slider.
+    pub fn notify_brightness_changed(&mut self, source: BrightnessChangeSource) {
+        let available = self.brightness.is_available();
+        if !available && source != BrightnessChangeSource::Sync {
             return;
         }
         let fraction = self.brightness.user_fraction();
         let platform_method_channel = &mut self.flutter_engine_mut().platform_method_channel;
         platform_method_channel.invoke_method(
             "brightness_changed",
-            Some(Box::new(serde_json::json!({ "fraction": fraction }))),
+            Some(Box::new(serde_json::json!({
+                "fraction": fraction,
+                "available": available,
+                "source": source,
+            }))),
             None,
         );
     }
+}
+
+/// What changed the display brightness, so the shell knows whether to show the
+/// brightness OSD.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BrightnessChangeSource {
+    /// A brightness key or hotkey: shows the OSD.
+    Keys,
+    /// The Helm's slider, which shows the level itself.
+    Helm,
+    /// The current level, sent when the shell starts.
+    Sync,
 }
 
 impl<BackendData: Backend + 'static> DndGrabHandler for State<BackendData> {}
@@ -560,7 +581,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         let mut seat = seat_state.new_wl_seat(&display_handle, seat_name.clone());
 
         let settings = settings_manager.get_settings();
-        crate::gles_framebuffer_importer::set_antialiasing(settings.theme.antialiasing);
+        crate::gles_framebuffer_importer::set_antialiasing(settings.display.antialiasing);
 
         // Delay before a held key starts repeating (ms), and the rate of the
         // repeat in characters per second. Both are advertised to clients via
@@ -790,10 +811,15 @@ impl<BackendData: Backend + 'static> State<BackendData> {
             idle_notifier_state,
             idle_inhibit_manager_state,
             brightness,
+            night_light: crate::night_light::NightLight::new(
+                &settings.display.night_light,
+                crate::night_light::local_minute(),
+            ),
             gamepads: Default::default(),
         };
         // Start watching for idleness right away.
         state.idle.arm_activity_timers();
+        crate::night_light::init(&mut state);
         state
     }
 
@@ -865,7 +891,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
     /// compositor and must not touch the host session's environment.
     pub fn apply_veshell_settings(&mut self, settings: &VeshellSettings) -> Option<Vec<String>> {
         self.swap_alt_and_win = settings.keyboard.swap_alt_and_win;
-        if crate::gles_framebuffer_importer::set_antialiasing(settings.theme.antialiasing) {
+        if crate::gles_framebuffer_importer::set_antialiasing(settings.display.antialiasing) {
             // The engine renders on demand: show the change now.
             if let Some(flutter_engine) = self.flutter_engine.as_ref() {
                 flutter_engine.schedule_frame();
@@ -873,6 +899,7 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         }
         self.wheel_scroll_factor = effective_wheel_scroll_factor(settings);
         crate::idle::apply_idle_settings(self, &settings.idle);
+        crate::night_light::apply_settings(self, &settings.display.night_light);
         let environment_changed = apply_environment_variables(
             &settings.environment,
             &mut self.applied_environment_variables,
@@ -1196,6 +1223,8 @@ impl<BackendData: Backend + 'static> State<BackendData> {
         }
         self.flutter_engine_mut()
             .monitor_layout_changed(outputs.clone(), revision);
+        // Whether any output can show Night Light depends on the outputs.
+        crate::night_light::notify(self);
 
         let highest_scale = outputs
             .iter()

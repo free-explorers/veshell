@@ -489,5 +489,21 @@
   "mouseSpeed": "Mouse: velocità del puntatore",
   "mouseSpeedDescription": "Velocità del puntatore da -1.0 (lenta) a 1.0 (veloce); 0.0 è il valore predefinito",
   "touchpadSpeed": "Touchpad: velocità del puntatore",
-  "touchpadSpeedDescription": "Velocità del puntatore da -1.0 (lenta) a 1.0 (veloce); 0.0 è il valore predefinito"
+  "touchpadSpeedDescription": "Velocità del puntatore da -1.0 (lenta) a 1.0 (veloce); 0.0 è il valore predefinito",
+  "display": "Schermo",
+  "nightLight": "Luce notturna",
+  "nightLightDescription": "Riscalda i colori dello schermo di notte per ridurre la luce blu",
+  "nightLightSchedule": "Pianificazione",
+  "nightLightScheduleDescription": "Attiva e disattiva automaticamente la luce notturna ogni giorno",
+  "nightLightScheduleOff": "Disattivata (solo interruttore dell’Helm)",
+  "nightLightScheduleManual": "Ogni giorno a orari fissi",
+  "nightLightFrom": "Si attiva alle",
+  "nightLightFromDescription": "Quando la pianificazione attiva la luce notturna",
+  "nightLightTo": "Si disattiva alle",
+  "nightLightToDescription": "Quando la pianificazione disattiva la luce notturna",
+  "nightLightTemperature": "Temperatura colore",
+  "nightLightTemperatureDescription": "Le temperature più calde riducono di più la luce blu; 6500 K lascia i colori invariati",
+  "kelvinValue": "{value} K",
+  "nightLightOnUntil": "Attiva fino alle {time}",
+  "nightLightOffUntil": "Disattivata fino alle {time}"
 }
